@@ -50,10 +50,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* MOBILE HEADER — only visible below md */}
       <header className={`md:hidden flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 ${isDark ? 'bg-[#0a0a0a] border-white/10' : 'bg-white border-slate-200'}`}>
-        <div className="flex items-baseline gap-0.5">
-          <span className="text-xl font-black text-[#007AFF]">g</span>
-          <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>roundwork.</span>
-        </div>
         <button
           onClick={() => setIsMobileMenuOpen(true)}
           className={`p-2 rounded-lg ${isDark ? 'bg-white/5 text-white' : 'bg-slate-100 text-slate-900'}`}
@@ -61,6 +57,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         >
           <Menu size={20} />
         </button>
+        <div className="flex items-baseline gap-0.5">
+          <span className="text-xl font-black text-[#007AFF]">g</span>
+          <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>roundwork.</span>
+        </div>
       </header>
 
       {/* MOBILE DRAWER OVERLAY — only visible below md */}

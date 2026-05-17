@@ -46,34 +46,57 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!user || (profile && !['admin', 'owner'].includes(profile.role))) return null;
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row overflow-hidden">
-      {/* Mobile Header */}
-      <div className={`md:hidden flex flex-shrink-0 items-center justify-between px-4 py-4 border-b z-40 relative ${isDark ? 'bg-[#0a0a0a] border-white/10' : 'bg-white border-slate-200'}`}>
-         <div className="flex items-baseline gap-0.5">
-            <span className="text-xl font-black text-[#007AFF]">g</span>
-            <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>roundwork.</span>
-         </div>
-         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className={`p-2 rounded-lg ${isDark ? 'bg-white/5 text-white' : 'bg-slate-100 text-slate-900'}`}>
-           {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-         </button>
-      </div>
+    <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
 
-      {/* Sidebar Overlay for Mobile */}
+      {/* MOBILE HEADER — only visible below md */}
+      <header className={`md:hidden flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 ${isDark ? 'bg-[#0a0a0a] border-white/10' : 'bg-white border-slate-200'}`}>
+        <div className="flex items-baseline gap-0.5">
+          <span className="text-xl font-black text-[#007AFF]">g</span>
+          <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>roundwork.</span>
+        </div>
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className={`p-2 rounded-lg ${isDark ? 'bg-white/5 text-white' : 'bg-slate-100 text-slate-900'}`}
+          aria-label="Open menu"
+        >
+          <Menu size={20} />
+        </button>
+      </header>
+
+      {/* MOBILE DRAWER OVERLAY — only visible below md */}
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm" 
-          onClick={() => setIsMobileMenuOpen(false)} 
-        />
+        <div className="md:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          {/* Sidebar drawer */}
+          <div className="fixed inset-y-0 left-0 z-50 w-64">
+            <div className="relative h-full">
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`absolute top-4 right-3 z-10 p-1.5 rounded-lg ${isDark ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-800'}`}
+                aria-label="Close menu"
+              >
+                <X size={18} />
+              </button>
+              <Sidebar />
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Sidebar Wrapper */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform md:relative md:translate-x-0 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* DESKTOP SIDEBAR — hidden on mobile, shown on md+ */}
+      <div className="hidden md:flex md:flex-shrink-0">
         <Sidebar />
       </div>
 
-      <main className="flex-1 overflow-auto w-full relative z-10 md:w-[calc(100%-16rem)]">
+      {/* MAIN CONTENT */}
+      <main className="flex-1 overflow-auto min-w-0">
         {children}
       </main>
+
     </div>
   );
 }

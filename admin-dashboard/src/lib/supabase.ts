@@ -11,10 +11,13 @@ export interface Profile {
   id: string;
   username: string | null;
   full_name: string | null;
+  email: string | null;
+  provider: string | null;
   avatar_url: string | null;
   role: AdminRole;
   pro_status: boolean;
   pro_until: string | null;
+  is_banned: boolean;
   created_at: string;
   updated_at: string;
 }

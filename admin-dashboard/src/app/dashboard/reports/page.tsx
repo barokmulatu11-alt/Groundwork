@@ -21,7 +21,23 @@ export default function ReportsPage() {
 
   const updateStatus = async (id: string, status: 'pending' | 'resolved' | 'dismissed') => {
     setUpdating(id);
+    const report = reports.find(r => r.id === id);
+    
+    // 1. Update report status
     await supabase.from('reports').update({ status }).eq('id', id);
+    
+    // 2. If resolved/dismissed and we have a user_id, send notification
+    if (report && report.user_id && (status === 'resolved' || status === 'dismissed')) {
+      await supabase.from('user_notifications').insert({
+        user_id: report.user_id,
+        title: status === 'resolved' ? 'Report Resolved' : 'Report Update',
+        message: status === 'resolved' 
+          ? `Good news! Your report "${report.title}" has been resolved. Thank you for your feedback!`
+          : `Your report "${report.title}" has been reviewed and closed.`,
+        type: status === 'resolved' ? 'success' : 'info'
+      });
+    }
+
     setReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
     setUpdating(null);
   };
@@ -49,13 +65,13 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-black text-white">Reports</h1>
           <p className="text-gray-500 text-sm mt-1">Bugs, crashes, and suggestions from users</p>
         </div>
-        <button onClick={load} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-800 text-gray-300 text-sm hover:bg-gray-700 transition-colors">
+        <button onClick={load} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gray-800 text-gray-300 text-sm hover:bg-gray-700 transition-colors w-full md:w-auto">
           <RefreshCw size={14} />
         </button>
       </div>
@@ -75,7 +91,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Filters */}
-      <div className="glass rounded-2xl p-4 mb-6 flex gap-3">
+      <div className="glass rounded-2xl p-4 mb-6 flex flex-col sm:flex-row gap-3">
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-[#007AFF]">
           <option value="all">All Status</option>
           <option value="pending">Pending</option>

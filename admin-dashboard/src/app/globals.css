@@ -4,15 +4,33 @@
   --accent: #007AFF;
   --accent-light: rgba(0, 122, 255, 0.12);
   --accent-glow: rgba(0, 122, 255, 0.25);
+  
+  --bg-primary: #030712;
+  --bg-secondary: #111827;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --border-color: rgba(255, 255, 255, 0.06);
+  --glass-bg: rgba(17, 24, 39, 0.7);
+}
+
+.light {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.8);
 }
 
 * {
   box-sizing: border-box;
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: 200ms;
 }
 
 body {
-  background-color: #030712;
-  color: #f9fafb;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 /* Scrollbar styling */
@@ -30,17 +48,11 @@ body {
   background: #4b5563;
 }
 
-/* Smooth transitions */
-* {
-  transition-property: background-color, border-color, color, opacity;
-  transition-duration: 150ms;
-}
-
 /* Glass effect */
 .glass {
-  background: rgba(17, 24, 39, 0.7);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--border-color);
 }
 
 /* Accent glow button effect */

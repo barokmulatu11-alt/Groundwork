@@ -67,7 +67,7 @@ export default function SubscriptionsPage() {
   const proCount = users.filter(u => u.pro_status).length;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-black text-white">Pro Subscriptions</h1>
@@ -90,16 +90,17 @@ export default function SubscriptionsPage() {
       {loading ? (
         <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-16 bg-gray-800/40 rounded-2xl animate-pulse" />)}</div>
       ) : (
-        <div className="glass rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-6 py-3 border-b border-gray-800/50">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">User</span>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Plan</span>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Expires</span>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</span>
-          </div>
-          {users.map(user => (
-            <div key={user.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-6 py-4 border-b border-gray-800/30 hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
+        <div className="glass rounded-2xl overflow-x-auto">
+          <div className="min-w-[700px]">
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-6 py-3 border-b border-gray-800/50">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">User</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Plan</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Expires</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</span>
+            </div>
+            {users.map(user => (
+              <div key={user.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-6 py-4 border-b border-gray-800/30 hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#007AFF] to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                   {(user.full_name || user.username || 'U')[0].toUpperCase()}
                 </div>
@@ -130,8 +131,9 @@ export default function SubscriptionsPage() {
                 )}
                 <button onClick={() => setModal({ user, action: 'lifetime' })} className="px-3 py-1.5 rounded-lg bg-yellow-400/15 text-yellow-400 hover:bg-yellow-400/25 text-xs font-semibold transition-colors" title="Grant Lifetime">∞</button>
               </div>
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

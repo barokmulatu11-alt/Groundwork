@@ -9,7 +9,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { FontAwesome } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
-import * as Notifications from 'expo-notifications';
+import notifee, { EventType } from '@/lib/safeNotifee';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -19,15 +19,21 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
+import * as Linking from 'expo-linking';
+import { supabase } from '@/lib/supabase';
 
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { ThemeProvider, useTheme } from '@/lib/ThemeContext';
 import { initDb } from '@/lib/db';
+import { initConnectDb } from '@/lib/connect/connectDatabase';
 import { handleNotificationResponse } from '@/lib/notifications';
 import { useAuthStore } from '@/store/useAuthStore';
 import { startSyncManager } from '@/store/useStore';
-import { AppLockScreen } from '@/components/AppLockScreen';
+import { SecurityProvider } from '@/components/security/SecurityProvider';
 import { AnimatedSplashScreen } from '@/components/AnimatedSplashScreen';
+import { UniversalRefreshButton } from '@/components/ui/UniversalRefreshButton';
+import { XPToastProvider } from '@/components/XPToastProvider';
+import { WebAuthHeader } from '@/components/ui/WebAuthHeader';
 
 export {
   ErrorBoundary,
@@ -38,6 +44,11 @@ export const unstable_settings = {
 };
 
 SplashScreen.preventAutoHideAsync();
+
+notifee.onBackgroundEvent(async ({ type, detail }) => {
+  // Background events are handled here. If the user presses a notification
+  // while the app is killed, getInitialNotification in RootLayoutNav will handle it.
+});
 
 function ThemeAwareStatusBar() {
   const { isDark } = useTheme();
@@ -61,6 +72,7 @@ export default function RootLayout() {
       try {
         console.log('[RootLayout] Starting boot sequence...');
         initDb();
+        initConnectDb();
         console.log('[RootLayout] Database initialized');
         await initialize();
         console.log('[RootLayout] Auth initialized');
@@ -106,9 +118,11 @@ export default function RootLayout() {
           <AnimatedSplashScreen onFinish={() => setSplashComplete(true)} />
         ) : (
           <>
+            <WebAuthHeader />
             <AuthMiddleware />
-            <AppLockScreen />
-            <RootLayoutNav />
+            <SecurityProvider>
+              <RootLayoutNav />
+            </SecurityProvider>
           </>
         )}
       </View>
@@ -118,40 +132,46 @@ export default function RootLayout() {
 
 function AuthMiddleware() {
   const router = useRouter();
-  const { session, isGuest } = useAuthStore();
+  const { session, isGuest, isLoading, onboardingDone, welcomeShown, setIsGuest } = useAuthStore();
   const segments = useSegments();
 
   useEffect(() => {
-    const checkNavigation = async () => {
-      const inAuthGroup =
-        segments[0] === 'login' ||
-        segments[0] === 'signup' ||
-        segments[0] === 'welcome' ||
-        segments[0] === 'forgot-password';
-      const inOnboarding = segments[0] === 'permissions_onboarding';
-      const done = await AsyncStorage.getItem('permissions_onboarding_done');
+    // CRITICAL: Never navigate while auth is still being initialized.
+    // Without this, session=null fires a redirect to /welcome before
+    // initialize() has finished — competing with any in-flight OAuth login.
+    if (isLoading) return;
 
-      if (!session && !isGuest) {
-        // Not logged in at all — force to welcome
+    const inAuthGroup =
+      segments[0] === 'login' ||
+      segments[0] === 'signup' ||
+      segments[0] === 'welcome' ||
+      segments[0] === 'forgot-password';
+    const inOnboarding = segments[0] === 'permissions_onboarding';
+
+    if (!session && !isGuest) {
+      if (welcomeShown) {
+        // User already onboarded once, default to guest state rather than kicking them to welcome screen
+        setIsGuest(true);
+      } else {
+        // Not logged in and welcome not shown yet — send to welcome
         if (!inAuthGroup) {
           router.replace('/welcome' as any);
         }
-      } else if (session) {
-        // Fully authenticated user — redirect away from auth pages
-        if (inAuthGroup) {
-          if (!done) {
-            router.replace('/permissions_onboarding' as any);
-          } else {
-            router.replace('/');
-          }
-        } else if (!done && !inOnboarding) {
-          router.replace('/permissions_onboarding' as any);
-        }
       }
-      // Guest users: allow them to go anywhere including login/signup
-    };
-    checkNavigation();
-  }, [session, isGuest, segments]);
+    } else if (session) {
+      // Authenticated — redirect away from auth pages
+      if (inAuthGroup) {
+        if (!onboardingDone) {
+          router.replace('/permissions_onboarding' as any);
+        } else {
+          router.replace('/');
+        }
+      } else if (!onboardingDone && !inOnboarding) {
+        router.replace('/permissions_onboarding' as any);
+      }
+    }
+    // Guest users: allow anywhere
+  }, [session, isGuest, isLoading, onboardingDone, welcomeShown, segments]);
 
   return null;
 }
@@ -160,12 +180,68 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    // Handle tapping a notification when app is in foreground or background
-    const sub = Notifications.addNotificationResponseReceivedListener(response => {
-      handleNotificationResponse(response, router);
+    // Check if app was opened from a notification while killed
+    notifee.getInitialNotification().then(initialNotification => {
+      if (initialNotification) {
+        handleNotificationResponse(initialNotification.notification, router);
+      }
     });
-    return () => sub.remove();
+
+    // Handle tapping a notification when app is in foreground
+    return notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.PRESS) {
+        handleNotificationResponse(detail.notification, router);
+      }
+    });
   }, [router]);
+
+  // Global Deep Link Handler — handles cold-start OAuth redirects only.
+  // Navigation is handled solely by AuthMiddleware watching session state.
+  useEffect(() => {
+    const handleDeepLink = async (event: { url: string }) => {
+      const url = event.url;
+      if (!url) return;
+      
+      console.log('[Global DeepLink] Received URL:', url);
+      
+      const getParam = (name: string) => {
+        const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
+        return match ? decodeURIComponent(match[1]) : null;
+      };
+
+      const code = getParam('code');
+      const access_token = getParam('access_token');
+      const refresh_token = getParam('refresh_token');
+
+      // Only process if this is actually an auth redirect
+      if (!code && !access_token) return;
+
+      try {
+        if (code) {
+          console.log('[Global DeepLink] Exchanging PKCE code for session...');
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          // onAuthStateChange in useAuthStore fires automatically → AuthMiddleware navigates
+        } else if (access_token && refresh_token) {
+          console.log('[Global DeepLink] Setting session from implicit flow...');
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (error) throw error;
+          // onAuthStateChange fires automatically → AuthMiddleware navigates
+        }
+      } catch (e: any) {
+        console.error('[Global DeepLink] Failed to handle authentication redirect:', e);
+      }
+    };
+
+    // Only used for true cold-start deep links (app opened via URL while closed)
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    Linking.getInitialURL().then(url => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -174,6 +250,8 @@ function RootLayoutNav() {
         <BackgroundGradient>
           <NavigationThemeProvider value={DefaultTheme}>
             <BottomSheetModalProvider>
+              <XPToastProvider>
+              <UniversalRefreshButton />
               <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
@@ -203,6 +281,7 @@ function RootLayoutNav() {
                 <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="subscription-settings" options={{ headerShown: false }} />
               </Stack>
+              </XPToastProvider>
             </BottomSheetModalProvider>
           </NavigationThemeProvider>
         </BackgroundGradient>

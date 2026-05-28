@@ -23,41 +23,53 @@ export default function WelcomeScreen() {
     return () => { WebBrowser.coolDownAsync(); };
   }, []);
 
-  const handleRedirect = async (url: string) => {
-    const parsed = Linking.parse(url);
-    const { access_token, refresh_token } = (parsed.queryParams || {}) as any;
-    
-    if (access_token && refresh_token) {
-      const { error } = await supabase.auth.setSession({
-        access_token,
-        refresh_token });
-      if (!error) {
-        router.replace('/' as any);
-      }
-    }
-  };
-
   const handleSignInWithGoogle = async () => {
     try {
       setGoogleLoading(true);
-      const redirectUrl = 'groundwork://';
+      const redirectUrl = __DEV__ ? Linking.createURL('/') : 'groundwork://';
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: true } });
+          skipBrowserRedirect: true,
+          queryParams: {
+            prompt: 'select_account consent',
+            access_type: 'offline',
+          },
+        },
+      });
 
-      if (error) { setGoogleLoading(false); return; }
+      if (error) throw error;
 
       if (data?.url) {
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         if (res.type === 'success' && res.url) {
-          handleRedirect(res.url);
+          const url = res.url;
+          const getParam = (name: string) => {
+            const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
+            return match ? decodeURIComponent(match[1]) : null;
+          };
+          const code = getParam('code');
+          const access_token = getParam('access_token');
+          const refresh_token = getParam('refresh_token');
+
+          if (code) {
+            const { data: sessionData, error: exchError } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchError) throw exchError;
+            // onAuthStateChange handles Zustand state update — AuthMiddleware handles navigation
+          } else if (access_token && refresh_token) {
+            const { error: sessError } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (sessError) throw sessError;
+            // onAuthStateChange fires automatically
+          }
+          // AuthMiddleware will handle navigation when session updates — do NOT call router.replace here
         }
+      } else {
+        throw new Error('No authentication URL returned from Supabase.');
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error('[Auth] Google sign in error:', e);
     } finally {
       setGoogleLoading(false);
     }
@@ -82,6 +94,22 @@ export default function WelcomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={{ flex: 1, justifyContent: 'center', padding: 24 }}
       >
+        {Platform.OS === 'web' ? (
+          <View style={{ position: 'absolute', top: 16, right: 16, flexDirection: 'row', gap: 10, zIndex: 10 }}>
+            <Pressable
+              onPress={handleSignIn}
+              style={[styles.webTopSecondary, { borderColor: theme.cardBorder, backgroundColor: theme.card }]}
+            >
+              <Text style={[styles.webTopSecondaryText, { color: theme.primaryText }]}>Log in</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleCreateAccount}
+              style={[styles.webTopPrimary, { backgroundColor: theme.accent }]}
+            >
+              <Text style={styles.webTopPrimaryText}>Sign up</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <View style={{ alignItems: 'center', zIndex: 1 }}>
           <Animated.View entering={FadeInUp.delay(0).duration(300)} style={{ alignItems: 'center', marginBottom: 40 }}>
             <BrandLogo fontSize={42} />
@@ -195,4 +223,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     textAlign: 'center' }
+  ,
+  webTopPrimary: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  webTopPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
+  webTopSecondary: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  webTopSecondaryText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
 });

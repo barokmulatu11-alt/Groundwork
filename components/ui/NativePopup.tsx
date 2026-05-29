@@ -1,8 +1,8 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import React from 'react';
-import { View, StyleSheet, Modal, Pressable, Animated, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, Animated, Dimensions, Platform, TouchableOpacity } from 'react-native';
+import { X } from 'lucide-react-native';
 import { Theme } from '@/lib/ThemeContext';
-import { AnimatedButton } from './AnimatedButton';
 
 interface NativePopupProps {
   visible: boolean;
@@ -11,7 +11,7 @@ interface NativePopupProps {
   message: string;
   theme: Theme;
   isDark: boolean;
-  primaryButton: {
+  primaryButton?: {
     text: string;
     onPress: () => void;
     destructive?: boolean;
@@ -20,9 +20,33 @@ interface NativePopupProps {
     text: string;
     onPress: () => void;
   };
+  showCloseButton?: boolean;
 }
 
 const { width } = Dimensions.get('window');
+
+function PopupButton({ title, onPress, variant, theme, destructive, flex }: any) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={[
+        styles.button,
+        flex ? { flex: 1 } : { width: '100%' },
+        variant === 'primary'
+          ? { backgroundColor: destructive ? theme.danger : theme.accent }
+          : { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder }
+      ]}
+    >
+      <Text style={[
+        styles.buttonText,
+        { color: variant === 'primary' ? '#FFFFFF' : (destructive ? theme.danger : theme.accent) }
+      ]}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export function NativePopup({
   visible,
@@ -33,6 +57,7 @@ export function NativePopup({
   isDark,
   primaryButton,
   secondaryButton,
+  showCloseButton = true,
 }: NativePopupProps) {
   const [showModal, setShowModal] = React.useState(visible);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -88,7 +113,7 @@ export function NativePopup({
           style={[
             styles.container,
             {
-              backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+              backgroundColor: theme.cardSolid,
               opacity: fadeAnim,
               transform: [{ scale: scaleAnim }],
               borderColor: theme.cardBorder,
@@ -97,28 +122,41 @@ export function NativePopup({
           ]}
         >
           <View style={styles.content}>
+            {showCloseButton && (
+              <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
+                <X size={20} color={theme.tertiaryText} />
+              </TouchableOpacity>
+            )}
+            
             <Text style={[styles.title, { color: theme.primaryText }]}>{title}</Text>
             <Text style={[styles.message, { color: theme.secondaryText }]}>{message}</Text>
             
-            <View style={styles.buttonContainer}>
-              {secondaryButton && (
-                <AnimatedButton
-                  title={secondaryButton.text}
-                  onPress={secondaryButton.onPress}
-                  variant="secondary"
-                  style={styles.button}
-                />
-              )}
-              <AnimatedButton
-                title={primaryButton.text}
-                onPress={primaryButton.onPress}
-                variant="primary"
-                style={[
-                  styles.button,
-                  primaryButton.destructive && { backgroundColor: '#FF3B30' }
-                ]}
-              />
-            </View>
+            {(primaryButton || secondaryButton) && (
+              <View style={[
+                styles.buttonContainer,
+                (primaryButton && secondaryButton) ? styles.buttonContainerRow : styles.buttonContainerCol
+              ]}>
+                {secondaryButton && (
+                  <PopupButton
+                    title={secondaryButton.text}
+                    onPress={secondaryButton.onPress}
+                    variant="secondary"
+                    theme={theme}
+                    flex={!!(primaryButton && secondaryButton)}
+                  />
+                )}
+                {primaryButton && (
+                  <PopupButton
+                    title={primaryButton.text}
+                    onPress={primaryButton.onPress}
+                    variant="primary"
+                    theme={theme}
+                    destructive={primaryButton.destructive}
+                    flex={!!(primaryButton && secondaryButton)}
+                  />
+                )}
+              </View>
+            )}
           </View>
         </Animated.View>
       </View>
@@ -166,9 +204,36 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: '100%',
     flexDirection: 'column',
-    gap: 12,
+    gap: 10,
+  },
+  buttonContainerRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  buttonContainerCol: {
+    flexDirection: 'column',
+    gap: 10,
   },
   button: {
-    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

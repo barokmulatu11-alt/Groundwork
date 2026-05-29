@@ -19,3 +19,5 @@ export const AppText = React.forwardRef<RNText, TextProps>((props, ref) => {
   
   return <RNText ref={ref} {...props} style={flatStyle} />;
 });
+
+

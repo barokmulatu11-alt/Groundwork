@@ -16,9 +16,11 @@ interface Props {
   onUpdate: (updates: Partial<Task>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onEdit?: () => void;
+  showDate?: boolean;
 }
 
-export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplicate }: Props) => {
+export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplicate, onEdit, showDate }: Props) => {
   const { theme, isDark } = useTheme();
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(task.note);
@@ -95,6 +97,13 @@ export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplica
                 <Text style={[styles.metaText, { color: theme.secondaryText }]}>{task.time_block}</Text>
               </View>
             ) : null}
+
+            {showDate && task.date && (
+              <View style={styles.metaItem}>
+                <Calendar size={12} color={theme.secondaryText} />
+                <Text style={[styles.metaText, { color: theme.secondaryText }]}>{task.date}</Text>
+              </View>
+            )}
             
             {task.sub_tasks && task.sub_tasks.length > 0 && (
               <Text style={[styles.metaText, { color: theme.secondaryText }]}>
@@ -162,6 +171,11 @@ export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplica
         </View>
 
         <View style={styles.actionRow}>
+          {onEdit && (
+            <Pressable style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} onPress={onEdit}>
+              <Text style={[styles.actionText, { color: theme.primaryText }]}>✏️ Edit</Text>
+            </Pressable>
+          )}
           <Pressable style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} onPress={onDuplicate}>
             <Text style={[styles.actionText, { color: theme.primaryText }]}>📋 Duplicate</Text>
           </Pressable>

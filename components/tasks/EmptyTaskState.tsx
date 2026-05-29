@@ -33,7 +33,7 @@ export const EmptyTaskState = ({ onQuickAdd, yesterdayTasks, onAddYesterdayTasks
         <AnimatedCard style={styles.yesterdayCard}>
           <Text style={[styles.yesterdayTitle, { color: theme.primaryText }]}>Continue from yesterday</Text>
           <Text style={[styles.yesterdaySub, { color: theme.secondaryText }]}>You had {yesterdayTasks.length} task{yesterdayTasks.length > 1 ? 's' : ''} yesterday you didn't finish. Add them to today?</Text>
-          <Pressable style={[styles.addYesterdayBtn]} onPress={onAddYesterdayTasks}>
+          <Pressable style={[styles.addYesterdayBtn, { backgroundColor: theme.accent }]} onPress={onAddYesterdayTasks}>
             <Plus size={16} color="white" />
             <Text style={styles.addYesterdayBtnText}>Add All to Today</Text>
           </Pressable>
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   yesterdayCard: { padding: 16, borderRadius: 16, width: '100%', alignItems: 'center' },
   yesterdayTitle: { fontSize: 16, fontFamily: 'System', fontWeight: '600', marginBottom: 4 },
   yesterdaySub: { fontSize: 13, fontFamily: 'System', fontWeight: '500', textAlign: 'center', marginBottom: 16, lineHeight: 18 },
-  addYesterdayBtn: { backgroundColor: '#007AFF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 8 },
+  addYesterdayBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 8 },
   addYesterdayBtnText: { color: 'white', fontSize: 14, fontFamily: 'System', fontWeight: '600' }
 });
 

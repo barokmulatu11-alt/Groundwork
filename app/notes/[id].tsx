@@ -3,26 +3,62 @@ import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { DrawingCanvas } from '@/components/DrawingCanvas';
 import { ImageViewer } from '@/components/ImageViewer';
 import { AlertType, CustomAlert } from '@/components/ui/CustomAlert';
+import { KeyboardAwareSheet } from '@/components/ui/KeyboardAwareSheet';
 import { VoiceNoteItem } from '@/components/VoiceNoteItem';
 import { VoiceRecordingUI } from '@/components/VoiceRecordingUI';
-import { TabHeader } from '@/components/ui/TabHeader';
 import { useTheme } from '@/lib/ThemeContext';
+import { normalizeNoteContent } from '@/lib/noteContent';
 import { useStore } from '@/store/useStore';
+import { requestIntelligentPermission, openSettings } from '@/lib/permissions';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Bold, Camera, ChevronLeft, Image as GalleryIcon, Image as ImageIcon, Italic, Link, List, ListOrdered, Lock, Mic, PenTool, Pin, Redo, Square, Strikethrough, Trash2, Underline, Undo, Unlock, X } from 'lucide-react-native';
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { RichEditor, RichToolbar, actions } from 'react-native-pell-rich-editor';
+import {
+  Bold, Camera, ChevronLeft, Image as ImageIcon, Italic, Link, List, ListOrdered,
+  Lock, Mic, MoreHorizontal, PenTool, Pin, Redo, Square, Strikethrough, Trash2,
+  Underline, Undo, Unlock, X, Plus, Calculator,
+} from 'lucide-react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView,
+  StyleSheet, TextInput, View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, G, Mask, Path, Rect } from 'react-native-svg';
 
+const PRIORITY_COLORS: Record<string, string> = {
+  Low: '#34C759',
+  Medium: '#007AFF',
+  High: '#FF9500',
+  Critical: '#FF3B30',
+};
+
+const FOLDERS = ['General', 'School', 'Personal', 'Physics', 'Calculus', 'Programming'];
+
+type DraftPayload = {
+  title: string;
+  content: string;
+  is_locked: boolean;
+  is_pinned: boolean;
+  tags: string[];
+  image_uris: string[];
+  audio_uris: string[];
+  drawing_uris: string[];
+  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  folder: string;
+  flashcards: { question: string; answer: string }[];
+  formulas: { name: string; latexOrText: string; description: string; isPinned?: boolean }[];
+};
+
+function draftSignature(d: DraftPayload | null): string {
+  return JSON.stringify(d);
+}
+
 export default function NoteEditorScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
   const router = useRouter();
-  const { notes, addNote, updateNote, deleteNote, draftNote, setDraftNote } = useStore();
+  const { notes, addNote, updateNote, deleteNote, setDraftNote } = useStore();
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -35,167 +71,183 @@ export default function NoteEditorScreen() {
   const [isPinned, setIsPinned] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
-
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [audioUris, setAudioUris] = useState<string[]>([]);
   const [drawingUris, setDrawingUris] = useState<string[]>([]);
+  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
+  const [folder, setFolder] = useState('General');
+  const [flashcards, setFlashcards] = useState<{ question: string; answer: string }[]>([]);
+  const [formulas, setFormulas] = useState<{ name: string; latexOrText: string; description: string; isPinned?: boolean }[]>([]);
 
-  const richText = useRef<RichEditor>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [formulaModalVisible, setFormulaModalVisible] = useState(false);
+  const [formulaName, setFormulaName] = useState('');
+  const [formulaEq, setFormulaEq] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const loadedIdRef = useRef<string | null>(null);
+  const lastDraftSigRef = useRef<string>('');
+  const startTimeRef = useRef(Date.now());
+  const autoStartRecorded = useRef(false);
 
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  
   const [alertVisible, setAlertVisible] = useState(false);
-  const [alertConfig, setAlertConfig] = useState<{ 
-    title: string; 
-    message: string; 
-    type: AlertType;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-    showCancel?: boolean;
-    cancelText?: string;
-    confirmText?: string;
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string; message: string; type: AlertType;
+    onConfirm?: () => void; onCancel?: () => void;
+    showCancel?: boolean; cancelText?: string; confirmText?: string;
   }>({ title: '', message: '', type: 'info' });
-
   const [imagePickerVisible, setImagePickerVisible] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
 
-  const showAlert = (title: string, message: string, type: AlertType = 'info') => {
-    setAlertConfig({ title, message, type });
-    setAlertVisible(true);
-  };
+  const hydrate = useCallback((data: Partial<DraftPayload>) => {
+    setTitle(data.title || '');
+    // Some older notes may have been saved as HTML (e.g. from a rich text editor).
+    // We edit in a plain TextInput, so normalize to readable plain text.
+    setContent(normalizeNoteContent(data.content || ''));
+    setIsLocked(!!data.is_locked);
+    setIsPinned(!!data.is_pinned);
+    setTags(data.tags || []);
+    setImageUris(data.image_uris || []);
+    setAudioUris(data.audio_uris || []);
+    setDrawingUris(data.drawing_uris || []);
+    setPriority(data.priority || 'Medium');
+    setFolder(data.folder || 'General');
+    setFlashcards(data.flashcards || []);
+    setFormulas(data.formulas || []);
+  }, []);
 
-  useEffect(() => {
-    if (!isNew && existingNote) {
-      if (existingNote.is_locked && !isAuthenticated) {
-        authenticateToUnlock();
-      } else {
-        setTitle(existingNote.title);
-        setContent(existingNote.content);
-        setIsLocked(existingNote.is_locked);
-        setIsPinned(existingNote.is_pinned || false);
-        setTags(existingNote.tags || []);
-        setImageUris(existingNote.image_uris || []);
-        setAudioUris(existingNote.audio_uris || []);
-        setDrawingUris(existingNote.drawing_uris || []);
-      }
-    } else if (isNew && draftNote) {
-      setTitle(draftNote.title || '');
-      setContent(draftNote.content || '');
-      setIsLocked(draftNote.is_locked || false);
-      setIsPinned(draftNote.is_pinned || false);
-      setTags(draftNote.tags || []);
-      setImageUris(draftNote.image_uris || []);
-      setAudioUris(draftNote.audio_uris || []);
-      setDrawingUris(draftNote.drawing_uris || []);
-    } else if (!isNew && !existingNote) {
-      router.back();
-    }
-  }, [id, isAuthenticated, draftNote]);
-
-  useEffect(() => {
-    if (isNew) {
-      if (!title.trim() && !content.trim() && imageUris.length === 0 && audioUris.length === 0 && drawingUris.length === 0) {
-        setDraftNote(null);
-      } else {
-        setDraftNote({ 
-          title, 
-          content, 
-          is_locked: isLocked, 
-          is_pinned: isPinned, 
-          tags, 
-          image_uris: imageUris, 
-          audio_uris: audioUris, 
-          drawing_uris: drawingUris 
-        });
-      }
-    }
-  }, [title, content, isLocked, isPinned, tags, imageUris, audioUris, drawingUris]);
-
-  const authenticateToUnlock = async () => {
+  const authenticateToUnlock = useCallback(async () => {
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    
     if (hasHardware && isEnrolled) {
-      const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock Note' });
+      const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock note' });
       if (result.success) setIsAuthenticated(true);
       else router.back();
     } else {
       setIsAuthenticated(true);
     }
-  };
+  }, [router]);
 
-  const handlePickImage = async (useCamera: boolean = false) => {
-    const getStatus = async () => {
-      if (useCamera) {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        return status;
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        return status;
+  useEffect(() => {
+    loadedIdRef.current = null;
+  }, [id]);
+
+  useEffect(() => {
+    if (loadedIdRef.current === id) return;
+
+    if (!isNew && existingNote) {
+      if (existingNote.is_locked && !isAuthenticated) {
+        authenticateToUnlock();
+        return;
       }
-    };
-
-    const status = await getStatus();
-
-    if (status !== 'granted') {
-      setAlertConfig({
-        title: useCamera ? 'Camera Access Needed' : 'Photo Access Needed',
-        message: useCamera ? 'To attach photos to your notes, please allow camera access.' : 'To attach images from your gallery, please allow photo access.',
-        type: 'warning' });
-      setAlertVisible(true);
+      hydrate({
+        title: existingNote.title,
+        content: existingNote.content,
+        is_locked: existingNote.is_locked,
+        is_pinned: existingNote.is_pinned,
+        tags: existingNote.tags,
+        image_uris: existingNote.image_uris,
+        audio_uris: existingNote.audio_uris,
+        drawing_uris: existingNote.drawing_uris,
+        priority: existingNote.priority,
+        folder: existingNote.folder,
+        flashcards: existingNote.flashcards,
+        formulas: existingNote.formulas,
+      });
+      loadedIdRef.current = id as string;
       return;
     }
 
+    if (isNew) {
+      const draft = useStore.getState().draftNote;
+      if (draft) hydrate(draft as DraftPayload);
+      loadedIdRef.current = 'new';
+      return;
+    }
+
+    if (!isNew && !existingNote) {
+      router.back();
+    }
+  }, [id, isNew, existingNote, isAuthenticated, authenticateToUnlock, hydrate, router]);
+
+  useEffect(() => {
+    if (!isNew) return;
+    const timer = setTimeout(() => {
+      const empty =
+        !title.trim() && !content.trim()
+        && imageUris.length === 0 && audioUris.length === 0
+        && drawingUris.length === 0 && formulas.length === 0;
+      const payload: DraftPayload | null = empty ? null : {
+        title, content, is_locked: isLocked, is_pinned: isPinned, tags,
+        image_uris: imageUris, audio_uris: audioUris, drawing_uris: drawingUris,
+        priority, folder, flashcards, formulas,
+      };
+      const sig = draftSignature(payload);
+      if (sig === lastDraftSigRef.current) return;
+      lastDraftSigRef.current = sig;
+      setDraftNote(payload);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [title, content, isLocked, isPinned, tags, imageUris, audioUris, drawingUris, priority, folder, flashcards, formulas, isNew, setDraftNote]);
+
+  const handlePickImage = async (useCamera = false) => {
+    const { granted, status } = await requestIntelligentPermission(useCamera ? 'camera' : 'media');
+    if (!granted) {
+      setAlertConfig({
+        title: useCamera ? 'Camera blocked' : 'Photos blocked',
+        message: 'Enable access in settings to attach images.',
+        type: 'warning',
+        showCancel: true,
+        confirmText: 'Settings',
+        onConfirm: () => { openSettings(); setAlertVisible(false); },
+        onCancel: () => setAlertVisible(false),
+      });
+      setAlertVisible(true);
+      return;
+    }
     const options: ImagePicker.ImagePickerOptions = {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.8,
-      aspect: [4, 3] };
-
-    const result = useCamera 
+      aspect: [4, 3],
+    };
+    const result = useCamera
       ? await ImagePicker.launchCameraAsync(options)
       : await ImagePicker.launchImageLibraryAsync(options);
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImageUris([...imageUris, result.assets[0].uri]);
+    if (!result.canceled && result.assets?.[0]) {
+      setImageUris(prev => [...prev, result.assets[0].uri]);
     }
     setImagePickerVisible(false);
   };
 
   const startRecording = async () => {
-    const { status } = await Audio.requestPermissionsAsync();
-
-    if (status !== 'granted') {
-      setAlertConfig({
-        title: 'Microphone Access Needed',
-        message: 'To record voice notes, please allow microphone access in your settings.',
-        type: 'warning' });
+    const { granted } = await requestIntelligentPermission('microphone');
+    if (!granted) {
+      setAlertConfig({ title: 'Microphone needed', message: 'Allow mic access to record voice notes.', type: 'warning' });
       setAlertVisible(true);
       return;
     }
-
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false });
-
+        playThroughEarpieceAndroid: false,
+      });
       const newRecording = new Audio.Recording();
       await newRecording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await newRecording.startAsync();
-      
       setRecording(newRecording);
       setIsRecording(true);
-    } catch (err) {
-      console.error("Failed to start recording", err);
-      showAlert('Recording Error', 'The microphone could not be started.', 'error');
+    } catch {
+      setAlertConfig({ title: 'Recording error', message: 'Could not start the microphone.', type: 'error' });
+      setAlertVisible(true);
     }
   };
 
@@ -206,82 +258,77 @@ export default function NoteEditorScreen() {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       setRecording(null);
-      if (uri) {
-        setAudioUris([...audioUris, uri]);
-        transcribeAudio(uri);
-      }
-    } catch (err) {
-      console.error("Failed to stop recording", err);
+      if (uri) setAudioUris(prev => [...prev, uri]);
+    } catch {
+      /* ignore */
     }
   };
 
-  const transcribeAudio = (uri: string) => {
-    setTimeout(() => {
-      const transcription = "<p><i>[Voice Transcription]: This is a summary of the recorded thoughts regarding the project timeline and key milestones...</i></p>";
-      setContent(prev => prev + transcription);
-      richText.current?.insertHTML(transcription);
-    }, 2000);
-  };
+  useEffect(() => {
+    if (isNew && mode === 'voice' && !autoStartRecorded.current) {
+      autoStartRecorded.current = true;
+      const timer = setTimeout(() => startRecording(), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isNew, mode]);
 
   const handleAddTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim().toLowerCase())) {
-      setTags([...tags, tagInput.trim().toLowerCase()]);
+    const t = tagInput.trim().toLowerCase();
+    if (t && !tags.includes(t)) {
+      setTags([...tags, t]);
       setTagInput('');
     }
   };
 
   const handleSave = async () => {
-    if (!title.trim() && !content.trim()) {
+    const cleanedContent = normalizeNoteContent(content).trim();
+    if (!title.trim() && !cleanedContent) {
       router.back();
       return;
     }
+    const hoursSpent = (Date.now() - startTimeRef.current) / 3600000;
     const noteData = {
       title: title.trim(),
-      content: content.trim(),
+      content: cleanedContent,
       is_locked: isLocked,
       is_pinned: isPinned,
       tags,
       image_uris: imageUris,
       audio_uris: audioUris,
       drawing_uris: drawingUris,
+      priority,
+      folder,
+      flashcards,
+      formulas,
+      study_hours: (existingNote?.study_hours || 0) + hoursSpent,
+      revision_score: existingNote?.revision_score || 0,
+      last_reviewed_at: existingNote?.last_reviewed_at || null,
       media_uri: imageUris[0] || audioUris[0] || null,
-      media_type: imageUris.length > 0 ? 'image' : (audioUris.length > 0 ? 'audio' : null) as any
+      media_type: imageUris.length > 0 ? 'image' : (audioUris.length > 0 ? 'audio' : null) as 'image' | 'audio' | null,
     };
-
     if (isNew) {
       await addNote(noteData);
       setDraftNote(null);
+      lastDraftSigRef.current = '';
     } else {
       await updateNote(id as string, noteData);
     }
-    
     router.back();
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Note",
-      "Are you sure you want to delete this note?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive", 
-          onPress: async () => {
-            await deleteNote(id as string);
-            router.back();
-          } 
-        }
-      ]
-    );
+    Alert.alert('Delete note', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteNote(id as string); router.back(); } },
+    ]);
   };
 
   if (!isNew && existingNote?.is_locked && !isAuthenticated) {
     return (
       <BackgroundGradient>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Lock size={48} color={theme.secondaryText} style={{ marginBottom: 16 }} />
-          <Text style={{ color: theme.secondaryText, fontFamily: 'Inter_600SemiBold' }}>Unlock to view note</Text>
+        <View style={styles.lockedCenter}>
+          <Lock size={48} color={theme.secondaryText} />
+          <Text style={{ color: theme.secondaryText, fontFamily: 'Inter_600SemiBold', marginTop: 12 }}>Unlock to view</Text>
         </View>
       </BackgroundGradient>
     );
@@ -290,213 +337,285 @@ export default function NoteEditorScreen() {
   return (
     <BackgroundGradient>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={{ flex: 1, paddingTop: insets.top + 24 }}>
-          <View style={{ paddingHorizontal: 24, marginBottom: 8 }}>
-            <TabHeader 
-              title={isNew ? "New Note" : "Edit Note"} 
-              subtitle={isNew ? "Capture your thoughts" : `Last edited ${existingNote ? new Date(existingNote.updated_at).toLocaleDateString() : ''}`}
-            />
-            
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-               <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <Pressable onPress={() => setIsPinned(!isPinned)} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isPinned ? theme.accent : theme.accentLight, alignItems: 'center', justifyContent: 'center' }}>
-                    <Pin size={20} color={isPinned ? 'white' : theme.accent} />
-                  </Pressable>
-                  <Pressable onPress={() => setIsLocked(!isLocked)} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isLocked ? theme.accent : theme.accentLight, alignItems: 'center', justifyContent: 'center' }}>
-                    {isLocked ? <Lock size={20} color="white" /> : <Unlock size={20} color={theme.accent} />}
-                  </Pressable>
-                  {!isNew && (
-                    <Pressable onPress={handleDelete} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${theme.danger}15`, alignItems: 'center', justifyContent: 'center' }}>
-                      <Trash2 size={16} color={theme.danger} />
-                    </Pressable>
-                  )}
-               </View>
-               <Pressable onPress={handleSave} style={{ paddingHorizontal: 20, height: 40, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
-                 <Text style={{ color: 'white', fontFamily: 'Inter_700Bold', fontSize: 14 }}>Save</Text>
-               </Pressable>
-            </View>
-          </View>
+        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <ChevronLeft size={22} color={theme.accent} />
+          </Pressable>
+          <Text style={[styles.topTitle, { color: theme.primaryText }]} numberOfLines={1}>
+            {isNew ? 'New note' : title || 'Edit note'}
+          </Text>
+          <Pressable onPress={() => setMenuOpen(true)} style={[styles.iconBtn, { backgroundColor: theme.card }]}>
+            <MoreHorizontal size={20} color={theme.primaryText} />
+          </Pressable>
+          <Pressable onPress={handleSave} style={[styles.saveBtn, { backgroundColor: theme.accent }]}>
+            <Text style={styles.saveBtnText}>Save</Text>
+          </Pressable>
+        </View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
-            <View style={{ paddingHorizontal: 24 }}>
-              <TextInput
-                style={[styles.titleInput, { color: theme.primaryText }]}
-                placeholder="Note Title"
-                placeholderTextColor={theme.secondaryText + '80'}
-                value={title}
-                onChangeText={setTitle}
-                multiline
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }} keyboardShouldPersistTaps="handled">
+          <View style={{ paddingHorizontal: 20 }}>
+            <TextInput
+              style={[styles.titleInput, { color: theme.primaryText }]}
+              placeholder="Title"
+              placeholderTextColor={theme.tertiaryText}
+              value={title}
+              onChangeText={setTitle}
+              multiline
+            />
+
+            <Pressable onPress={() => setDetailsOpen(true)} style={[styles.metaChip, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+              <Text style={{ color: theme.secondaryText, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                {folder} · {priority}{tags.length ? ` · ${tags.length} tag${tags.length > 1 ? 's' : ''}` : ''}
+              </Text>
+            </Pressable>
+
+            <View style={styles.attachRow}>
+              {[
+                { label: 'Photo', icon: ImageIcon, onPress: () => setImagePickerVisible(true) },
+                { label: isRecording ? 'Stop' : 'Voice', icon: isRecording ? Square : Mic, onPress: isRecording ? stopRecording : startRecording, danger: isRecording },
+                { label: 'Sketch', icon: PenTool, onPress: () => setIsDrawing(true) },
+                { label: 'Formula', icon: Calculator, onPress: () => setFormulaModalVisible(true) },
+              ].map(btn => (
+                <Pressable
+                  key={btn.label}
+                  onPress={btn.onPress}
+                  style={[
+                    styles.attachBtn,
+                    {
+                      backgroundColor: btn.danger ? `${theme.danger}15` : theme.card,
+                      borderColor: btn.danger ? theme.danger : theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <btn.icon size={16} color={btn.danger ? theme.danger : theme.accent} />
+                  <Text style={{ marginLeft: 6, fontSize: 12, fontFamily: 'Inter_600SemiBold', color: btn.danger ? theme.danger : theme.primaryText }}>
+                    {btn.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {isRecording && (
+              <VoiceRecordingUI
+                onStop={stopRecording}
+                colors={{
+                  background: theme.background,
+                  cardBg: theme.card,
+                  cardBorder: theme.cardBorder,
+                  text: theme.primaryText,
+                  textSecondary: theme.secondaryText,
+                }}
+                isDark={isDark}
               />
-              
-              <View style={styles.tagSection}>
-                {tags.map(tag => (
-                  <View key={tag} style={[styles.tagPill, { backgroundColor: theme.card }]}>
-                    <Text style={[styles.tagText, { color: theme.primaryText }]}>#{tag}</Text>
-                    <Pressable onPress={() => setTags(tags.filter(t => t !== tag))} style={{ marginLeft: 6 }}>
-                      <Text style={[styles.tagClose, { color: theme.secondaryText }]}>×</Text>
+            )}
+
+            {imageUris.map((uri, idx) => (
+              <Pressable
+                key={`img-${idx}`}
+                onPress={() => { setSelectedImageUri(uri); setImageViewerVisible(true); }}
+                style={[styles.imageWrap, { borderColor: theme.cardBorder }]}
+              >
+                <Image source={{ uri }} style={styles.image} />
+              </Pressable>
+            ))}
+
+            {audioUris.map((uri, idx) => (
+              <VoiceNoteItem
+                key={`aud-${idx}`}
+                uri={uri}
+                index={idx}
+                colors={{
+                  background: theme.background,
+                  cardBg: theme.card,
+                  cardBorder: theme.cardBorder,
+                  text: theme.primaryText,
+                  textSecondary: theme.secondaryText,
+                }}
+                isDark={isDark}
+                onDelete={() => setAudioUris(audioUris.filter((_, i) => i !== idx))}
+              />
+            ))}
+
+            {drawingUris.map((drawingData, idx) => {
+              let strokes: any = [];
+              try {
+                strokes = typeof drawingData === 'string' ? JSON.parse(drawingData) : drawingData;
+                if (!Array.isArray(strokes)) {
+                  strokes = [];
+                }
+              } catch (err) {
+                console.warn("Failed to parse drawing strokes:", err);
+              }
+              const inkStrokes = strokes.filter((s: any) => s && typeof s === 'object' && s.d && !s.isEraser);
+              const eraserStrokes = strokes.filter((s: any) => s && typeof s === 'object' && s.d && s.isEraser);
+              const maskId = `mask-${idx}`;
+              return (
+                <View key={`draw-${idx}`} style={[styles.drawingWrap, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+                  <Svg style={StyleSheet.absoluteFill}>
+                    <Defs>
+                      <Mask id={maskId}>
+                        <Rect width="100%" height="100%" fill="white" />
+                        {eraserStrokes.map((s: { d: string; width: number }, sIdx: number) => (
+                          <Path key={`e-${sIdx}`} d={s.d} stroke="black" strokeWidth={s.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                        ))}
+                      </Mask>
+                    </Defs>
+                    <G mask={`url(#${maskId})`}>
+                      {inkStrokes.map((s: { d: string; color: string; width: number }, sIdx: number) => (
+                        <Path key={`i-${sIdx}`} d={s.d} stroke={s.color} strokeWidth={s.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      ))}
+                    </G>
+                  </Svg>
+                  <Pressable onPress={() => setDrawingUris(drawingUris.filter((_, i) => i !== idx))} style={styles.drawDelete}>
+                    <Trash2 size={16} color={theme.primaryText} />
+                  </Pressable>
+                </View>
+              );
+            })}
+
+            {formulas.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 10 }}>
+                {formulas.map((f, idx) => (
+                  <View key={idx} style={[styles.formulaCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: theme.primaryText }}>{f.name}</Text>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 13, color: theme.accent, marginTop: 4 }}>{f.latexOrText}</Text>
+                    <Pressable onPress={() => setFormulas(formulas.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: 8, right: 8 }}>
+                      <X size={14} color={theme.secondaryText} />
                     </Pressable>
                   </View>
                 ))}
-                <TextInput
-                  style={[styles.tagInput, { color: theme.primaryText, borderColor: theme.cardBorder }]}
-                  placeholder="Add tag..."
-                  placeholderTextColor={theme.secondaryText}
-                  value={tagInput}
-                  onChangeText={setTagInput}
-                  onSubmitEditing={handleAddTag}
-                  returnKeyType="done"
-                />
-              </View>
+              </ScrollView>
+            )}
 
-              <View style={styles.attachmentStrip}>
-                <Pressable 
-                  onPress={() => setImagePickerVisible(true)} 
-                  style={[styles.attachmentBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-                >
-                  <ImageIcon size={16} color={theme.accent} style={{ marginRight: 8 }} />
-                  <Text style={[styles.attachmentBtnText, { color: theme.primaryText }]}>Image</Text>
-                </Pressable>
-
-                <Pressable 
-                  onPress={isRecording ? stopRecording : startRecording} 
-                  style={[styles.attachmentBtn, isRecording ? { backgroundColor: `${theme.danger}15`, borderColor: theme.danger } : { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-                >
-                  {isRecording ? <Square size={16} color={theme.danger} style={{ marginRight: 8 }} /> : <Mic size={16} color={theme.accent} style={{ marginRight: 8 }} />}
-                  <Text style={[styles.attachmentBtnText, { color: isRecording ? theme.danger : theme.primaryText }]}>{isRecording ? 'Recording' : 'Voice'}</Text>
-                </Pressable>
-              </View>
-
-              {imageUris.map((uri, idx) => (
-                <Pressable 
-                  key={`img-${idx}`} 
-                  onPress={() => { setSelectedImageUri(uri); setImageViewerVisible(true); }}
-                  onLongPress={() => {
-                    Alert.alert("Image Options", "What would you like to do?", [
-                      { text: "Delete", style: "destructive", onPress: () => setImageUris(imageUris.filter((_, i) => i !== idx)) },
-                      { text: "Cancel", style: "cancel" }
-                    ]);
-                  }}
-                  style={[styles.imageAttachment, { borderColor: theme.cardBorder, backgroundColor: theme.card }]}
-                >
-                  <Image source={{ uri }} style={styles.imageAsset} />
-                </Pressable>
-              ))}
-
-              {isRecording && (
-                <VoiceRecordingUI 
-                  onStop={stopRecording} 
-                  colors={{
-                    background: theme.background,
-                    cardBg: theme.card,
-                    cardBorder: theme.cardBorder,
-                    text: theme.primaryText,
-                    textSecondary: theme.secondaryText
-                  }} 
-                  isDark={isDark} 
-                />
-              )}
-
-              {audioUris.map((uri, idx) => (
-                <VoiceNoteItem 
-                  key={`aud-${idx}`} 
-                  uri={uri} 
-                  index={idx} 
-                  colors={{
-                    background: theme.background,
-                    cardBg: theme.card,
-                    cardBorder: theme.cardBorder,
-                    text: theme.primaryText,
-                    textSecondary: theme.secondaryText
-                  }} 
-                  isDark={isDark} 
-                  onDelete={() => setAudioUris(audioUris.filter((_, i) => i !== idx))} 
-                />
-              ))}
-
-              {drawingUris.map((drawingData, idx) => {
-                const strokes = JSON.parse(drawingData);
-                const inkStrokes = strokes.filter((s: any) => !s.isEraser);
-                const eraserStrokes = strokes.filter((s: any) => s.isEraser);
-                const maskId = `mask-${idx}`;
-                return (
-                  <View key={`draw-${idx}`} style={[styles.drawingAttachment, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-                    <Svg style={StyleSheet.absoluteFill}>
-                      <Defs><Mask id={maskId}><Rect width="100%" height="100%" fill="white" />{eraserStrokes.map((s: any, sIdx: number) => (<Path key={`e-${sIdx}`} d={s.d} stroke="black" strokeWidth={s.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />))}</Mask></Defs>
-                      <G mask={`url(#${maskId})`}>{inkStrokes.map((s: any, sIdx: number) => (<Path key={`i-${sIdx}`} d={s.d} stroke={s.color} strokeWidth={s.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />))}</G>
-                    </Svg>
-                    <Pressable onPress={() => setDrawingUris(drawingUris.filter((_, i) => i !== idx))} style={styles.drawingDeleteBtn}>
-                      <Trash2 size={16} color={theme.primaryText} />
-                    </Pressable>
-                  </View>
-                );
-              })}
-
-              <RichToolbar
-                editor={richText}
-                actions={[actions.setBold, actions.setItalic, actions.setUnderline, actions.insertBulletsList, actions.insertOrderedList, actions.insertLink, actions.setStrikethrough, actions.undo, actions.redo]}
-                style={styles.toolbar}
-                selectedIconTint={theme.accent}
-                iconTint={theme.secondaryText}
-                iconMap={{
-                  [actions.setBold]: ({ tintColor }: any) => <Bold size={18} color={tintColor} />,
-                  [actions.setItalic]: ({ tintColor }: any) => <Italic size={18} color={tintColor} />,
-                  [actions.setUnderline]: ({ tintColor }: any) => <Underline size={18} color={tintColor} />,
-                  [actions.insertBulletsList]: ({ tintColor }: any) => <List size={18} color={tintColor} />,
-                  [actions.insertOrderedList]: ({ tintColor }: any) => <ListOrdered size={18} color={tintColor} />,
-                  [actions.insertLink]: ({ tintColor }: any) => <Link size={18} color={tintColor} />,
-                  [actions.setStrikethrough]: ({ tintColor }: any) => <Strikethrough size={18} color={tintColor} />,
-                  [actions.undo]: ({ tintColor }: any) => <Undo size={18} color={tintColor} />,
-                  [actions.redo]: ({ tintColor }: any) => <Redo size={18} color={tintColor} />
-                }}
-              />
-              <RichEditor
-                ref={richText}
-                initialContentHTML={content}
-                onChange={setContent}
-                placeholder="Start typing your thoughts..."
-                editorStyle={{
-                  backgroundColor: 'transparent',
-                  color: theme.primaryText,
-                  contentCSSText: `font-family: 'Inter_500Medium'; font-size: 16px; line-height: 24px; min-height: 400px;` }}
-              />
-            </View>
-          </ScrollView>
-        </View>
+            <TextInput
+              style={{
+                fontSize: 16,
+                fontFamily: 'Inter_500Medium',
+                lineHeight: 24,
+                color: theme.primaryText,
+                minHeight: 320,
+                textAlignVertical: 'top',
+                marginTop: 10,
+              }}
+              placeholder="Write here — use [[hidden text]] for active recall in Study tab"
+              placeholderTextColor={theme.tertiaryText}
+              value={content}
+              onChangeText={setContent}
+              multiline
+            />
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {isDrawing && (
-        <DrawingCanvas 
+        <DrawingCanvas
           colors={{
             background: theme.background,
             cardBg: theme.card,
             cardBorder: theme.cardBorder,
             text: theme.primaryText,
-            textSecondary: theme.secondaryText
-          }} 
-          onCancel={() => setIsDrawing(false)} 
-          onSave={(paths) => { setDrawingUris([...drawingUris, paths]); setIsDrawing(false); }} 
+            textSecondary: theme.secondaryText,
+          }}
+          onCancel={() => setIsDrawing(false)}
+          onSave={(paths) => { setDrawingUris([...drawingUris, paths]); setIsDrawing(false); }}
         />
       )}
 
-      <Modal visible={imagePickerVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setImagePickerVisible(false)} />
-          <View style={[styles.choiceContainer, { backgroundColor: theme.background, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.choiceTitle, { color: theme.primaryText }]}>Add Image</Text>
-            <View style={styles.choiceRow}>
-              <Pressable onPress={() => handlePickImage(true)} style={styles.choiceBtn}>
-                <View style={[styles.choiceIcon, { backgroundColor: 'rgba(0,122,255,0.1)' }]}><Camera size={24} color="#007AFF" /></View>
-                <Text style={[styles.choiceText, { color: theme.primaryText }]}>Camera</Text>
+      <Modal visible={menuOpen} transparent animationType="fade">
+        <Pressable style={styles.overlay} onPress={() => setMenuOpen(false)}>
+          <View style={[styles.menuSheet, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder, marginTop: insets.top + 56 }]}>
+            {[
+              { label: isPinned ? 'Unpin' : 'Pin', icon: Pin, onPress: () => setIsPinned(!isPinned) },
+              { label: isLocked ? 'Unlock' : 'Lock', icon: isLocked ? Lock : Unlock, onPress: () => setIsLocked(!isLocked) },
+              { label: 'Details', icon: Plus, onPress: () => { setMenuOpen(false); setDetailsOpen(true); } },
+              ...(!isNew ? [{ label: 'Delete', icon: Trash2, onPress: handleDelete, danger: true }] : []),
+            ].map(item => (
+              <Pressable key={item.label} onPress={() => { item.onPress(); setMenuOpen(false); }} style={styles.menuRow}>
+                <item.icon size={18} color={'danger' in item && item.danger ? theme.danger : theme.primaryText} />
+                <Text style={{ marginLeft: 12, fontFamily: 'Inter_600SemiBold', color: 'danger' in item && item.danger ? theme.danger : theme.primaryText }}>{item.label}</Text>
               </Pressable>
-              <Pressable onPress={() => handlePickImage(false)} style={styles.choiceBtn}>
-                <View style={[styles.choiceIcon, { backgroundColor: 'rgba(52,199,89,0.1)' }]}><GalleryIcon size={24} color="#34C759" /></View>
-                <Text style={[styles.choiceText, { color: theme.primaryText }]}>Gallery</Text>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <KeyboardAwareSheet visible={detailsOpen} onClose={() => setDetailsOpen(false)} title="Note details">
+        <Text style={[styles.sheetLabel, { color: theme.secondaryText }]}>Space</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 16 }}>
+          {FOLDERS.map(f => (
+            <Pressable key={f} onPress={() => setFolder(f)} style={[styles.pill, { backgroundColor: folder === f ? theme.accent : theme.card, borderColor: folder === f ? theme.accent : theme.cardBorder }]}>
+              <Text style={{ color: folder === f ? '#FFF' : theme.primaryText, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>{f}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Text style={[styles.sheetLabel, { color: theme.secondaryText }]}>Priority</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+          {(['Low', 'Medium', 'High', 'Critical'] as const).map(p => (
+            <Pressable key={p} onPress={() => setPriority(p)} style={[styles.pill, { flex: 1, backgroundColor: priority === p ? PRIORITY_COLORS[p] : theme.card, borderColor: priority === p ? PRIORITY_COLORS[p] : theme.cardBorder }]}>
+              <Text style={{ textAlign: 'center', color: priority === p ? '#FFF' : theme.primaryText, fontFamily: 'Inter_600SemiBold', fontSize: 11 }}>{p}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={[styles.sheetLabel, { color: theme.secondaryText }]}>Tags</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {tags.map(tag => (
+            <Pressable key={tag} onPress={() => setTags(tags.filter(t => t !== tag))} style={[styles.tagPill, { backgroundColor: theme.card }]}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: theme.primaryText }}>#{tag} ×</Text>
+            </Pressable>
+          ))}
+        </View>
+        <TextInput
+          style={[styles.tagInput, { color: theme.primaryText, borderColor: theme.cardBorder, backgroundColor: theme.card }]}
+          placeholder="Add tag"
+          placeholderTextColor={theme.tertiaryText}
+          value={tagInput}
+          onChangeText={setTagInput}
+          onSubmitEditing={handleAddTag}
+          returnKeyType="done"
+        />
+        <Pressable onPress={() => setDetailsOpen(false)} style={[styles.sheetDone, { backgroundColor: theme.accent }]}>
+          <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold' }}>Done</Text>
+        </Pressable>
+      </KeyboardAwareSheet>
+
+      <Modal visible={imagePickerVisible} transparent animationType="fade">
+        <View style={styles.overlay}>
+          <View style={[styles.choiceBox, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.sheetTitle, { color: theme.primaryText }]}>Add photo</Text>
+            <View style={{ flexDirection: 'row', gap: 24, marginTop: 16 }}>
+              <Pressable onPress={() => handlePickImage(true)} style={styles.choiceItem}>
+                <Camera size={28} color={theme.accent} />
+                <Text style={{ marginTop: 8, color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }}>Camera</Text>
+              </Pressable>
+              <Pressable onPress={() => handlePickImage(false)} style={styles.choiceItem}>
+                <ImageIcon size={28} color={theme.accent} />
+                <Text style={{ marginTop: 8, color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }}>Gallery</Text>
               </Pressable>
             </View>
-            <Pressable onPress={() => setImagePickerVisible(false)} style={styles.closeBtn}><X size={20} color={theme.secondaryText} /></Pressable>
+            <Pressable onPress={() => setImagePickerVisible(false)} style={{ marginTop: 20 }}>
+              <Text style={{ color: theme.secondaryText, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
+
+      <KeyboardAwareSheet visible={formulaModalVisible} onClose={() => setFormulaModalVisible(false)} title="Add formula">
+        <TextInput style={[styles.modalInput, { color: theme.primaryText, borderColor: theme.cardBorder, backgroundColor: theme.card }]} placeholder="Name" placeholderTextColor={theme.tertiaryText} value={formulaName} onChangeText={setFormulaName} />
+        <TextInput style={[styles.modalInput, { color: theme.primaryText, borderColor: theme.cardBorder, backgroundColor: theme.card, fontFamily: 'monospace' }]} placeholder="Equation" placeholderTextColor={theme.tertiaryText} value={formulaEq} onChangeText={setFormulaEq} multiline />
+        <Pressable
+          onPress={() => {
+            if (formulaName.trim() && formulaEq.trim()) {
+              setFormulas([...formulas, { name: formulaName.trim(), latexOrText: formulaEq.trim(), description: '' }]);
+              setFormulaName('');
+              setFormulaEq('');
+              setFormulaModalVisible(false);
+            }
+          }}
+          style={[styles.sheetDone, { backgroundColor: theme.accent, marginTop: 8 }]}
+        >
+          <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold' }}>Add</Text>
+        </Pressable>
+      </KeyboardAwareSheet>
 
       <ImageViewer visible={imageViewerVisible} uri={selectedImageUri || ''} isDark={isDark} onClose={() => setImageViewerVisible(false)} onDelete={() => { setImageUris(imageUris.filter(u => u !== selectedImageUri)); setImageViewerVisible(false); }} />
       <CustomAlert visible={alertVisible} title={alertConfig.title} message={alertConfig.message} type={alertConfig.type} onConfirm={alertConfig.onConfirm || (() => setAlertVisible(false))} onCancel={alertConfig.onCancel || (() => setAlertVisible(false))} showCancel={alertConfig.showCancel} cancelText={alertConfig.cancelText} confirmText={alertConfig.confirmText} />
@@ -505,37 +624,34 @@ export default function NoteEditorScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, marginBottom: 16 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  saveBtn: { padding: 8, borderRadius: 12, paddingHorizontal: 16 },
-  saveBtnText: { color: '#FFF', fontFamily: 'Inter_700Bold' },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  titleInput: { fontSize: 28, fontFamily: 'Inter_800ExtraBold', marginBottom: 16 },
-  tagSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 },
-  tagPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-  tagText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  tagClose: { fontSize: 14,  fontFamily: 'Inter_600SemiBold' },
-  tagInput: { fontSize: 12, fontFamily: 'Inter_500Medium', paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderRadius: 16 },
-  attachmentStrip: { flexDirection: 'row', gap: 12, marginBottom: 24, flexWrap: 'wrap' },
-  attachmentBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
-  attachmentBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  imageAttachment: { marginBottom: 16, borderRadius: 20, overflow: 'hidden', borderWidth: 1 },
-  imageAsset: { width: '100%', height: 220, resizeMode: 'cover' },
-  drawingAttachment: { marginBottom: 16, height: 200, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
-  drawingDeleteBtn: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.1)', padding: 8, borderRadius: 20 },
-  toolbar: { backgroundColor: 'transparent' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  choiceContainer: { width: '100%', maxWidth: 320, borderRadius: 28, borderWidth: 1, padding: 24, alignItems: 'center', position: 'relative' },
-  choiceTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 24 },
-  choiceRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', gap: 20 },
-  choiceBtn: { alignItems: 'center' },
-  choiceIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  choiceText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  closeBtn: { position: 'absolute', top: 16, right: 16, padding: 8 }
+  lockedCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
+  backBtn: { padding: 6 },
+  topTitle: { flex: 1, fontSize: 17, fontFamily: 'Inter_700Bold' },
+  iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  saveBtn: { paddingHorizontal: 16, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  saveBtnText: { color: '#FFF', fontFamily: 'Inter_700Bold', fontSize: 14 },
+  titleInput: { fontSize: 28, fontFamily: 'Inter_800ExtraBold', marginBottom: 10 },
+  metaChip: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, marginBottom: 14 },
+  attachRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  attachBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1 },
+  imageWrap: { marginBottom: 12, borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
+  image: { width: '100%', height: 200, resizeMode: 'cover' },
+  drawingWrap: { height: 180, borderRadius: 16, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },
+  drawDelete: { position: 'absolute', top: 10, right: 10, padding: 8, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.08)' },
+  formulaCard: { padding: 12, borderRadius: 14, borderWidth: 1, minWidth: 160, paddingRight: 28 },
+  toolbar: { backgroundColor: 'transparent', marginBottom: 4 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  menuSheet: { alignSelf: 'flex-end', marginRight: 16, borderRadius: 16, borderWidth: 1, padding: 8, minWidth: 200 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  detailsSheet: { width: '100%', maxWidth: 400, borderRadius: 24, borderWidth: 1, padding: 22, marginTop: 'auto' },
+  sheetTitle: { fontSize: 18, fontFamily: 'Inter_800ExtraBold', marginBottom: 16 },
+  sheetLabel: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
+  pill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  tagPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  tagInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter_500Medium', marginBottom: 16 },
+  sheetDone: { paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  choiceBox: { width: '100%', maxWidth: 300, borderRadius: 22, borderWidth: 1, padding: 24, alignItems: 'center' },
+  choiceItem: { alignItems: 'center' },
+  modalInput: { width: '100%', height: 44, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, marginBottom: 10, fontSize: 14, fontFamily: 'Inter_500Medium' },
 });

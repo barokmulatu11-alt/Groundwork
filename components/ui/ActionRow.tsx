@@ -19,9 +19,10 @@ interface ActionRowProps {
   onPress: () => void;
   showChevron?: boolean;
   accentColor?: string;
+  rightElement?: React.ReactNode;
 }
 
-export function ActionRow({ Icon, title, subtitle, onPress, showChevron = true, accentColor }: ActionRowProps) {
+export function ActionRow({ Icon, title, subtitle, onPress, showChevron = true, accentColor, rightElement }: ActionRowProps) {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
 
@@ -65,10 +66,12 @@ export function ActionRow({ Icon, title, subtitle, onPress, showChevron = true, 
           <Text style={[styles.subtitle, { color: theme.secondaryText }]}>{subtitle}</Text>
         )}
       </View>
-      {showChevron && <ChevronRight size={18} color={theme.tertiaryText} />}
+      {rightElement || (showChevron && <ChevronRight size={18} color={theme.tertiaryText} />)}
     </AnimatedPressable>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   card: {
@@ -101,3 +104,5 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 });
+
+

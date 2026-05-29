@@ -1,4 +1,5 @@
 import { useTheme } from '@/lib/ThemeContext';
+import { hapticLight } from '@/lib/haptics';
 import React, { useEffect } from 'react';
 import { Pressable, ViewProps } from 'react-native';
 import Animated, {
@@ -48,9 +49,16 @@ export function AnimatedCard({ onPress, onLongPress, children, style, ...props }
     overflow: 'hidden' as const,
   };
 
+  const handlePress = () => {
+    if (onPress) {
+      hapticLight();
+      onPress();
+    }
+  };
+
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={onPress ? handlePress : undefined}
       onLongPress={onLongPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}

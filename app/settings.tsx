@@ -61,7 +61,7 @@ export default function SettingsScreen() {
   const { theme, isDark, toggleTheme, showAlert } = useTheme();
   const insets = useSafeAreaInsets();
   const { theme: settingsTheme, setTheme, notificationsEnabled, setNotificationsEnabled } = useSettingsStore();
-  const { session, signOut } = useAuthStore();
+  const { session, signOut, isGuest, profile } = useAuthStore();
 
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -129,12 +129,14 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false}>
         
         <ProfileHeader 
-          name={session?.user?.user_metadata?.full_name || session?.user?.email?.split('@')?.[0] || "groundwork. User"}
-          username={`@${session?.user?.user_metadata?.username || session?.user?.email?.split('@')?.[0] || 'guest'}`}
+          name={profile?.full_name || session?.user?.user_metadata?.full_name || session?.user?.email?.split('@')?.[0] || "groundwork. User"}
+          username={`@${profile?.username || session?.user?.user_metadata?.username || session?.user?.email?.split('@')?.[0] || 'guest'}`}
           email={session?.user?.email || "guest@groundwork.app"}
-          isPro={session?.user?.user_metadata?.is_pro || false}
-          isAdmin={session?.user?.user_metadata?.role === 'admin' || session?.user?.email === 'barok.m.lakew@gmail.com'}
-          avatarUri={session?.user?.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/png?seed=${session?.user?.email || 'Barok'}`}
+          isPro={profile?.pro_status || session?.user?.user_metadata?.is_pro || false}
+          isOwner={profile?.role === 'owner' || session?.user?.email === 'barok.m.lakew@gmail.com'}
+          isAdmin={profile?.role === 'admin'}
+          isModerator={profile?.role === 'moderator'}
+          avatarUri={profile?.avatar_url || session?.user?.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/png?seed=${session?.user?.email || 'Barok'}`}
           onEditPress={() => router.push('/edit-profile' as any)}
         />
 
@@ -179,26 +181,28 @@ export default function SettingsScreen() {
         <Card theme={theme}>
           <SettingRow icon={RefreshCw} title="Data & Sync" subtitle="Cloud backup, export, storage" theme={theme} onPress={() => router.push('/data-settings' as any)} />
           <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-          <SettingRow icon={Shield} title="Privacy & Security" subtitle="Biometrics, PIN, sessions" theme={theme} onPress={() => router.push('/privacy-settings' as any)} />
+          <SettingRow icon={Shield} title="Privacy & Permissions" subtitle="Biometrics, permissions, PIN, sessions" theme={theme} onPress={() => router.push('/privacy-settings' as any)} />
         </Card>
 
 
-        <View style={{ marginTop: 40, marginBottom: 20 }}>
-          <TouchableOpacity 
-            onPress={handleSignOut}
-            activeOpacity={0.7}
-            style={[
-              styles.logoutBtn, 
-              { 
-                backgroundColor: isDark ? 'rgba(255,59,48,0.12)' : 'rgba(255,59,48,0.06)',
-                borderColor: isDark ? 'rgba(255,59,48,0.25)' : 'rgba(255,59,48,0.15)'
-              }
-            ]}
-          >
-            <LogOut size={20} color="#FF3B30" />
-            <Text style={styles.logoutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
+        {session && !isGuest && (
+          <View style={{ marginTop: 40, marginBottom: 20 }}>
+            <TouchableOpacity 
+              onPress={handleSignOut}
+              activeOpacity={0.7}
+              style={[
+                styles.logoutBtn, 
+                { 
+                  backgroundColor: isDark ? 'rgba(255,59,48,0.12)' : 'rgba(255,59,48,0.06)',
+                  borderColor: isDark ? 'rgba(255,59,48,0.25)' : 'rgba(255,59,48,0.15)'
+                }
+              ]}
+            >
+              <LogOut size={20} color="#FF3B30" />
+              <Text style={styles.logoutText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
 
 
@@ -240,7 +244,6 @@ const styles = StyleSheet.create({
     height: 1,
     marginLeft: 46,
     opacity: 0.5,
-    考验: 0,
   },
 
   header: { paddingHorizontal: 24, paddingBottom: 20 },

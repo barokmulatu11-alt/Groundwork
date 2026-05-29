@@ -32,6 +32,18 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
   const [hasReminder, setHasReminder] = useState(false);
   const [subTasks, setSubTasks] = useState<string[]>([]);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrowDate = new Date(Date.now() + 86400000);
+  const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+  const nextWeekDate = new Date(Date.now() + 7 * 86400000);
+  const nextWeekStr = nextWeekDate.toISOString().split('T')[0];
+
+  const dateOptions = [
+    { label: 'Today', value: todayStr },
+    { label: 'Tomorrow', value: tomorrowStr },
+    { label: 'Next Week', value: nextWeekStr },
+  ];
+
   useImperativeHandle(ref, () => ({
     open: (defaultDate?: string) => {
       setTitle('');
@@ -40,7 +52,6 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
       setPriority(settings.defaultTaskPriority);
       setHasTime(false);
       setHasReminder(false);
-      setSubTasks([]);
       setSubTasks([]);
       setVisible(true);
       setTimeout(() => inputRef.current?.focus(), 300);
@@ -84,9 +95,26 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
 
           <Text style={[styles.label, { color: theme.secondaryText }]}>DATE</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRow}>
-            <Pressable style={[styles.datePill, { backgroundColor: theme.accent }]}>
-              <Text style={[styles.datePillText, { color: 'white' }]}>Today</Text>
-            </Pressable>
+            {dateOptions.map(opt => {
+              const isSelected = date === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => setDate(opt.value)}
+                  style={[
+                    styles.datePill,
+                    isSelected ? { backgroundColor: theme.accent } : { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }
+                  ]}
+                >
+                  <Text style={[styles.datePillText, isSelected ? { color: 'white' } : { color: theme.secondaryText }]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+            {!dateOptions.some(o => o.value === date) && (
+              <View style={[styles.datePill, { backgroundColor: theme.accent }]}>
+                <Text style={[styles.datePillText, { color: 'white' }]}>{date}</Text>
+              </View>
+            )}
           </ScrollView>
 
           <View style={styles.toggleRow}>

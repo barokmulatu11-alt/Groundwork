@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWA Health & Diagnostics | Groundwork</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at top left, #0e1118, #050609);
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --card-border: rgba(255, 255, 255, 0.07);
+      --glass-glow: rgba(99, 102, 241, 0.15);
+      
+      --color-primary: #818cf8;
+      --color-success: #10b981;
+      --color-success-bg: rgba(16, 185, 129, 0.1);
+      --color-error: #ef4444;
+      --color-error-bg: rgba(239, 68, 68, 0.1);
+      --color-warning: #f59e0b;
+      --color-warning-bg: rgba(245, 158, 11, 0.1);
+      --color-text-main: #f3f4f6;
+      --color-text-muted: #9ca3af;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg-gradient);
+      color: var(--color-text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      overflow-x: hidden;
+    }
+
+    /* Glow effects */
+    .glow-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .glow-circle {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, var(--glass-glow) 0%, transparent 70%);
+      border-radius: 50%;
+      top: -200px;
+      left: -100px;
+      filter: blur(40px);
+      animation: float 20s ease-in-out infinite alternate;
+    }
+
+    .glow-circle-2 {
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(236, 72, 153, 0.08) 0%, transparent 70%);
+      border-radius: 50%;
+      bottom: -100px;
+      right: -50px;
+      filter: blur(40px);
+      animation: float 15s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes float {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(50px, 30px) scale(1.1); }
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .logo {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 2.5rem;
+      background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+      letter-spacing: -1px;
+    }
+
+    .subtitle {
+      color: var(--color-text-muted);
+      font-size: 1rem;
+      font-weight: 400;
+    }
+
+    /* Diagnostics Card */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 2.5rem;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      margin-bottom: 2rem;
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .card-title svg {
+      color: var(--color-primary);
+    }
+
+    /* Status Items */
+    .status-group {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem;
+      background: rgba(255, 255, 255, 0.015);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 16px;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .status-item:hover {
+      background: rgba(255, 255, 255, 0.03);
+      transform: translateY(-2px);
+    }
+
+    .info-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .item-label {
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: var(--color-text-main);
+    }
+
+    .item-desc {
+      font-size: 0.85rem;
+      color: var(--color-text-muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .badge.success {
+      background: var(--color-success-bg);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .badge.error {
+      background: var(--color-error-bg);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .badge.warning {
+      background: var(--color-warning-bg);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    /* Troubleshooting guide */
+    .guide-card {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 20px;
+      padding: 1.75rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .guide-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--color-primary);
+    }
+
+    .guide-steps {
+      list-style-type: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+      color: var(--color-text-muted);
+    }
+
+    .guide-steps li {
+      position: relative;
+      padding-left: 1.5rem;
+    }
+
+    .guide-steps li::before {
+      content: "✦";
+      position: absolute;
+      left: 0;
+      color: var(--color-primary);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.875rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--color-text-main);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.3);
+      position: relative;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-container">
+    <div class="glow-circle"></div>
+    <div class="glow-circle-2"></div>
+  </div>
+
+  <main>
+    <div class="header">
+      <div class="logo">Groundwork</div>
+      <div class="subtitle">Security & Environment Diagnostics</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+        </svg>
+        System Isolation Check
+      </div>
+
+      <div class="status-group">
+        <!-- crossOriginIsolated -->
+        <div class="status-item">
+          <div class="info-left">
+            <span class="item-label">Cross-Origin Isolated</span>
+            <span class="item-desc">Required for synchronous WebAssembly SQLite driver</span>
+          </div>
+          <span id="badge-isolated" class="badge warning">Checking...</span>
+        </div>
+
+        <!-- SharedArrayBuffer -->
+        <div class="status-item">
+          <div class="info-left">
+            <span class="item-label">SharedArrayBuffer Support</span>
+            <span class="item-desc">Memory sharing API utilized by sqlite-wasm</span>
+          </div>
+          <span id="badge-sab" class="badge warning">Checking...</span>
+        </div>
+
+        <!-- Service Worker -->
+        <div class="status-item">
+          <div class="info-left">
+            <span class="item-label">PWA Service Worker</span>
+            <span class="item-desc">Handles offline operations & resource caching</span>
+          </div>
+          <span id="badge-sw" class="badge warning">Checking...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="guide-card">
+      <div class="guide-title">Environment & Debug Info</div>
+      <ul class="guide-steps">
+        <li><strong>Origin:</strong> <span id="text-origin">-</span></li>
+        <li><strong>Secure Context (HTTPS/localhost):</strong> <span id="text-secure">-</span></li>
+        <li><strong>User Agent:</strong> <span id="text-ua">-</span></li>
+        <li id="coop-hint" style="display: none;">💡 <strong>Note:</strong> If crossOriginIsolated is false, check that Vercel is sending the appropriate <code>Cross-Origin-Opener-Policy: same-origin</code> and <code>Cross-Origin-Embedder-Policy: require-corp</code> headers.</li>
+      </ul>
+
+      <div class="button-group">
+        <button onclick="clearServiceWorkerCache()" class="btn btn-secondary">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+          Purge SW & Caches
+        </button>
+        <a href="/" class="btn btn-primary">
+          Launch App
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Groundwork Diagnostics &copy; 2026
+  </footer>
+
+  <script>
+    document.getElementById('text-origin').textContent = window.location.origin;
+    document.getElementById('text-secure').textContent = window.isSecureContext ? 'Yes (Secure)' : 'No (Requires HTTPS/localhost)';
+    document.getElementById('text-ua').textContent = navigator.userAgent;
+
+    // 1. Check crossOriginIsolated
+    const badgeIsolated = document.getElementById('badge-isolated');
+    if (window.crossOriginIsolated) {
+      badgeIsolated.textContent = 'Active';
+      badgeIsolated.className = 'badge success';
+    } else {
+      badgeIsolated.textContent = 'Inactive';
+      badgeIsolated.className = 'badge error';
+      document.getElementById('coop-hint').style.display = 'block';
+    }
+
+    // 2. Check SharedArrayBuffer
+    const badgeSab = document.getElementById('badge-sab');
+    if (typeof SharedArrayBuffer !== 'undefined') {
+      badgeSab.textContent = 'Available';
+      badgeSab.className = 'badge success';
+    } else {
+      badgeSab.textContent = 'Unavailable';
+      badgeSab.className = 'badge error';
+    }
+
+    // 3. Check Service Worker
+    const badgeSw = document.getElementById('badge-sw');
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(registration => {
+        if (registration) {
+          badgeSw.textContent = `Registered (${registration.active ? 'Active' : 'Pending'})`;
+          badgeSw.className = 'badge success';
+        } else {
+          badgeSw.textContent = 'None Active';
+          badgeSw.className = 'badge warning';
+        }
+      }).catch(err => {
+        badgeSw.textContent = 'Error';
+        badgeSw.className = 'badge error';
+      });
+    } else {
+      badgeSw.textContent = 'Unsupported';
+      badgeSw.className = 'badge error';
+    }
+
+    // Clear service worker caches function
+    function clearServiceWorkerCache() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for (let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      caches.keys().then(names => {
+        for (let name of names) {
+          caches.delete(name);
+        }
+      });
+      alert('Unregistered service workers and cleared all caches. Page will reload.');
+      window.location.reload();
+    }
+  </script>
+</body>
+</html>

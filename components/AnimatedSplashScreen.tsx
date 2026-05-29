@@ -97,7 +97,7 @@ export function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenProps) {
 
       {/* Initial "g" */}
       <Animated.Text style={[styles.largeG, gStyle]}>
-        g
+        {/* g removed */}
       </Animated.Text>
 
       {/* Full Word and Branding */}

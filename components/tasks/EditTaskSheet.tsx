@@ -69,7 +69,7 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
             onChangeText={setTitle}
             maxLength={120}
           />
-          <View style={styles.borderBottom} />
+          <View style={[styles.borderBottom, { backgroundColor: theme.accent }]} />
 
           <Text style={[styles.label, { color: theme.secondaryText }]}>PRIORITY</Text>
           <View style={styles.priorityRow}>
@@ -104,7 +104,7 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
 
         <View style={[styles.footer, { backgroundColor: theme.card }]}>
           <Pressable 
-            style={[styles.submitBtn, !title.trim() && { backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }]} 
+            style={[styles.submitBtn, { backgroundColor: theme.accent }, !title.trim() && { backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }]} 
             onPress={handleUpdate}
             disabled={!title.trim()}
           >
@@ -119,14 +119,14 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
 const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 12 },
   titleInput: { fontSize: 20, fontFamily: 'Inter_700Bold', paddingVertical: 8 },
-  borderBottom: { height: 1, backgroundColor: '#007AFF', opacity: 0.5, marginBottom: 24 },
+  borderBottom: { height: 1, opacity: 0.5, marginBottom: 24 },
   label: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 12, marginTop: 16 },
   priorityRow: { flexDirection: 'row', gap: 8 },
   priorityPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.05)' },
   priorityText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   noteInput: { padding: 16, borderRadius: 12, minHeight: 80, textAlignVertical: 'top', fontFamily: 'Inter_500Medium' },
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
-  submitBtn: { backgroundColor: '#007AFF', padding: 16, borderRadius: 100, alignItems: 'center' },
+  submitBtn: { padding: 16, borderRadius: 100, alignItems: 'center' },
   submitText: { color: 'white', fontSize: 16, fontFamily: 'Inter_600SemiBold' }
 });
 

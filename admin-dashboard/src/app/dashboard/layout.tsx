@@ -5,33 +5,38 @@ import { useAuth } from '@/lib/auth-context';
 import Sidebar from '@/components/Sidebar';
 import { Menu, X } from 'lucide-react';
 import { useTheme } from '@/lib/ThemeContext';
+import { isAdminRole } from '@/lib/admin-actions';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, profileReady, profileError } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isDark } = useTheme();
 
+  const accessDenied =
+    !loading &&
+    profileReady &&
+    (!user || !profile || !isAdminRole(profile.role));
+
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.replace('/login');
-        return;
-      }
-      if (profile && profile.role !== 'admin' && profile.role !== 'owner') {
-        router.replace('/login?error=unauthorized');
-      }
+    if (loading || !profileReady) return;
+    if (!user) {
+      router.replace('/login');
+      return;
     }
-  }, [user, profile, loading, router]);
+    if (!profile || !isAdminRole(profile.role)) {
+      router.replace('/login?error=unauthorized');
+    }
+  }, [user, profile, loading, profileReady, router]);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  if (loading) {
+  if (loading || !profileReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-950' : 'bg-slate-50'}`}>
         <div className="flex flex-col items-center gap-4">
           <svg className="animate-spin w-8 h-8 text-[#007AFF]" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -43,12 +48,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (!user || (profile && !['admin', 'owner'].includes(profile.role))) return null;
+  if (accessDenied) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center p-6 ${isDark ? 'bg-gray-950' : 'bg-slate-50'}`}>
+        <div className="max-w-md text-center space-y-3">
+          <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Access denied</p>
+          <p className="text-gray-500 text-sm">
+            {profileError ||
+              (profile
+                ? `Your role is "${profile.role}". Owner or admin is required.`
+                : 'No profile loaded for this account.')}
+          </p>
+          <p className="text-gray-600 text-xs">Redirecting to login…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
-
-      {/* MOBILE HEADER — only visible below md */}
       <header className={`md:hidden flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 ${isDark ? 'bg-[#0a0a0a] border-white/10' : 'bg-white border-slate-200'}`}>
         <button
           onClick={() => setIsMobileMenuOpen(true)}
@@ -63,15 +81,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      {/* MOBILE DRAWER OVERLAY — only visible below md */}
       {isMobileMenuOpen && (
         <div className="md:hidden">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-          {/* Sidebar drawer */}
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={() => setIsMobileMenuOpen(false)} />
           <div className="fixed inset-y-0 left-0 z-50 w-64">
             <div className="relative h-full">
               <button
@@ -87,16 +99,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* DESKTOP SIDEBAR — hidden on mobile, shown on md+ */}
       <div className="hidden md:flex md:flex-shrink-0">
         <Sidebar />
       </div>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 overflow-auto min-w-0">
-        {children}
-      </main>
-
+      <main className="flex-1 overflow-auto min-w-0">{children}</main>
     </div>
   );
 }

@@ -71,8 +71,8 @@ ALTER TABLE remote_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Policies
--- Profiles: Users can view their own, admins can view all
-CREATE POLICY "Profiles are viewable by owner" ON profiles FOR SELECT USING (auth.uid() = id);
+-- Profiles: Viewable by everyone for social/friend queries, manageable by admins
+CREATE POLICY "Profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Profiles are manageable by admins" ON profiles FOR ALL USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'owner'))
 );

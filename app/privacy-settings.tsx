@@ -7,7 +7,10 @@ import { useSessionStore } from '@/store/useSessionStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { checkPermissionStatus, openSettings } from '@/lib/permissions';
 import {
+  Camera,
   ChevronLeft,
   Circle,
   Clock,
@@ -15,9 +18,12 @@ import {
   Eye,
   FileJson,
   Fingerprint,
+  Folder,
   Globe,
+  Image as ImageIcon,
   Lock,
   LogOut,
+  Mic,
   Shield,
   ShieldCheck,
   Smartphone
@@ -26,6 +32,10 @@ import React, { useEffect, useState } from 'react';
 import { Dimensions, Linking, Modal, Platform, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LockScreen } from '@/components/security/LockScreen';
+import { MFAEnrollment } from '@/components/security/MFAEnrollment';
+import { SecurityUtils } from '@/lib/security';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -90,6 +100,17 @@ function SettingRow({ icon: Icon, title, subtitle, theme, children, onPress, des
   return content;
 }
 
+function PermissionBadge({ status, onPress }: { status: string; onPress: () => void }) {
+  const isGranted = status === 'granted' || status === 'limited';
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.permBadge, { backgroundColor: isGranted ? 'rgba(52,199,89,0.1)' : 'rgba(255,59,48,0.1)' }]}>
+      <Text style={[styles.permBadgeText, { color: isGranted ? '#34C759' : '#FF3B30' }]}>
+        {isGranted ? (status === 'limited' ? 'Limited' : 'Granted') : 'Denied'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 
 const MOCK_HISTORY = [
@@ -104,7 +125,7 @@ export default function PrivacySettingsScreen() {
   const { theme, isDark, showAlert } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const accentColor = '#007AFF';
+  const accentColor = theme.accent;
 
   const { faceIdEnabled, setFaceIdEnabled, appPin, setAppPin, autoLockTimeout, setAutoLockTimeout } = useSettingsStore();
   const { session } = useAuthStore();
@@ -112,6 +133,35 @@ export default function PrivacySettingsScreen() {
 
   const [biometricType, setBiometricType] = useState<string>('Face ID');
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [pinMode, setPinMode] = useState<'setup' | 'verify' | 'change_step1' | 'change_step2' | 'change_step3'>('setup');
+  const [showMFAEnrollment, setShowMFAEnrollment] = useState(false);
+  const [isMFAActive, setIsMFAActive] = useState(false);
+
+  const [permissions, setPermissions] = useState({
+    camera: 'undetermined',
+    microphone: 'undetermined',
+    media: 'undetermined',
+    files: 'granted',
+  });
+
+  const loadPermissions = async () => {
+    const cam = await checkPermissionStatus('camera');
+    const mic = await checkPermissionStatus('microphone');
+    const med = await checkPermissionStatus('media');
+    setPermissions({
+      camera: cam,
+      microphone: mic,
+      media: med,
+      files: 'granted',
+    });
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPermissions();
+    }, [])
+  );
 
   const timeoutOptions = [
     { label: 'Immediately', value: 0 },
@@ -123,13 +173,10 @@ export default function PrivacySettingsScreen() {
   useEffect(() => {
     (async () => {
       const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-      if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
-        setBiometricType('Face ID');
-      } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
-        setBiometricType('Touch ID');
-      } else {
-        setBiometricType('Biometrics');
-      }
+      setBiometricType('Fingerprint/Face ID');
+      
+      const mfaStatus = await SecurityUtils.getMFAStatus();
+      setIsMFAActive(mfaStatus.verified);
     })();
   }, []);
 
@@ -181,41 +228,134 @@ export default function PrivacySettingsScreen() {
     action();
   };
 
-  const handlePinSetup = () => {
-    if (appPin) {
-      showAlert({
-        title: 'Reset PIN',
-        message: 'Do you want to clear your current PIN?',
-        primaryButton: { text: 'Cancel', onPress: () => { } },
-        secondaryButton: { text: 'Clear PIN', onPress: () => setAppPin(null) },
-      });
+  const handlePinToggle = (value: boolean) => {
+    if (value) {
+      setPinMode('setup');
+      setShowPinSetup(true);
     } else {
+      setPinMode('verify'); // Require current PIN to disable
+      setShowPinSetup(true);
+    }
+  };
+
+  const handlePinSetupSuccess = async (pin?: string) => {
+    if (pinMode === 'setup') {
+      if (pin) {
+        await SecurityUtils.savePin(pin);
+        setAppPin('active');
+        setShowPinSetup(false);
+        showAlert({ title: 'PIN Set', message: 'Your app PIN has been successfully enabled.', primaryButton: { text: 'Great', onPress: () => {} }});
+      }
+    } else if (pinMode === 'verify') {
+      // Disabling PIN
+      await SecurityUtils.clearPin();
+      setAppPin(null);
+      setShowPinSetup(false);
+      showAlert({ title: 'Security Disabled', message: 'App PIN lock has been turned off.', primaryButton: { text: 'OK', onPress: () => {} }});
+    } else if (pinMode === 'change_step1') {
+      // Current PIN verified, move to step 2
+      setPinMode('change_step2');
+    } else if (pinMode === 'change_step2') {
+      // New PIN entered, move to step 3 (confirmation)
+      setPinMode('change_step3');
+    } else if (pinMode === 'change_step3') {
+      // New PIN confirmed
+      if (pin) {
+        await SecurityUtils.savePin(pin);
+        setAppPin('active');
+        setShowPinSetup(false);
+        showAlert({ title: 'PIN Changed', message: 'Your security PIN has been updated.', primaryButton: { text: 'Done', onPress: () => {} }});
+      }
+    }
+  };
+
+  const handleChangePin = () => {
+    setPinMode('change_step1');
+    setShowPinSetup(true);
+  };
+
+  const handle2FASetup = async () => {
+    if (isMFAActive) {
       showAlert({
-        title: 'PIN Setup',
-        message: 'This feature is coming soon in the next security update.',
+        title: 'Disable 2FA',
+        message: 'Two-factor authentication is currently active. To disable it, please contact support or use your recovery codes.',
         primaryButton: { text: 'OK', onPress: () => { } }
       });
+    } else {
+      setShowMFAEnrollment(true);
     }
   };
 
   return (
     <BackgroundGradient>
       <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 24 }}>
-        <TabHeader title="Privacy & Security" subtitle="Protect your focus and data" />
+        <TabHeader title="Privacy & Permissions" subtitle="Protect your focus and manage data access" />
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
+        <Animated.View entering={FadeInDown.delay(50).duration(500)}>
+          {/* ── APP PERMISSIONS ────────────────────────── */}
+          <SectionLabel label="APP PERMISSIONS" theme={theme} />
+          <Card theme={theme}>
+            <SettingRow
+              icon={Camera}
+              title="Camera"
+              subtitle="Photos for your notes & profile"
+              theme={theme}
+              onPress={openSettings}
+            >
+              <PermissionBadge status={permissions.camera} onPress={openSettings} />
+            </SettingRow>
+
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+
+            <SettingRow
+              icon={Mic}
+              title="Microphone"
+              subtitle="Voice recordings & audio notes"
+              theme={theme}
+              onPress={openSettings}
+            >
+              <PermissionBadge status={permissions.microphone} onPress={openSettings} />
+            </SettingRow>
+
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+
+            <SettingRow
+              icon={ImageIcon}
+              title="Photos & Media"
+              subtitle="Pick images from your gallery"
+              theme={theme}
+              onPress={openSettings}
+            >
+              <PermissionBadge status={permissions.media} onPress={openSettings} />
+            </SettingRow>
+
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+
+            <SettingRow
+              icon={Folder}
+              title="Files & Storage"
+              subtitle="Attachments & downloaded files"
+              theme={theme}
+              onPress={openSettings}
+            >
+              <PermissionBadge status={permissions.files} onPress={openSettings} />
+            </SettingRow>
+          </Card>
+        </Animated.View>
+
         <Animated.View entering={FadeInDown.delay(100).duration(500)}>
           {/* ── AUTHENTICATION ────────────────────────── */}
           <SectionLabel label="AUTHENTICATION" theme={theme} />
           <Card theme={theme}>
             <SettingRow
-              icon={biometricType === 'Face ID' ? Eye : Fingerprint}
-              title={`${biometricType} Lock`}
-              subtitle={`Require ${biometricType} to open the app`}
+              icon={Fingerprint}
+              title="Fingerprint/Face ID"
+              subtitle="Use biometrics to unlock the app"
               theme={theme}
             >
               <Switch
@@ -230,39 +370,81 @@ export default function PrivacySettingsScreen() {
 
             <SettingRow
               icon={Lock}
-              title="App PIN"
-              subtitle={appPin ? 'PIN is active' : 'Set a unique PIN for groundwork.'}
+              title="App PIN Lock"
+              subtitle="Protect your app with a secure PIN"
               theme={theme}
-              onPress={handlePinSetup}
-            />
+            >
+              <Switch
+                value={!!appPin}
+                onValueChange={handlePinToggle}
+                trackColor={{ true: accentColor, false: theme.switchTrackFalse }}
+                thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+              />
+            </SettingRow>
+          </Card>
 
-            {(faceIdEnabled || appPin) && (
-              <>
+          {appPin && (
+            <Animated.View entering={FadeInDown.duration(400)}>
+              {/* Main Visual PIN Card */}
+              <View style={[styles.mainPinCard, { backgroundColor: theme.card }]}>
+                <View style={styles.pinDotsContainer}>
+                  {[...Array(4)].map((_, i) => (
+                    <View 
+                      key={i} 
+                      style={[
+                        styles.visualDot, 
+                        { borderColor: theme.cardBorder + '80', backgroundColor: accentColor } 
+                      ]} 
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.pinIndicatorLabel, { color: theme.secondaryText }]}>PIN Security Active</Text>
+              </View>
+
+              {/* Secondary Actions Card */}
+              <Card theme={theme}>
+                <SettingRow
+                  icon={Shield}
+                  title="Change PIN"
+                  theme={theme}
+                  onPress={handleChangePin}
+                />
                 <View style={[styles.separator, { backgroundColor: theme.separator }]} />
                 <SettingRow
-                  icon={Clock}
-                  title="Auto-Lock Timeout"
-                  subtitle={timeoutOptions.find(o => o.value === autoLockTimeout)?.label || 'Immediately'}
+                  icon={ShieldCheck}
+                  title="Disable PIN"
                   theme={theme}
-                  onPress={() => setShowTimeoutModal(true)}
+                  onPress={() => handlePinToggle(false)}
                 />
-              </>
-            )}
+              </Card>
 
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+              {/* Timeout Setting */}
+              <View style={{ marginTop: 12 }}>
+                <Card theme={theme}>
+                  <SettingRow
+                    icon={Clock}
+                    title="Auto-Lock Timeout"
+                    subtitle={timeoutOptions.find(o => o.value === autoLockTimeout)?.label || 'Immediately'}
+                    theme={theme}
+                    onPress={() => setShowTimeoutModal(true)}
+                  />
+                </Card>
+              </View>
+            </Animated.View>
+          )}
 
-            <SettingRow
-              icon={ShieldCheck}
-              title="Two-Factor Authentication"
-              subtitle="Secure your account with 2FA"
-              theme={theme}
-              onPress={() => showAlert({
-                title: 'Two-Factor Auth',
-                message: 'Two-factor authentication can be managed via your account dashboard.',
-                primaryButton: { text: 'OK', onPress: () => { } }
-              })}
-            />
-          </Card>
+          <View style={{ marginTop: 24 }}>
+            <SectionLabel label="ACCOUNT SECURITY" theme={theme} />
+            <Card theme={theme}>
+              <SettingRow
+                icon={ShieldCheck}
+                title="Two-Factor Authentication"
+                subtitle={isMFAActive ? '2FA is active' : 'Secure your account with 2FA'}
+                theme={theme}
+                onPress={handle2FASetup}
+              />
+            </Card>
+          </View>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(500)}>
@@ -379,7 +561,7 @@ export default function PrivacySettingsScreen() {
       {/* Auto-Lock Picker Modal */}
       <Modal transparent visible={showTimeoutModal} animationType="fade" onRequestClose={() => setShowTimeoutModal(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowTimeoutModal(false)}>
-          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <View style={[styles.modalBox, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder }]}>
             <Text style={[styles.modalTitle, { color: theme.primaryText }]}>Auto-Lock Timeout</Text>
             {timeoutOptions.map((opt, index) => (
               <TouchableOpacity
@@ -396,6 +578,27 @@ export default function PrivacySettingsScreen() {
             ))}
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* PIN Flow Modal */}
+      <Modal visible={showPinSetup} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent>
+        <LockScreen 
+          mode={pinMode} 
+          onSuccess={handlePinSetupSuccess}
+          onCancel={() => setShowPinSetup(false)}
+        />
+      </Modal>
+
+      {/* MFA Enrollment Modal */}
+      <Modal visible={showMFAEnrollment} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent>
+        <MFAEnrollment 
+          onSuccess={() => {
+            setShowMFAEnrollment(false);
+            setIsMFAActive(true);
+            showAlert({ title: '2FA Enabled', message: 'Two-factor authentication is now active on your account.', primaryButton: { text: 'Done', onPress: () => {} }});
+          }}
+          onCancel={() => setShowMFAEnrollment(false)}
+        />
       </Modal>
 
     </BackgroundGradient>
@@ -484,7 +687,33 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     marginVertical: 12,
-    opacity: 0.05,
+    opacity: 0.1,
+  },
+  mainPinCard: {
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  pinDotsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+  },
+  visualDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1.5,
+  },
+  pinIndicatorLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    opacity: 0.5,
   },
   sessionRow: {
     flexDirection: 'row',
@@ -605,5 +834,17 @@ const styles = StyleSheet.create({
   modalOptionText: {
     fontSize: 16,
     fontFamily: 'Inter_500Medium',
+  },
+  permBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  permBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    textTransform: 'uppercase',
   }
 });

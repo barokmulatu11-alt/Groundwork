@@ -1,4 +1,5 @@
 import { useTheme } from '@/lib/ThemeContext';
+import { hapticLight } from '@/lib/haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, View } from 'react-native';
 
@@ -60,6 +61,7 @@ export function NativeSheet({ visible, onClose, children, height = '50%' }: Nati
             Animated.timing(panY, { toValue: 0, duration: 0, useNativeDriver: true }),
           ]).start(({ finished }) => {
             if (finished) {
+              hapticLight();
               setShowModal(false);
               onClose();
             }
@@ -167,3 +169,5 @@ export function NativeSheet({ visible, onClose, children, height = '50%' }: Nati
     </Modal>
   );
 }
+
+

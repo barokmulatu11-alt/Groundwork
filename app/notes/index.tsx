@@ -3,437 +3,611 @@ import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { NativeSheet } from '@/components/ui/NativeSheet';
-import { TabHeader } from '@/components/ui/TabHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { KeyboardAwareSheet } from '@/components/ui/KeyboardAwareSheet';
+import { NoteCard } from '@/components/notes/NoteCard';
 import { useTheme } from '@/lib/ThemeContext';
+import { getRandomGreeting } from '@/lib/GreetingUtils';
+import { htmlToPlainText } from '@/lib/noteContent';
+import { addXP, XP_VALUES } from '@/lib/connect/xpSystem';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useStore } from '@/store/useStore';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import {
-    ArrowDown, ArrowUp,
-    ChevronRight,
-    Folder,
-    Image as ImageIcon,
-    Lock,
-    Mic, Pencil,
-    Pin,
-    Plus,
-    Search, Trash2,
-    X
+  ArrowDown, ArrowUp, Atom, Binary, BookMarked, BookOpen, BrainCircuit,
+  Calculator, Check, ChevronLeft, ChevronRight, FileText, FlaskConical,
+  Folder, GraduationCap, LayoutGrid, List as ListIcon, Lock, Mic,
+  PenLine, Plus, RotateCcw, Search, Sparkles, Star, X, Zap,
 } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator, Alert, Dimensions, Modal, Pressable, RefreshControl,
+  ScrollView, StyleSheet, TextInput, View,
+} from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const FOLDERS = ['All', 'General', 'School', 'Personal', 'Exams', 'Other'];
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function estimateReadTime(content: string): string {
-  const words = content.trim().split(/\s+/).length;
-  const mins = Math.max(1, Math.ceil(words / 200));
-  return `${mins} min read`;
-}
+const TABS = ['Home', 'Library', 'Study'] as const;
+type TabType = (typeof TABS)[number];
+
+const SPACE_META: Record<string, { icon: typeof FileText; color: string }> = {
+  Physics: { icon: Atom, color: '#7C3AED' },
+  Calculus: { icon: Calculator, color: '#EC4899' },
+  Programming: { icon: Binary, color: '#059669' },
+  Chemistry: { icon: FlaskConical, color: '#D97706' },
+  General: { icon: FileText, color: '#3B82F6' },
+  School: { icon: GraduationCap, color: '#6366F1' },
+  Personal: { icon: Star, color: '#14B8A6' },
+};
 
 export default function NotesScreen() {
   const router = useRouter();
-  const { tasks, habits, notes, focusSessions, draftNote, loadAllTasks, loadHabits, loadNotes, loadFocusSessions, deleteNote, setDraftNote } = useStore();
+  const { notes, loadNotes, deleteNote, updateNote } = useStore();
   const { session } = useAuthStore();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { notesLayout, setNotesLayout } = useSettingsStore();
   const insets = useSafeAreaInsets();
 
+  const [activeTab, setActiveTab] = useState<TabType>('Home');
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFolder, setSelectedFolder] = useState('All');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest');
+  const [fabOpen, setFabOpen] = useState(false);
+  const [quickThoughtVisible, setQuickThoughtVisible] = useState(false);
+  const [quickThoughtText, setQuickThoughtText] = useState('');
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<{ id: string; title: string } | null>(null);
-  const [isOptionsVisible, setOptionsVisible] = useState(false);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest');
-  const [selectedFolder, setSelectedFolder] = useState('All');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [showDraftBanner, setShowDraftBanner] = useState(true);
+  const [revisionNoteId, setRevisionNoteId] = useState<string | null>(null);
+  const [revealedSections, setRevealedSections] = useState<Set<number>>(new Set());
 
   const isGrid = notesLayout === 'grid';
 
-  const allTags = useMemo(() => 
-    Array.from(new Set(notes.flatMap(n => n.tags || []))).sort(), 
-    [notes]
+  useFocusEffect(
+    useCallback(() => {
+      if (!session) return;
+      setNotesLoading(true);
+      loadNotes().finally(() => setNotesLoading(false));
+    }, [session, loadNotes])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadNotes();
+    setRefreshing(false);
+  }, [loadNotes]);
 
   const allFolders = useMemo(() => {
     const used = new Set(notes.map(n => n.folder || 'General'));
-    let folders = FOLDERS.filter(f => f === 'All' || used.has(f));
-    
-    // Drafts should be visible if a draft exists OR if it's currently selected
-    if (draftNote || selectedFolder === 'Drafts') {
-      if (!folders.includes('Drafts')) folders.push('Drafts');
-    }
-    
-    return folders;
-  }, [notes, draftNote, selectedFolder]);
+    return ['All', ...Array.from(used).sort()];
+  }, [notes]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const results = notes.filter(note => {
-      const matchesSearch = !q
-        || note.title.toLowerCase().includes(q)
-        || note.content.toLowerCase().includes(q)
-        || (note.tags || []).some(t => t.toLowerCase().includes(q));
-      const matchesFolder = selectedFolder === 'All' || (note.folder || 'General') === selectedFolder;
-      const matchesTag = !selectedTag || (note.tags || []).includes(selectedTag);
-      return matchesSearch && matchesFolder && matchesTag;
-    });
+    return notes
+      .filter(n => {
+        const matchQ = !q
+          || n.title.toLowerCase().includes(q)
+          || n.content.toLowerCase().includes(q)
+          || (n.tags || []).some(t => t.toLowerCase().includes(q))
+          || (n.folder || '').toLowerCase().includes(q);
+        const matchFolder = selectedFolder === 'All' || (n.folder || 'General') === selectedFolder;
+        return matchQ && matchFolder;
+      })
+      .sort((a, b) => {
+        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+        if (sortOrder === 'newest') return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        if (sortOrder === 'oldest') return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+        return (a.title || '').localeCompare(b.title || '');
+      });
+  }, [notes, searchQuery, selectedFolder, sortOrder]);
 
-    if (selectedFolder === 'Drafts' && draftNote) {
-      const title = draftNote.title || '';
-      const content = draftNote.content || '';
-      const matchesSearch = !q
-        || title.toLowerCase().includes(q)
-        || content.toLowerCase().includes(q);
-      if (matchesSearch) {
-        // Mock a note object for the draft
-        results.push({
-          id: 'DRAFT',
-          title: draftNote.title || 'Untitled Draft',
-          content: draftNote.content,
-          updated_at: new Date().toISOString(),
-          folder: 'Drafts',
-          is_pinned: false,
-          is_locked: false,
-          tags: [],
-          image_uris: [],
-          audio_uris: [],
-          drawing_uris: []
-        } as any);
-      }
-    }
+  const recentNotes = useMemo(
+    () => [...notes].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 6),
+    [notes]
+  );
 
-    return results.sort((a, b) => {
-      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
-      if (sortOrder === 'newest') return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-      if (sortOrder === 'oldest') return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
-      return (a.title || '').localeCompare(b.title || '');
+  const revisionQueue = useMemo(
+    () => notes.filter(n => !n.is_locked && n.content.length > 40 && (n.revision_score ?? 0) < 85).slice(0, 5),
+    [notes]
+  );
+
+  const spaces = useMemo(() => {
+    const map = new Map<string, number>();
+    notes.forEach(n => {
+      const f = n.folder || 'General';
+      map.set(f, (map.get(f) || 0) + 1);
     });
-  }, [notes, searchQuery, selectedFolder, selectedTag, sortOrder, draftNote]);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [notes]);
 
   const handleDeleteNote = (id: string, title: string) => {
     setNoteToDelete({ id, title });
     setDeleteDialogVisible(true);
   };
 
-  const confirmDeleteNote = async () => {
+  const confirmDelete = async () => {
     if (!noteToDelete) return;
-    
     try {
-      if (noteToDelete.id === 'DRAFT') {
-        setDraftNote(null);
-      } else if (noteToDelete.id === 'ALL') {
-        const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-        if (hasHardware && isEnrolled) {
-          const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: 'Authenticate to delete ALL notes',
-            fallbackLabel: 'Use Passcode' });
-          if (!result.success) {
-            Alert.alert('Authentication Failed', 'You must authenticate to perform this action.');
-            setDeleteDialogVisible(false);
-            return;
-          }
-        }
-        for (const note of notes) await deleteNote(note.id);
-      } else {
-        await deleteNote(noteToDelete.id);
-      }
-    } catch (e) {
-      console.error("[Notes] Delete failed:", e);
-      Alert.alert("Delete Failed", "Something went wrong while deleting the note.");
+      await deleteNote(noteToDelete.id);
+    } catch {
+      Alert.alert('Delete failed', 'Could not delete this note.');
     } finally {
       setNoteToDelete(null);
       setDeleteDialogVisible(false);
     }
   };
 
+  const handleQuickThought = async () => {
+    if (!quickThoughtText.trim()) return;
+    await useStore.getState().addNote({
+      title: quickThoughtText.trim().slice(0, 48),
+      content: quickThoughtText.trim(),
+      folder: 'General',
+      tags: ['quick'],
+      priority: 'Low',
+    });
+    setQuickThoughtText('');
+    setQuickThoughtVisible(false);
+  };
+
+  const handleRevisionAnswer = async (noteId: string, correct: boolean) => {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    const delta = correct ? 10 : -5;
+    const newScore = Math.max(0, Math.min(100, (note.revision_score || 0) + delta));
+    await updateNote(noteId, {
+      revision_score: newScore,
+      last_reviewed_at: new Date().toISOString(),
+    } as any);
+    if (correct && session?.user?.id) {
+      await addXP(session.user.id, XP_VALUES.REVISION_SESSION_COMPLETED, 'Revision session');
+    }
+    setRevisionNoteId(null);
+    setRevealedSections(new Set());
+  };
+
   if (!session) {
     return (
       <BackgroundGradient>
-        <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center' }}>
-          <View style={[styles.iconBox, { width: 80, height: 80, borderRadius: 24, backgroundColor: theme.accentLight, marginBottom: 24 }]}>
-            <Lock size={40} color={theme.accent} />
-          </View>
-          <Text style={{ fontSize: 28, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 12, textAlign: 'center' }}>Login Required</Text>
-          <Text style={{ fontSize: 15, fontFamily: 'Inter_500Medium', color: theme.secondaryText, textAlign: 'center', marginBottom: 32, lineHeight: 22 }}>
-            Sign in to create and sync your personal notes.
+        <View style={[styles.centered, { paddingHorizontal: 24 }]}>
+          <Lock size={40} color={theme.accent} style={{ marginBottom: 20 }} />
+          <Text style={[styles.loginTitle, { color: theme.primaryText }]}>Sign in for Notes</Text>
+          <Text style={[styles.loginSub, { color: theme.secondaryText }]}>
+            Your notes sync securely when you are logged in.
           </Text>
-          <AnimatedButton title="Sign In or Sign Up" onPress={() => router.push('/login' as any)} />
-          <Pressable onPress={() => router.back()} style={{ marginTop: 24 }}>
-            <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: theme.accent }}>Go Back</Text>
-          </Pressable>
+          <AnimatedButton title="Sign In" onPress={() => router.push('/login' as any)} />
         </View>
       </BackgroundGradient>
     );
   }
 
-  return (
-    <BackgroundGradient>
+  const revisionNote = revisionNoteId ? notes.find(n => n.id === revisionNoteId) : null;
 
-      
-        <ScrollView 
-          style={{ flex: 1 }} 
-          contentContainerStyle={{ 
-            paddingHorizontal: 24, 
-            paddingBottom: 120,
-            paddingTop: insets.top + 24
-          }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <TabHeader 
-            title="Notes"
-            subtitle={`${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`}
-            onLayoutToggle={() => setNotesLayout(isGrid ? 'list' : 'grid')}
-            isGrid={isGrid}
-            onMorePress={() => setOptionsVisible(true)}
-          />
-  
-          {/* Drafts Banner */}
-          {draftNote && showDraftBanner && (
-            <AnimatedCard 
-              onPress={() => router.push('/notes/new')} 
-              style={{ marginBottom: 24, padding: 16 }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={[styles.iconBox, { backgroundColor: theme.accentLight, marginRight: 12 }]}>
-                  <Pencil size={20} color={theme.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: theme.primaryText }}>Continue writing...</Text>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText }} numberOfLines={1}>
-                    Draft: {draftNote.title || 'Untitled Note'}
-                  </Text>
-                </View>
-                <Pressable onPress={(e) => { e.stopPropagation(); setShowDraftBanner(false); }} style={[styles.iconBox, { width: 32, height: 32, borderRadius: 10 }]}>
-                  <X size={18} color={theme.secondaryText} />
+  const renderTabs = () => (
+    <View style={styles.tabRow}>
+      {TABS.map(tab => {
+        const active = activeTab === tab;
+        return (
+          <Pressable
+            key={tab}
+            onPress={() => { setActiveTab(tab); if (tab !== 'Study') setRevisionNoteId(null); }}
+            style={[styles.tab, active && { backgroundColor: theme.accent, borderColor: theme.accent }]}
+          >
+            <Text style={[styles.tabText, { color: active ? '#FFF' : theme.secondaryText }]}>{tab}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const renderHome = () => (
+    <Animated.View entering={FadeIn.duration(250)}>
+      <Text style={[styles.greeting, { color: theme.primaryText }]}>{getRandomGreeting()}</Text>
+      <Text style={[styles.greetingSub, { color: theme.secondaryText }]}>
+        {notes.length} notes · {spaces.length} spaces
+      </Text>
+
+      <View style={styles.captureRow}>
+        {[
+          { label: 'Write', icon: PenLine, color: theme.accent, onPress: () => router.push('/notes/new') },
+          { label: 'Voice', icon: Mic, color: '#34C759', onPress: () => router.push('/notes/new?mode=voice' as any) },
+          { label: 'Quick', icon: Zap, color: '#FF9500', onPress: () => setQuickThoughtVisible(true) },
+        ].map(item => (
+          <Pressable
+            key={item.label}
+            onPress={item.onPress}
+            style={[styles.captureBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+          >
+            <View style={[styles.captureIcon, { backgroundColor: `${item.color}18` }]}>
+              <item.icon size={18} color={item.color} />
+            </View>
+            <Text style={[styles.captureLabel, { color: theme.primaryText }]}>{item.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {recentNotes.length > 0 && (
+        <>
+          <Text style={[styles.sectionLabel, { color: theme.primaryText }]}>Pick up where you left off</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 4 }}>
+            {recentNotes.map(note => {
+              const meta = SPACE_META[note.folder || 'General'] || SPACE_META.General;
+              const Icon = meta.icon;
+              return (
+                <Pressable
+                  key={note.id}
+                  onPress={() => router.push(`/notes/${note.id}`)}
+                  style={[styles.recentCard, { backgroundColor: meta.color }]}
+                >
+                  <Icon size={14} color="rgba(255,255,255,0.85)" />
+                  <Text style={styles.recentTitle} numberOfLines={2}>{note.title || 'Untitled'}</Text>
+                  <Text style={styles.recentFolder}>{note.folder || 'General'}</Text>
                 </Pressable>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
+
+      {revisionQueue.length > 0 && (
+        <>
+          <Text style={[styles.sectionLabel, { color: theme.primaryText, marginTop: 20 }]}>Ready to review</Text>
+          {revisionQueue.map(note => (
+            <AnimatedCard
+              key={note.id}
+              style={{ padding: 14, marginBottom: 8 }}
+              onPress={() => { setRevisionNoteId(note.id); setActiveTab('Study'); }}
+            >
+              <View style={styles.row}>
+                <BrainCircuit size={18} color="#AF52DE" />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.rowTitle, { color: theme.primaryText }]} numberOfLines={1}>{note.title || 'Untitled'}</Text>
+                  <Text style={[styles.rowSub, { color: theme.secondaryText }]}>Score {note.revision_score ?? 0}%</Text>
+                </View>
+                <ChevronRight size={16} color={theme.secondaryText} />
               </View>
             </AnimatedCard>
-          )}
-  
-          {/* Search Bar */}
-          <View style={{ 
-            flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, 
-            borderRadius: 16, paddingHorizontal: 16, height: 48, marginBottom: 16
-          }}>
-            <Search size={18} color={theme.secondaryText} />
-            <TextInput
-              style={{ flex: 1, marginLeft: 10, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: theme.primaryText }}
-              placeholder="Search notes, tags..."
-              placeholderTextColor={theme.secondaryText}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-                <X size={18} color={theme.secondaryText} />
-              </Pressable>
-            )}
-          </View>
-  
-          {/* Folder Pills */}
-          {allFolders.length > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}
-              contentContainerStyle={{ gap: 8, paddingRight: 24 }}>
-              {allFolders.map(folder => (
-                <Pressable
-                  key={folder}
-                  onPress={() => setSelectedFolder(folder)}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 4,
-                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                    backgroundColor: selectedFolder === folder ? theme.primaryText : theme.card }}
-                >
-                  {folder !== 'All' && <Folder size={12} color={selectedFolder === folder ? theme.background : theme.secondaryText} />}
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: selectedFolder === folder ? theme.background : theme.primaryText }}>
-                    {folder}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-  
-          {/* Tag Pills */}
-          {allTags.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}
-              contentContainerStyle={{ gap: 8, paddingRight: 24 }}>
-              <Pressable
-                onPress={() => setSelectedTag(null)}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
-                  backgroundColor: selectedTag === null ? theme.card : theme.card }}
-              >
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: selectedTag === null ? theme.accent : theme.secondaryText }}>
-                  All tags
-                </Text>
-              </Pressable>
-              {allTags.map(tag => (
-                <Pressable
-                  key={tag}
-                  onPress={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                  style={{
-                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
-                    backgroundColor: selectedTag === tag ? theme.card : theme.card }}
-                >
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: selectedTag === tag ? theme.accent : theme.secondaryText }}>
-                    #{tag}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-  
-          {/* Notes List */}
-          {filtered.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-              <Text style={{ fontSize: 40, fontFamily: 'Inter_700Bold', marginBottom: 12 }}></Text>
-              <Text style={{ fontSize: 17, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 6 }}>
-                {searchQuery ? 'No results' : 'No notes yet'}
-              </Text>
-              <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: theme.secondaryText, textAlign: 'center' }}>
-                {searchQuery ? `No notes match "${searchQuery}"` : 'Tap the + button to create your first note.'}
-              </Text>
-            </View>
-          ) : (
-            <View style={isGrid ? { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' } : { gap: 12 }}>
-              {filtered.map(note => (
-                <AnimatedCard
-                  key={note.id}
-                  style={isGrid ? { width: '48%', padding: 0, marginBottom: 16 } : { padding: 0, marginBottom: 0 }}
-                  onPress={() => router.push(`/notes/${note.id}`)}
-                  onLongPress={() => handleDeleteNote(note.id, note.title)}
-                >
-                  <View style={{ padding: 18, height: isGrid ? 180 : 'auto', justifyContent: 'space-between' }}>
-                    <View>
-                      {/* Title row */}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                          <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: theme.primaryText }} numberOfLines={isGrid ? 2 : 1}>
-                            {note.title || 'Untitled Note'}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                          {note.is_pinned && <Pin size={14} color={theme.primaryText} />}
-                          {note.is_locked && <Lock size={14} color={theme.secondaryText} />}
-                          <Pressable 
-                            onPress={(e) => { 
-                              e.stopPropagation(); 
-                              handleDeleteNote(note.id, note.title); 
-                            }}
-                            hitSlop={15}
-                            style={{ padding: 8, marginLeft: 4 }}
-                          >
-                            <Trash2 size={20} color={theme.danger} />
-                          </Pressable>
-                        </View>
-                      </View>
-  
-                      {/* Preview */}
-                      {note.is_locked ? (
-                        <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText, fontStyle: 'italic' }}>
-                          Locked note
-                        </Text>
-                      ) : (
-                        <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.secondaryText, lineHeight: 20 }} numberOfLines={isGrid ? 3 : 2}>
-                          {note.content.replace(/<[^>]+>/g, '').trim() || 'No content...'}
-                        </Text>
-                      )}
-                    </View>
-  
-                    {/* Footer */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText }}>
-                        {new Date(note.updated_at).toLocaleDateString()}
-                      </Text>
-                      {(note.image_uris?.length > 0 || note.audio_uris?.length > 0 || note.drawing_uris?.length > 0) && !isGrid && (
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          {note.image_uris?.length > 0 && <ImageIcon size={12} color={theme.primaryText} />}
-                          {note.audio_uris?.length > 0 && <Mic size={12} color={theme.primaryText} />}
-                          {note.drawing_uris?.length > 0 && <Pencil size={12} color={theme.primaryText} />}
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </AnimatedCard>
-              ))}
-            </View>
-          )}
-        </ScrollView>
+          ))}
+        </>
+      )}
 
-      {/* Floating Action Button */}
-      <Pressable
-        onPress={() => router.push('/notes/new')}
-        style={[styles.fab, { backgroundColor: theme.accent, }]}
+      {spaces.length > 0 && (
+        <>
+          <Text style={[styles.sectionLabel, { color: theme.primaryText, marginTop: 20 }]}>Your spaces</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+            {spaces.map(([name, count]) => {
+              const meta = SPACE_META[name] || SPACE_META.General;
+              const Icon = meta.icon;
+              return (
+                <Pressable
+                  key={name}
+                  onPress={() => { setSelectedFolder(name); setActiveTab('Library'); }}
+                  style={[styles.spaceChip, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+                >
+                  <View style={[styles.spaceIcon, { backgroundColor: `${meta.color}20` }]}>
+                    <Icon size={16} color={meta.color} />
+                  </View>
+                  <Text style={[styles.spaceName, { color: theme.primaryText }]}>{name}</Text>
+                  <Text style={[styles.spaceCount, { color: theme.secondaryText }]}>{count}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
+    </Animated.View>
+  );
+
+  const renderLibrary = () => (
+    <Animated.View entering={FadeIn.duration(250)}>
+      <View style={[styles.searchBox, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+        <Search size={18} color={theme.secondaryText} />
+        <TextInput
+          style={[styles.searchInput, { color: theme.primaryText }]}
+          placeholder="Search notes, tags, spaces…"
+          placeholderTextColor={theme.secondaryText}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+            <X size={18} color={theme.secondaryText} />
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.libraryToolbar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flex: 1 }}>
+          {allFolders.map(folder => (
+            <Pressable
+              key={folder}
+              onPress={() => setSelectedFolder(folder)}
+              style={[
+                styles.folderChip,
+                {
+                  backgroundColor: selectedFolder === folder ? theme.accent : theme.card,
+                  borderColor: selectedFolder === folder ? theme.accent : theme.cardBorder,
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: selectedFolder === folder ? '#FFF' : theme.primaryText }}>
+                {folder}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Pressable onPress={() => setNotesLayout(isGrid ? 'list' : 'grid')} style={[styles.toolBtn, { backgroundColor: theme.card }]}>
+          {isGrid ? <ListIcon size={16} color={theme.primaryText} /> : <LayoutGrid size={16} color={theme.primaryText} />}
+        </Pressable>
+        <Pressable
+          onPress={() => setSortOrder(s => (s === 'newest' ? 'oldest' : s === 'oldest' ? 'az' : 'newest'))}
+          style={[styles.toolBtn, { backgroundColor: theme.card }]}
+        >
+          {sortOrder === 'oldest' ? <ArrowUp size={16} color={theme.primaryText} /> : <ArrowDown size={16} color={theme.primaryText} />}
+        </Pressable>
+      </View>
+
+      {notesLoading && notes.length === 0 ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={theme.accent} />
+          <Text style={{ marginTop: 10, color: theme.secondaryText, fontFamily: 'Inter_500Medium' }}>Loading…</Text>
+        </View>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title={searchQuery ? 'No matches' : 'No notes yet'}
+          subtitle={searchQuery ? 'Try another search or folder.' : 'Capture a lecture, idea, or revision sheet.'}
+          actionLabel={searchQuery ? undefined : 'Create note'}
+          onAction={searchQuery ? undefined : () => router.push('/notes/new')}
+        />
+      ) : (
+        <View style={isGrid ? styles.gridWrap : undefined}>
+          {filtered.map(note => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              variant={isGrid ? 'grid' : 'list'}
+              onPress={() => router.push(`/notes/${note.id}`)}
+              onLongPress={() => handleDeleteNote(note.id, note.title)}
+            />
+          ))}
+        </View>
+      )}
+    </Animated.View>
+  );
+
+  const renderStudy = () => {
+    if (revisionNote) {
+      const raw = htmlToPlainText(revisionNote.content || '');
+      const parts = raw.split(/(\[\[[^\]]+\]\])/g);
+      return (
+        <Animated.View entering={FadeIn.duration(250)}>
+          <Pressable
+            onPress={() => { setRevisionNoteId(null); setRevealedSections(new Set()); }}
+            style={[styles.backStudy, { backgroundColor: theme.card }]}
+          >
+            <ChevronLeft size={18} color={theme.primaryText} />
+            <Text style={{ marginLeft: 6, fontFamily: 'Inter_600SemiBold', color: theme.primaryText }}>Back</Text>
+          </Pressable>
+          <Text style={[styles.studyTitle, { color: theme.primaryText }]}>{revisionNote.title || 'Untitled'}</Text>
+          <View style={[styles.studyCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={{ fontSize: 15, lineHeight: 26, fontFamily: 'Inter_500Medium', color: theme.primaryText }}>
+              {parts.map((part, idx) => {
+                const match = part.match(/^\[\[(.+)\]\]$/);
+                if (!match) return <Text key={idx}>{part}</Text>;
+                const revealed = revealedSections.has(idx);
+                return (
+                  <Text
+                    key={idx}
+                    onPress={() => {
+                      const next = new Set(revealedSections);
+                      if (revealed) next.delete(idx);
+                      else next.add(idx);
+                      setRevealedSections(next);
+                    }}
+                    style={{
+                      backgroundColor: revealed ? theme.successLight : theme.accentLight,
+                      color: revealed ? theme.success : theme.accent,
+                      fontFamily: 'Inter_700Bold',
+                    }}
+                  >
+                    {revealed ? match[1] : '  tap to reveal  '}
+                  </Text>
+                );
+              })}
+            </Text>
+          </View>
+          <View style={styles.revisionActions}>
+            <Pressable onPress={() => handleRevisionAnswer(revisionNote.id, false)} style={[styles.revisionBtn, { backgroundColor: theme.dangerLight }]}>
+              <RotateCcw size={18} color={theme.danger} />
+              <Text style={{ color: theme.danger, fontFamily: 'Inter_700Bold', marginLeft: 8 }}>Forgot</Text>
+            </Pressable>
+            <Pressable onPress={() => handleRevisionAnswer(revisionNote.id, true)} style={[styles.revisionBtn, { backgroundColor: theme.successLight }]}>
+              <Check size={18} color={theme.success} />
+              <Text style={{ color: theme.success, fontFamily: 'Inter_700Bold', marginLeft: 8 }}>Got it</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      );
+    }
+
+    const studyNotes = notes.filter(n => !n.is_locked && n.content.length > 30);
+    return (
+      <Animated.View entering={FadeIn.duration(250)}>
+        <View style={styles.studyHero}>
+          <BrainCircuit size={28} color="#AF52DE" />
+          <View style={{ flex: 1, marginLeft: 14 }}>
+            <Text style={[styles.studyHeading, { color: theme.primaryText }]}>Active recall</Text>
+            <Text style={[styles.studyHint, { color: theme.secondaryText }]}>
+              Wrap key terms in [[double brackets]] while writing. They hide until you tap to reveal.
+            </Text>
+          </View>
+        </View>
+        {studyNotes.length === 0 ? (
+          <EmptyState icon={BookOpen} title="Nothing to study yet" subtitle="Add [[hidden terms]] inside a note to start." />
+        ) : (
+          studyNotes.map(note => (
+            <AnimatedCard
+              key={note.id}
+              style={{ padding: 14, marginBottom: 8 }}
+              onPress={() => { setRevisionNoteId(note.id); setRevealedSections(new Set()); }}
+            >
+              <View style={styles.row}>
+                <BookMarked size={18} color={theme.accent} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.rowTitle, { color: theme.primaryText }]} numberOfLines={1}>{note.title || 'Untitled'}</Text>
+                  <Text style={[styles.rowSub, { color: theme.secondaryText }]}>{note.folder || 'General'} · {note.revision_score ?? 0}%</Text>
+                </View>
+                <ChevronRight size={16} color={theme.secondaryText} />
+              </View>
+            </AnimatedCard>
+          ))
+        )}
+      </Animated.View>
+    );
+  };
+
+  const fabActions = [
+    { label: 'New note', icon: PenLine, color: theme.accent, onPress: () => { setFabOpen(false); router.push('/notes/new'); } },
+    { label: 'Voice note', icon: Mic, color: '#34C759', onPress: () => { setFabOpen(false); router.push('/notes/new?mode=voice' as any); } },
+    { label: 'Quick capture', icon: Zap, color: '#FF9500', onPress: () => { setFabOpen(false); setQuickThoughtVisible(true); } },
+  ];
+
+  return (
+    <BackgroundGradient>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: 130 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Plus size={28} color="white" />
+        <Pressable onPress={() => router.back()} style={styles.backRow}>
+          <ChevronLeft size={22} color={theme.accent} />
+          <Text style={{ color: theme.accent, fontFamily: 'Inter_600SemiBold', marginLeft: 2 }}>Back</Text>
+        </Pressable>
+
+        <Text style={[styles.pageTitle, { color: theme.primaryText }]}>Notes</Text>
+        {renderTabs()}
+
+        {activeTab === 'Home' && renderHome()}
+        {activeTab === 'Library' && renderLibrary()}
+        {activeTab === 'Study' && renderStudy()}
+      </ScrollView>
+
+      <Pressable onPress={() => setFabOpen(true)} style={[styles.fab, { backgroundColor: theme.accent }]}>
+        <Plus size={26} color="#FFF" />
       </Pressable>
 
-      {/* Confirm Delete Dialog */}
+      <Modal visible={fabOpen} transparent animationType="fade">
+        <Pressable style={styles.overlay} onPress={() => setFabOpen(false)}>
+          <View style={[styles.fabMenu, { bottom: insets.bottom + 100 }]}>
+            {fabActions.map((action, i) => (
+              <Animated.View key={action.label} entering={FadeInDown.delay(i * 50)}>
+                <Pressable
+                  onPress={action.onPress}
+                  style={[styles.fabItem, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder }]}
+                >
+                  <action.icon size={18} color={action.color} />
+                  <Text style={{ marginLeft: 10, fontFamily: 'Inter_700Bold', color: theme.primaryText }}>{action.label}</Text>
+                </Pressable>
+              </Animated.View>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <KeyboardAwareSheet
+        visible={quickThoughtVisible}
+        onClose={() => setQuickThoughtVisible(false)}
+        title="Quick capture"
+      >
+        <TextInput
+          style={[styles.quickInput, { color: theme.primaryText, backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+          placeholder="Jot it down…"
+          placeholderTextColor={theme.secondaryText}
+          value={quickThoughtText}
+          onChangeText={setQuickThoughtText}
+          multiline
+          autoFocus
+        />
+        <View style={styles.quickActions}>
+          <Pressable onPress={() => setQuickThoughtVisible(false)} style={[styles.quickBtn, { backgroundColor: theme.card }]}>
+            <Text style={{ color: theme.secondaryText, fontFamily: 'Inter_700Bold' }}>Cancel</Text>
+          </Pressable>
+          <Pressable onPress={handleQuickThought} style={[styles.quickBtn, { backgroundColor: theme.accent }]}>
+            <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold' }}>Save</Text>
+          </Pressable>
+        </View>
+      </KeyboardAwareSheet>
+
       <ConfirmDialog
         visible={deleteDialogVisible}
-        title={noteToDelete?.id === 'ALL' ? 'Delete All Notes' : 'Delete Note'}
-        message={noteToDelete?.id === 'ALL'
-          ? 'Are you sure you want to delete ALL notes? This cannot be undone.'
-          : `Delete "${noteToDelete?.title || 'Untitled Note'}"?`}
+        title="Delete note"
+        message={`Delete "${noteToDelete?.title || 'Untitled'}"?`}
         confirmText="Delete"
         confirmButtonColor={theme.danger}
         onCancel={() => setDeleteDialogVisible(false)}
-        onConfirm={confirmDeleteNote}
+        onConfirm={confirmDelete}
       />
-
-      {/* Options Sheet */}
-      <NativeSheet visible={isOptionsVisible} onClose={() => setOptionsVisible(false)} height="40%">
-        <View style={{ flex: 1, padding: 24, backgroundColor: theme.background }}>
-          <Text style={{ fontSize: 20, fontFamily: 'System', fontWeight: '700', color: theme.primaryText, marginBottom: 20 }}>Options</Text>
-
-          {[
-            { label: `Sort: ${sortOrder === 'newest' ? 'Newest first' : sortOrder === 'oldest' ? 'Oldest first' : 'A → Z'}`, icon: sortOrder === 'oldest' ? ArrowUp : ArrowDown, onPress: () => { setSortOrder(s => s === 'newest' ? 'oldest' : s === 'oldest' ? 'az' : 'newest'); setOptionsVisible(false); } },
-          ].map((item, i) => (
-            <Pressable 
-              key={i} 
-              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.cardBorder }}
-              onPress={item.onPress}
-            >
-              <item.icon size={20} color={theme.primaryText} style={{ marginRight: 16 }} />
-              <Text style={{ fontSize: 16, fontFamily: 'System', fontWeight: '600', color: theme.primaryText, flex: 1 }}>{item.label}</Text>
-              <ChevronRight size={18} color={theme.secondaryText} />
-            </Pressable>
-          ))}
-
-          <Pressable
-            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16 }}
-            onPress={() => { setOptionsVisible(false); handleDeleteNote('ALL', 'ALL'); }}
-          >
-            <View style={[styles.iconBox, { backgroundColor: `${theme.danger}15`, marginRight: 16 }]}>
-              <Trash2 size={20} color={theme.danger} />
-            </View>
-            <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: theme.danger }}>Delete All Notes</Text>
-          </Pressable>
-        </View>
-      </NativeSheet>
     </BackgroundGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fab: {
-    position: 'absolute', bottom: 100, right: 24,
-    width: 60, height: 60, borderRadius: 30,
-    alignItems: 'center', justifyContent: 'center',
-      
-    
-  }
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loginTitle: { fontSize: 26, fontFamily: 'Inter_800ExtraBold', marginBottom: 10, textAlign: 'center' },
+  loginSub: { fontSize: 15, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: 28, lineHeight: 22 },
+  backRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginLeft: -4 },
+  pageTitle: { fontSize: 32, fontFamily: 'Inter_800ExtraBold', marginBottom: 16 },
+  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 22 },
+  tab: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', backgroundColor: 'rgba(128,128,128,0.12)' },
+  tabText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  greeting: { fontSize: 24, fontFamily: 'Inter_800ExtraBold', marginBottom: 4 },
+  greetingSub: { fontSize: 14, fontFamily: 'Inter_500Medium', marginBottom: 18 },
+  captureRow: { flexDirection: 'row', gap: 10, marginBottom: 22 },
+  captureBtn: { flex: 1, borderRadius: 16, borderWidth: 1, paddingVertical: 14, alignItems: 'center' },
+  captureIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  captureLabel: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  sectionLabel: { fontSize: 17, fontFamily: 'Inter_700Bold', marginBottom: 12 },
+  recentCard: { width: 140, borderRadius: 18, padding: 14, minHeight: 110 },
+  recentTitle: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#FFF', marginTop: 10, marginBottom: 4 },
+  recentFolder: { fontSize: 11, fontFamily: 'Inter_500Medium', color: 'rgba(255,255,255,0.75)' },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  rowTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  rowSub: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  spaceChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, gap: 8 },
+  spaceIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  spaceName: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  spaceCount: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, paddingHorizontal: 14, height: 48, borderWidth: 1, marginBottom: 12 },
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  libraryToolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  folderChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  toolBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  gridWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  loadingBox: { alignItems: 'center', paddingVertical: 48 },
+  studyHero: { flexDirection: 'row', marginBottom: 20 },
+  studyHeading: { fontSize: 20, fontFamily: 'Inter_800ExtraBold' },
+  studyHint: { fontSize: 13, fontFamily: 'Inter_500Medium', lineHeight: 20, marginTop: 4 },
+  backStudy: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, marginBottom: 14 },
+  studyTitle: { fontSize: 20, fontFamily: 'Inter_800ExtraBold', marginBottom: 14 },
+  studyCard: { borderRadius: 20, padding: 18, borderWidth: 1, marginBottom: 16 },
+  revisionActions: { flexDirection: 'row', gap: 12 },
+  revisionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16 },
+  fab: { position: 'absolute', right: 20, bottom: 96, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  fabMenu: { position: 'absolute', right: 20, gap: 10 },
+  fabItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1 },
+  quickModal: { marginHorizontal: 24, marginBottom: 120, borderRadius: 22, padding: 20, borderWidth: 1 },
+  quickTitle: { fontSize: 18, fontFamily: 'Inter_800ExtraBold', marginBottom: 12 },
+  quickInput: { minHeight: 100, borderRadius: 14, borderWidth: 1, padding: 14, textAlignVertical: 'top', fontSize: 15, fontFamily: 'Inter_500Medium' },
+  quickActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  quickBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
 });

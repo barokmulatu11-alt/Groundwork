@@ -2,7 +2,7 @@ import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
-import { NativeSheet } from '@/components/ui/NativeSheet';
+import { CenterModal } from '@/components/ui/CenterModal';
 import { TabHeader } from '@/components/ui/TabHeader';
 import { useTheme } from '@/lib/ThemeContext';
 import { useStore } from '@/store/useStore';
@@ -34,7 +34,7 @@ import { Dimensions, LayoutAnimation, Pressable, ScrollView, StatusBar, StyleShe
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 
-const { width } = Dimensions.get('window');
+const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
@@ -321,17 +321,20 @@ export default function CalendarScreen() {
           </AnimatedCard>
         </View>
 
-        {/* Day Detail Sheet */}
-        <NativeSheet visible={isDetailVisible} onClose={() => setDetailVisible(false)} height="85%">
+        {/* Day Detail — Centered Modal */}
+        <CenterModal visible={isDetailVisible} onClose={() => setDetailVisible(false)} maxWidth={420}>
           {selectedDate && (() => {
             const data = getDayData(selectedDate);
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
             return (
-              <ScrollView style={{ flex: 1, padding: 24, backgroundColor: theme.background }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+              <ScrollView
+                style={{ maxHeight: SCREEN_HEIGHT * 0.78 }}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                   <View>
-                    <Text style={{ fontSize: 24, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>{format(selectedDate, 'MMMM do')}</Text>
-                    <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: theme.secondaryText }}>{format(selectedDate, 'EEEE, yyyy')}</Text>
+                    <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>{format(selectedDate, 'MMMM do')}</Text>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.secondaryText }}>{format(selectedDate, 'EEEE, yyyy')}</Text>
                   </View>
                   {data.isPerfect && (
                     <View style={{ backgroundColor: '#FFD60A20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
@@ -341,31 +344,31 @@ export default function CalendarScreen() {
                 </View>
 
                 {/* Day Stats */}
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 32 }}>
-                  <View style={{ flex: 1, backgroundColor: 'transparent', padding: 12, borderRadius: 16, alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+                  <View style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 16, alignItems: 'center' }}>
                     <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>{data.tasks.filter(t => t.completed).length}/{data.tasks.length}</Text>
                     <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>TASKS</Text>
                   </View>
-                  <View style={{ flex: 1, backgroundColor: 'transparent', padding: 12, borderRadius: 16, alignItems: 'center' }}>
+                  <View style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 16, alignItems: 'center' }}>
                     <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>{data.habits.length}</Text>
                     <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>HABITS</Text>
                   </View>
-                  <View style={{ flex: 1, backgroundColor: 'transparent', padding: 12, borderRadius: 16, alignItems: 'center' }}>
+                  <View style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 16, alignItems: 'center' }}>
                     <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>{Math.round(data.sessions.reduce((acc, s) => acc + s.duration_minutes, 0) / 60)}h</Text>
                     <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>FOCUS</Text>
                   </View>
                 </View>
 
                 {/* Day Note */}
-                <View style={{ marginBottom: 32 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ marginBottom: 24 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                     <Pencil size={16} color={theme.accent} style={{ marginRight: 8 }} />
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>Day Note</Text>
                   </View>
                   <TextInput
                     style={{ 
-                      backgroundColor: theme.card, borderRadius: 16, padding: 16, 
-                      color: theme.primaryText, fontSize: 14,  fontFamily: 'Inter_600SemiBold', minHeight: 100, textAlignVertical: 'top'
+                      backgroundColor: theme.card, borderRadius: 16, padding: 14,
+                      color: theme.primaryText, fontSize: 13, fontFamily: 'Inter_600SemiBold', minHeight: 80, textAlignVertical: 'top'
                     }}
                     placeholder="How was your day? Reflections, wins, thoughts..."
                     placeholderTextColor={theme.secondaryText}
@@ -376,46 +379,43 @@ export default function CalendarScreen() {
                 </View>
 
                 {/* Tasks List */}
-                <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 16 }}>Planned Tasks</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 12 }}>Planned Tasks</Text>
                 {data.tasks.length === 0 ? (
-                  <Text style={{ fontSize: 13,  fontFamily: 'Inter_500Medium', color: theme.secondaryText, fontStyle: 'italic', marginBottom: 24 }}>No tasks planned for this day.</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: theme.secondaryText, fontStyle: 'italic', marginBottom: 20 }}>No tasks planned for this day.</Text>
                 ) : (
-                  <View style={{ gap: 12, marginBottom: 32 }}>
+                  <View style={{ gap: 10, marginBottom: 20 }}>
                     {data.tasks.map(t => (
                       <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <CheckCircle2 size={20} color={t.completed ? theme.accent : theme.card} />
-                        <Text style={{ marginLeft: 12, fontSize: 14,  fontFamily: 'Inter_600SemiBold', color: t.completed ? theme.secondaryText : theme.primaryText, textDecorationLine: t.completed ? 'line-through' : 'none' }}>{t.title}</Text>
+                        <CheckCircle2 size={18} color={t.completed ? theme.accent : theme.card} />
+                        <Text style={{ marginLeft: 10, fontSize: 13, fontFamily: 'Inter_600SemiBold', color: t.completed ? theme.secondaryText : theme.primaryText, textDecorationLine: t.completed ? 'line-through' : 'none' }}>{t.title}</Text>
                       </View>
                     ))}
                   </View>
                 )}
 
                 {/* Habits */}
-                <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 16 }}>Habit Check-ins</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 12 }}>Habit Check-ins</Text>
                 {data.habits.length === 0 ? (
-                  <Text style={{ fontSize: 13,  fontFamily: 'Inter_500Medium', color: theme.secondaryText, fontStyle: 'italic', marginBottom: 24 }}>No habits completed this day.</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: theme.secondaryText, fontStyle: 'italic', marginBottom: 20 }}>No habits completed this day.</Text>
                 ) : (
-                  <View style={{ gap: 12, marginBottom: 32 }}>
+                  <View style={{ gap: 10, marginBottom: 20 }}>
                     {data.habits.map(h => (
                       <View key={h.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Flame size={16} color={theme.accent} />
-                        <Text style={{ marginLeft: 12, fontSize: 14, fontFamily: 'Inter_700Bold', color: theme.accent }}>{h.title}</Text>
+                        <Flame size={14} color={theme.accent} />
+                        <Text style={{ marginLeft: 10, fontSize: 13, fontFamily: 'Inter_700Bold', color: theme.accent }}>{h.title}</Text>
                       </View>
                     ))}
                   </View>
                 )}
 
-                <View style={{ height: 40 }} />
-                {isFuture(selectedDate) && (
-                  <AnimatedButton 
-                    title="+ Plan Task" 
-                    onPress={() => { setDetailVisible(false); router.push({ pathname: '/tasks', params: { date: dateStr } } as any); }} 
-                  />
-                )}
+                <AnimatedButton 
+                  title="+ Plan Task" 
+                  onPress={() => { setDetailVisible(false); router.push({ pathname: '/tasks', params: { date: dateStr } } as any); }} 
+                />
               </ScrollView>
             );
           })()}
-        </NativeSheet>
+        </CenterModal>
       </ScrollView>
     </BackgroundGradient>
   );

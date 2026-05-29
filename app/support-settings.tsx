@@ -103,7 +103,7 @@ export default function SupportAboutScreen() {
   const handleRate = () => {
     showAlert({
       title: 'Rate App',
-      message: 'Redirecting to App Store... Thank you for your support!',
+      message: 'Redirecting to Play Store... Thank you for your support!',
       primaryButton: { text: 'OK', onPress: () => { } }
     });
   };

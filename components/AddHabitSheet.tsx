@@ -110,7 +110,7 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
               <Pressable
                 key={c}
                 onPress={() => setCategory(c)}
-                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: category === c ? '#007AFF' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), borderWidth: 1, borderColor: category === c ? '#007AFF' : theme.cardBorder }}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: category === c ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), borderWidth: 1, borderColor: category === c ? theme.accent : theme.cardBorder }}
               >
                 <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: category === c ? 'white' : theme.primaryText }}>{c}</Text>
               </Pressable>
@@ -126,7 +126,7 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
               <Pressable
                 key={d}
                 onPress={() => setDifficulty(d)}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: difficulty === d ? '#007AFF' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', borderWidth: 1, borderColor: difficulty === d ? '#007AFF' : theme.cardBorder }}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: difficulty === d ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', borderWidth: 1, borderColor: difficulty === d ? theme.accent : theme.cardBorder }}
               >
                 <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: difficulty === d ? 'white' : theme.primaryText }}>{d}</Text>
               </Pressable>
@@ -142,7 +142,7 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
               <Pressable
                 key={f}
                 onPress={() => setFrequency(f)}
-                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: frequency === f ? '#007AFF' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), borderWidth: 1, borderColor: frequency === f ? '#007AFF' : theme.cardBorder }}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: frequency === f ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), borderWidth: 1, borderColor: frequency === f ? theme.accent : theme.cardBorder }}
               >
                 <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: frequency === f ? 'white' : theme.primaryText }}>{f}</Text>
               </Pressable>
@@ -155,7 +155,7 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
                 <Pressable
                   key={i}
                   onPress={() => toggleDay(i)}
-                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: customDays.includes(i) ? '#007AFF' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: customDays.includes(i) ? '#007AFF' : theme.cardBorder }}
+                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: customDays.includes(i) ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: customDays.includes(i) ? theme.accent : theme.cardBorder }}
                 >
                   <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: customDays.includes(i) ? 'white' : theme.primaryText }}>{d}</Text>
                 </Pressable>

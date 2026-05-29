@@ -96,7 +96,7 @@ interface AlertState {
   visible: boolean
   title: string
   message: string
-  primaryButton: {
+  primaryButton?: {
     text: string
     onPress: () => void
     destructive?: boolean
@@ -141,13 +141,14 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     checkboxBorder: accentColor,
     checkboxFill: accentColor,
     pillActive: accentColor,
+    blob1: accentColor + (isDark ? '14' : '12'),
+    blob2: accentColor + (isDark ? '0A' : '08'),
   }
 
   const [alert, setAlert] = useState<AlertState>({
     visible: false,
     title: '',
     message: '',
-    primaryButton: { text: 'OK', onPress: () => {} }
   })
 
   const toggleTheme = () => {
@@ -178,13 +179,13 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
         message={alert.message}
         theme={theme}
         isDark={isDark}
-        primaryButton={{
+        primaryButton={alert.primaryButton ? {
           ...alert.primaryButton,
           onPress: () => {
-            alert.primaryButton.onPress()
+            alert.primaryButton?.onPress()
             hideAlert()
           }
-        }}
+        } : undefined}
         secondaryButton={alert.secondaryButton ? {
           ...alert.secondaryButton,
           onPress: () => {

@@ -110,7 +110,7 @@ export default function ProductivitySettingsScreen() {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const accentColor = '#007AFF';
+  const accentColor = theme.accent;
 
   const settings = useSettingsStore();
 

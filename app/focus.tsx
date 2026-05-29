@@ -5,6 +5,8 @@ import { CenterModal } from '@/components/ui/CenterModal';
 import { CustomAlert } from '@/components/ui/CustomAlert';
 import { CustomTimePicker } from '@/components/ui/CustomTimePicker';
 import { TabHeader } from '@/components/ui/TabHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { hapticSuccess } from '@/lib/haptics';
 import { useTheme } from '@/lib/ThemeContext';
 import {
     cancelFocusCompleteNotification,
@@ -187,7 +189,8 @@ export default function FocusScreen() {
     await cancelFocusCompleteNotification();
     
     addFocusSession({ duration_minutes: defaultDurationMinutes, task_id: selectedTaskId || undefined, date: new Date().toISOString().split('T')[0], mode: mode });
-    Vibration.vibrate([0, 500, 200, 500]); // Vibrate pattern: wait 0, vibrate 500, wait 200, vibrate 500
+    Vibration.vibrate([0, 500, 200, 500]);
+    hapticSuccess();
     setCompletionAlertVisible(true);
   };
 
@@ -328,9 +331,11 @@ export default function FocusScreen() {
               </AnimatedCard>
             </TouchableOpacity>
           ))) : (
-            <AnimatedCard style={styles.emptyTasks}>
-              <Text style={[styles.emptyTasksText, { color: theme.secondaryText }]}>No active tasks. Focused on freedom! </Text>
-            </AnimatedCard>
+            <EmptyState
+              icon={Trophy}
+              title="No tasks to link"
+              subtitle="Add a task first, or start an open focus session without linking one."
+            />
           )}
         </View>
       </ScrollView>
@@ -343,7 +348,7 @@ export default function FocusScreen() {
             <Text style={[styles.pickerSeparator, { color: theme.primaryText }]}>:</Text>
             <View style={styles.pickerItem}><CustomTimePicker items={Array.from({ length: 60 }, (_, i) => String(i))} selectedValue={tempMinutes} onValueChange={setTempMinutes} /><Text style={[styles.pickerLabel, { color: theme.primaryText }]}>mins</Text></View>
           </View>
-          <TouchableOpacity onPress={applyCustomDuration} style={styles.applyBtn}><Text style={styles.applyBtnText}>Apply Duration</Text></TouchableOpacity>
+          <TouchableOpacity onPress={applyCustomDuration} style={[styles.applyBtn, { backgroundColor: theme.accent }]}><Text style={styles.applyBtnText}>Apply Duration</Text></TouchableOpacity>
         </View>
       </CenterModal>
 
@@ -396,7 +401,7 @@ const styles = StyleSheet.create({
   pickerItem: { flex: 1, alignItems: 'center' },
   pickerLabel: { fontSize: 12, fontFamily: 'Inter_700Bold', marginTop: 8, textTransform: 'uppercase' },
   pickerSeparator: { fontSize: 32, fontFamily: 'Inter_700Bold', marginHorizontal: 10, marginBottom: 20 },
-  applyBtn: { backgroundColor: '#007AFF', paddingHorizontal: 50, paddingVertical: 15, borderRadius: 15, width: '100%', alignItems: 'center' },
+  applyBtn: { paddingHorizontal: 50, paddingVertical: 15, borderRadius: 15, width: '100%', alignItems: 'center' },
   applyBtnText: { color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' },
   visualizerContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 40, marginTop: 20 },
   visualizerBar: { width: 4, borderRadius: 2 }

@@ -73,14 +73,6 @@ export default function PermissionsSettings() {
 
           <View style={styles.list}>
             <PermissionRow 
-              icon={Camera} 
-              name="Camera" 
-              subtitle="Photos for your notes"
-              isAllowed={statuses.camera}
-              onPress={openSettings}
-              theme={theme}
-            />
-            <PermissionRow 
               icon={Mic} 
               name="Microphone" 
               subtitle="Voice recordings & notes"

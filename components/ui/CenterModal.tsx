@@ -34,7 +34,8 @@ export function CenterModal({
         
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ width: '100%', alignItems: 'center' }}
+          // Ensure the modal content stays centered across platforms (incl. web)
+          style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}
           pointerEvents="box-none"
         >
           <View 
@@ -61,6 +62,8 @@ export function CenterModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,

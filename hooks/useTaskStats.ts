@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as db from '../lib/db';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export const useTaskStats = (date: string) => {
   const [stats, setStats] = useState({
@@ -9,12 +10,14 @@ export const useTaskStats = (date: string) => {
     streak: 0
   });
 
+  const userId = useAuthStore(state => state.session?.user?.id || 'guest');
+
   const loadStats = useCallback(() => {
     try {
-      const { total, completed } = db.getTaskStats(date);
+      const { total, completed } = db.getTaskStats(date, userId);
       
       // Calculate avg time
-      const tasks = db.getTasksByDate(date).filter(t => t.completed && t.completed_at);
+      const tasks = db.getTasksByDate(date, userId).filter(t => t.completed && t.completed_at);
       let totalMins = 0;
       tasks.forEach(t => {
         const created = new Date(t.created_at).getTime();
@@ -32,8 +35,8 @@ export const useTaskStats = (date: string) => {
       while (true) {
         const dStr = checkDate.toISOString().split('T')[0];
         const count = db.db.getFirstSync<{c: number}>(
-          'SELECT COUNT(*) as c FROM tasks WHERE date = ? AND completed = 1', 
-          [dStr]
+          'SELECT COUNT(*) as c FROM tasks WHERE date = ? AND completed = 1 AND user_id = ?', 
+          [dStr, userId]
         )?.c || 0;
         
         if (count > 0) {
@@ -48,7 +51,7 @@ export const useTaskStats = (date: string) => {
     } catch (e) {
       console.error(e);
     }
-  }, [date]);
+  }, [date, userId]);
 
   useEffect(() => {
     loadStats();

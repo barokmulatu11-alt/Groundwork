@@ -654,6 +654,28 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
+      // Sync achievements
+      try {
+        const { data: achievementsData } = await supabase
+          .from('connect_achievements')
+          .select('*')
+          .eq('user_id', userId);
+        
+        if (achievementsData) {
+          for (const remote of achievementsData) {
+            const local = db.db.getFirstSync<any>('SELECT * FROM connect_achievements WHERE achievement_key = ? AND user_id = ?', [remote.achievement_key, userId]);
+            if (!local) {
+              db.db.runSync(
+                'INSERT INTO connect_achievements (id, user_id, achievement_key, unlocked_at, progress) VALUES (?, ?, ?, ?, ?)',
+                [remote.id, userId, remote.achievement_key, remote.unlocked_at, remote.progress]
+              );
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Sync] Achievements sync failed:', e);
+      }
+
       // Reload all into memory
       await Promise.all([
         get().loadAllTasks(),

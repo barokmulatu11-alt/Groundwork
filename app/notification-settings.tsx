@@ -82,7 +82,7 @@ export default function NotificationSettingsScreen() {
   const { theme, isDark, showAlert } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const accentColor = '#007AFF';
+  const accentColor = theme.accent;
 
   const { 
     notificationsEnabled, setNotificationsEnabled,

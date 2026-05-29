@@ -1,24 +1,17 @@
 /**
  * GroundWork Notification System — lib/notifications.ts
- * All notification logic lives here. Nothing notification-related exists in screen components.
+ * Rewritten to use @notifee/react-native
  */
 
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import notifee, {
+  RepeatFrequency,
+  TriggerType,
+  AndroidImportance,
+  AuthorizationStatus
+} from './safeNotifee';
+import type { TimestampTrigger, Notification } from 'react-native-notify-kit';
 import { Platform } from 'react-native';
-
-// ─── Handler ──────────────────────────────────────────────────────────────────
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── IDs ──────────────────────────────────────────────────────────────────────
 
@@ -112,73 +105,70 @@ export const saveQuietHours = async (qh: QuietHours): Promise<void> => {
 
 // ─── Quiet Hours Guard ────────────────────────────────────────────────────────
 
-/**
- * Returns true if the given hour:minute falls within quiet hours.
- * Handles overnight ranges (e.g. 22:00 → 07:00).
- */
 const isInQuietHours = (hour: number, minute: number, qh: QuietHours): boolean => {
   if (!qh.enabled) return false;
   const t = hour * 60 + minute;
   const from = qh.fromHour * 60 + qh.fromMinute;
   const to   = qh.toHour   * 60 + qh.toMinute;
   if (from > to) {
-    // overnight range
     return t >= from || t < to;
   }
   return t >= from && t < to;
 };
 
-/**
- * Given a desired hour:minute, return the next valid time that is not
- * inside quiet hours. If the time is fine, return it unchanged.
- * Result is { hour, minute }.
- */
 const resolveQuietHours = (
   hour: number,
   minute: number,
   qh: QuietHours
 ): { hour: number; minute: number } => {
   if (!isInQuietHours(hour, minute, qh)) return { hour, minute };
-  // Push to end-of-quiet-hours
   return { hour: qh.toHour, minute: qh.toMinute };
 };
 
 // ─── Permission Request ───────────────────────────────────────────────────────
 
 export const requestNotificationPermissions = async (): Promise<boolean> => {
-  if (!Device.isDevice) {
-    console.log('[Notifs] Not a physical device — skipping permission request');
-    return false;
+  const settings = await notifee.requestPermission();
+  
+  if (settings.authorizationStatus >= AuthorizationStatus.AUTHORIZED) {
+    if (Platform.OS === 'android') {
+      try {
+        await notifee.deleteChannel('groundwork');
+      } catch (e) {
+        console.warn('[Notifs] Failed to delete channel groundwork', e);
+      }
+      await notifee.createChannel({
+        id: 'groundwork',
+        name: 'GroundWork',
+        importance: AndroidImportance.HIGH,
+        vibration: true,
+        vibrationPattern: [250, 250, 250, 250],
+        lightColor: '#007AFF',
+      });
+    }
+    return true;
   }
-
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    console.log('[Notifs] Permission denied');
-    return false;
-  }
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('groundwork', {
-      name: 'GroundWork',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#007AFF',
-      sound: 'default',
-    });
-  }
-
-  return true;
+  
+  console.log('[Notifs] Permission denied');
+  return false;
 };
 
-// Backwards-compatible alias used in existing layout code
 export const requestPermissionsAsync = requestNotificationPermissions;
+
+export const displayTestNotification = async (): Promise<void> => {
+  await requestNotificationPermissions();
+  await notifee.displayNotification({
+    title: '🔔 GroundWork Notification Test',
+    body: 'Your Notifee notification system is working perfectly! 🚀',
+    android: {
+      channelId: 'groundwork',
+      color: '#007AFF',
+      pressAction: {
+        id: 'default',
+      },
+    },
+  });
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -186,18 +176,46 @@ const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 const safeCancel = async (id: string) => {
   try {
-    await Notifications.cancelScheduledNotificationAsync(id);
+    await notifee.cancelNotification(id);
   } catch {
-    // Silently ignore — notification may not exist yet
+    // Silently ignore
   }
+};
+
+const getNextDate = (hour: number, minute: number) => {
+  const now = new Date();
+  const date = new Date();
+  date.setHours(hour, minute, 0, 0);
+  
+  if (date <= now) {
+    date.setDate(date.getDate() + 1);
+  }
+  return date;
+};
+
+const getNextWeeklyDate = (weekday: number, hour: number, minute: number) => {
+  const now = new Date();
+  const date = new Date();
+  date.setHours(hour, minute, 0, 0);
+  
+  const currentDay = date.getDay();
+  const daysUntilNext = (weekday + 7 - currentDay) % 7;
+  
+  if (daysUntilNext === 0 && date <= now) {
+    date.setDate(date.getDate() + 7);
+  } else {
+    date.setDate(date.getDate() + daysUntilNext);
+  }
+  
+  return date;
 };
 
 // ─── PART 4: Task Reminders ───────────────────────────────────────────────────
 
 const taskReminderBodies = (name: string, offset: number) => [
-  `"${name}" starts in ${offset} minutes. You've got this `,
+  `"${name}" starts in ${offset} minutes. You've got this 💪`,
   `Heads up! "${name}" is coming up in ${offset} minutes`,
-  ` Don't forget: "${name}" in ${offset} minutes`,
+  `⏰ Don't forget: "${name}" in ${offset} minutes`,
 ];
 
 export const scheduleTaskReminder = async (
@@ -212,21 +230,21 @@ export const scheduleTaskReminder = async (
   const id = `${NOTIFICATION_IDS.TASK_REMINDER}_${taskId}`;
   await safeCancel(id);
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: id,
-    content: {
-      title: ' Task coming up',
-      body: pick(taskReminderBodies(taskName, reminderOffset)),
-      data: { type: 'task_reminder', taskId },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: reminderTime.getTime(),
+  };
+
+  await notifee.createTriggerNotification({
+    id,
+    title: '⏰ Task coming up',
+    body: pick(taskReminderBodies(taskName, reminderOffset)),
+    data: { type: 'task_reminder', taskId },
+    android: {
+      channelId: 'groundwork',
       color: '#007AFF',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: reminderTime,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 export const cancelTaskReminder = async (taskId: string): Promise<void> => {
@@ -243,41 +261,41 @@ export const scheduleMorningSummary = async (taskCount: number): Promise<void> =
 
   let body: string;
   if (taskCount === 0) {
-    body = "No tasks planned yet. Want to add some? Let's make today count ";
+    body = "No tasks planned yet. Want to add some? Let's make today count 🚀";
   } else if (taskCount <= 3) {
-    body = `You've got ${taskCount} task${taskCount > 1 ? 's' : ''} today. Light day, make it count `;
+    body = `You've got ${taskCount} task${taskCount > 1 ? 's' : ''} today. Light day, make it count 🎯`;
   } else if (taskCount <= 6) {
-    body = `${taskCount} tasks lined up today. Solid plan, let's get moving `;
+    body = `${taskCount} tasks lined up today. Solid plan, let's get moving 💪`;
   } else {
-    body = `Big day ahead with ${taskCount} tasks. Stay focused and take it one at a time `;
+    body = `Big day ahead with ${taskCount} tasks. Stay focused and take it one at a time 🔥`;
   }
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: NOTIFICATION_IDS.MORNING_SUMMARY,
-    content: {
-      title: '️ Good morning!',
-      body,
-      data: { type: 'morning_summary' },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: getNextDate(hour, minute).getTime(),
+    repeatFrequency: RepeatFrequency.DAILY,
+  };
+
+  await notifee.createTriggerNotification({
+    id: NOTIFICATION_IDS.MORNING_SUMMARY,
+    title: '☀️ Good morning!',
+    body,
+    data: { type: 'morning_summary' },
+    android: {
+      channelId: 'groundwork',
       color: '#007AFF',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour,
-      minute,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 // ─── PART 6: Afternoon Check-in ───────────────────────────────────────────────
 
 const afternoonMessages = [
-  { title: ' Focus mode: ON',   body: 'Afternoon slump? Push through. Your future self will thank you.' },
-  { title: ' Quick check-in',   body: "How's the day going? Cross off one more task before dinner." },
-  { title: ' Stay on track',    body: "You're halfway through the day. Finish strong " },
-  { title: ' Fuel up',          body: "Take a 5 minute break, then get back to it. You've got this." },
-  { title: ' Task check',       body: "Have you looked at your task list lately? Let's knock something out." },
+  { title: '🧠 Focus mode: ON',   body: 'Afternoon slump? Push through. Your future self will thank you.' },
+  { title: '⚡ Quick check-in',   body: "How's the day going? Cross off one more task before dinner." },
+  { title: '🎯 Stay on track',    body: "You're halfway through the day. Finish strong 🔥" },
+  { title: '☕ Fuel up',          body: "Take a 5 minute break, then get back to it. You've got this." },
+  { title: '📋 Task check',       body: "Have you looked at your task list lately? Let's knock something out." },
 ];
 
 export const scheduleAfternoonCheckin = async (): Promise<void> => {
@@ -287,22 +305,22 @@ export const scheduleAfternoonCheckin = async (): Promise<void> => {
   const { hour, minute } = resolveQuietHours(14, 0, qh);
   const msg = pick(afternoonMessages);
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: NOTIFICATION_IDS.AFTERNOON_CHECKIN,
-    content: {
-      title: msg.title,
-      body: msg.body,
-      data: { type: 'afternoon_checkin' },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: getNextDate(hour, minute).getTime(),
+    repeatFrequency: RepeatFrequency.DAILY,
+  };
+
+  await notifee.createTriggerNotification({
+    id: NOTIFICATION_IDS.AFTERNOON_CHECKIN,
+    title: msg.title,
+    body: msg.body,
+    data: { type: 'afternoon_checkin' },
+    android: {
+      channelId: 'groundwork',
       color: '#007AFF',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour,
-      minute,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 // ─── PART 7: Evening Streak Protection ───────────────────────────────────────
@@ -318,38 +336,38 @@ export const scheduleEveningStreakProtection = async (currentStreak: number): Pr
   let body: string;
 
   if (currentStreak >= 30) {
-    title = ' Legendary streak alert';
+    title = '👑 Legendary streak alert';
     body  = `${currentStreak} days strong! Don't break it now. Open GroundWork and check in.`;
   } else if (currentStreak >= 14) {
-    title = ' Two weeks and counting';
+    title = '🔥 Two weeks and counting';
     body  = `${currentStreak} day streak! You're unstoppable. Keep it alive tonight.`;
   } else if (currentStreak >= 7) {
-    title = ' One week streak!';
+    title = '⚡ One week streak!';
     body  = `${currentStreak} days in a row. You're building something real. Don't stop now.`;
   } else if (currentStreak >= 3) {
-    title = ' Streak on the line';
+    title = '⚠️ Streak on the line';
     body  = `${currentStreak} day streak at risk. Open GroundWork and keep it alive!`;
   } else {
-    title = ' Keep the streak going';
+    title = '🌱 Keep the streak going';
     body  = `You're on a ${currentStreak} day streak. A quick check-in is all it takes.`;
   }
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: NOTIFICATION_IDS.EVENING_STREAK,
-    content: {
-      title,
-      body,
-      data: { type: 'evening_streak', streak: currentStreak },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: getNextDate(hour, minute).getTime(),
+    repeatFrequency: RepeatFrequency.DAILY,
+  };
+
+  await notifee.createTriggerNotification({
+    id: NOTIFICATION_IDS.EVENING_STREAK,
+    title,
+    body,
+    data: { type: 'evening_streak', streak: currentStreak },
+    android: {
+      channelId: 'groundwork',
       color: '#FF9500',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour,
-      minute,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 // ─── PART 8: Focus Session Complete ──────────────────────────────────────────
@@ -363,38 +381,38 @@ export const scheduleFocusCompleteNotification = async (
   const completionTime = new Date(Date.now() + durationMinutes * 60 * 1000);
   const messages = [
     {
-      title: ' Session complete!',
+      title: '🎯 Session complete!',
       body: taskName
         ? `Great work on "${taskName}"! Time for a well-earned break.`
         : 'You crushed that session! Take a quick break.',
     },
     {
-      title: ' Focus session done',
-      body: `${durationMinutes} minutes of pure focus. That is how it is done `,
+      title: '⚡ Focus session done',
+      body: `${durationMinutes} minutes of pure focus. That is how it is done 🔥`,
     },
     {
-      title: ' Session complete!',
+      title: '✅ Session complete!',
       body: 'Another one in the books. Take 5 minutes and then get back to it.',
     },
   ];
 
   const msg = pick(messages);
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: NOTIFICATION_IDS.FOCUS_COMPLETE,
-    content: {
-      title: msg.title,
-      body: msg.body,
-      data: { type: 'focus_complete' },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: completionTime.getTime(),
+  };
+
+  await notifee.createTriggerNotification({
+    id: NOTIFICATION_IDS.FOCUS_COMPLETE,
+    title: msg.title,
+    body: msg.body,
+    data: { type: 'focus_complete' },
+    android: {
+      channelId: 'groundwork',
       color: '#34C759',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: completionTime,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 export const cancelFocusCompleteNotification = async (): Promise<void> => {
@@ -404,11 +422,11 @@ export const cancelFocusCompleteNotification = async (): Promise<void> => {
 // ─── PART 9: Forgot About Me ──────────────────────────────────────────────────
 
 const forgotMessages = (streak: number) => [
-  { title: ' heyyy you forgot about me',  body: 'Your tasks miss you. Come back and keep the streak alive!' },
-  { title: ' It has been a while...',     body: `Your ${streak} day streak is getting cold. Come warm it up.` },
-  { title: ' Your streak is freezing',    body: `${streak} days of progress on the line. One check-in is all it takes.` },
-  { title: ' GroundWork misses you',      body: 'Your habits and tasks are waiting. Come back and stay consistent.' },
-  { title: '️ Streak in danger',          body: `You built a ${streak} day streak. Don't let it disappear now.` },
+  { title: '👀 heyyy you forgot about me',  body: 'Your tasks miss you. Come back and keep the streak alive!' },
+  { title: '🕸️ It has been a while...',     body: `Your ${streak} day streak is getting cold. Come warm it up.` },
+  { title: '🧊 Your streak is freezing',    body: `${streak} days of progress on the line. One check-in is all it takes.` },
+  { title: '👋 GroundWork misses you',      body: 'Your habits and tasks are waiting. Come back and stay consistent.' },
+  { title: '⚠️ Streak in danger',          body: `You built a ${streak} day streak. Don't let it disappear now.` },
 ];
 
 export const scheduleForgotAboutMe = async (currentStreak: number): Promise<void> => {
@@ -418,21 +436,21 @@ export const scheduleForgotAboutMe = async (currentStreak: number): Promise<void
   const twoDaysFromNow = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
   const msg = pick(forgotMessages(currentStreak));
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: NOTIFICATION_IDS.FORGOT_ABOUT_ME,
-    content: {
-      title: msg.title,
-      body: msg.body,
-      data: { type: 'forgot_about_me' },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: twoDaysFromNow.getTime(),
+  };
+
+  await notifee.createTriggerNotification({
+    id: NOTIFICATION_IDS.FORGOT_ABOUT_ME,
+    title: msg.title,
+    body: msg.body,
+    data: { type: 'forgot_about_me' },
+    android: {
+      channelId: 'groundwork',
       color: '#FF3B30',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: twoDaysFromNow,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 // ─── PART 10: Weekly Habit Report ─────────────────────────────────────────────
@@ -452,48 +470,47 @@ export const scheduleWeeklyHabitReport = async (
   let body: string;
 
   if (completionRate >= 80) {
-    title = ' Incredible week!';
+    title = '🏆 Incredible week!';
     body  = `You completed ${completionRate}% of your habits this week. ${bestStreak} day best streak. You are on fire!`;
   } else if (completionRate >= 50) {
-    title = ' Solid week!';
+    title = '📈 Solid week!';
     body  = `${habitsCompleted} of ${totalHabits} habits done this week. ${completionRate}% completion. Keep building!`;
   } else {
-    title = ' Weekly check-in';
+    title = '📊 Weekly check-in';
     body  = `${completionRate}% habit completion this week. Every week is a chance to do better. You've got this.`;
   }
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: NOTIFICATION_IDS.WEEKLY_REPORT,
-    content: {
-      title,
-      body,
-      data: { type: 'weekly_report' },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: getNextWeeklyDate(0, hour, minute).getTime(), // Sunday
+    repeatFrequency: RepeatFrequency.WEEKLY,
+  };
+
+  await notifee.createTriggerNotification({
+    id: NOTIFICATION_IDS.WEEKLY_REPORT,
+    title,
+    body,
+    data: { type: 'weekly_report' },
+    android: {
+      channelId: 'groundwork',
       color: '#007AFF',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-      weekday: 1, // Sunday
-      hour,
-      minute,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 // ─── PART 11: Daily Motivational Tip ─────────────────────────────────────────
 
 const dailyTips = [
-  { title: ' Study tip',          body: 'Break your study into 25-minute chunks. Your brain retains more with short breaks.' },
-  { title: ' Rest reminder',      body: 'Rest is not laziness. It is part of the process. Recharge today.' },
-  { title: ' Learning insight',   body: 'Teaching someone else what you learned is the fastest way to remember it.' },
-  { title: ' Recovery matters',   body: 'Sleep is when your brain processes everything you learned today. Protect it.' },
-  { title: ' Focus tip',          body: 'Single tasking beats multitasking every time. Pick one thing and go deep.' },
-  { title: '️ Morning power',      body: 'The first hour of your day sets the tone for everything that follows.' },
-  { title: ' Energy management',  body: 'Do your hardest task when your energy is highest. Know your peak hours.' },
-  { title: ' Flow state',         body: 'It takes about 23 minutes to reach deep focus after a distraction. Guard your attention.' },
-  { title: ' Consistency wins',   body: 'Showing up imperfectly every day beats showing up perfectly once a week.' },
-  { title: ' Mental reset',       body: 'Five deep breaths right now. Seriously. Try it. Your focus will thank you.' },
+  { title: '📚 Study tip',          body: 'Break your study into 25-minute chunks. Your brain retains more with short breaks.' },
+  { title: '🔋 Rest reminder',      body: 'Rest is not laziness. It is part of the process. Recharge today.' },
+  { title: '🧠 Learning insight',   body: 'Teaching someone else what you learned is the fastest way to remember it.' },
+  { title: '🛌 Recovery matters',   body: 'Sleep is when your brain processes everything you learned today. Protect it.' },
+  { title: '🎯 Focus tip',          body: 'Single tasking beats multitasking every time. Pick one thing and go deep.' },
+  { title: '☀️ Morning power',      body: 'The first hour of your day sets the tone for everything that follows.' },
+  { title: '⚡ Energy management',  body: 'Do your hardest task when your energy is highest. Know your peak hours.' },
+  { title: '🌊 Flow state',         body: 'It takes about 23 minutes to reach deep focus after a distraction. Guard your attention.' },
+  { title: '🌱 Consistency wins',   body: 'Showing up imperfectly every day beats showing up perfectly once a week.' },
+  { title: '🧘 Mental reset',       body: 'Five deep breaths right now. Seriously. Try it. Your focus will thank you.' },
 ];
 
 export const scheduleDailyTip = async (): Promise<void> => {
@@ -507,32 +524,33 @@ export const scheduleDailyTip = async (): Promise<void> => {
 
   const tip = pick(dailyTips);
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: NOTIFICATION_IDS.DAILY_TIP,
-    content: {
-      title: tip.title,
-      body:  tip.body,
-      data:  { type: 'daily_tip' },
-      sound: 'default',
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: getNextDate(hour, minute).getTime(),
+    repeatFrequency: RepeatFrequency.DAILY,
+  };
+
+  await notifee.createTriggerNotification({
+    id: NOTIFICATION_IDS.DAILY_TIP,
+    title: tip.title,
+    body:  tip.body,
+    data:  { type: 'daily_tip' },
+    android: {
+      channelId: 'groundwork',
       color: '#007AFF',
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour,
-      minute,
-      channelId: 'groundwork',
-    },
-  });
+  }, trigger);
 };
 
 // ─── PART 12: Notification Tap Handler ───────────────────────────────────────
 
 export const handleNotificationResponse = (
-  response: Notifications.NotificationResponse,
+  notification: Notification | undefined,
   router: any
 ): void => {
-  const data = response.notification.request.content.data as any;
-  switch (data?.type) {
+  if (!notification || !notification.data) return;
+  const type = notification.data.type as string;
+  switch (type) {
     case 'task_reminder':
     case 'morning_summary':
     case 'afternoon_checkin':
@@ -556,7 +574,7 @@ export const handleNotificationResponse = (
 // ─── Cancel All ───────────────────────────────────────────────────────────────
 
 export const cancelAllNotifications = async (): Promise<void> => {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  await notifee.cancelAllNotifications();
 };
 
 export const cancelAll = cancelAllNotifications;

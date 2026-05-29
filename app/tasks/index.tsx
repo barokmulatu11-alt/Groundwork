@@ -2,7 +2,7 @@ import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { AddTaskSheet, AddTaskSheetRef } from '@/components/tasks/AddTaskSheet';
-import { EditTaskSheetRef } from '@/components/tasks/EditTaskSheet';
+import { EditTaskSheet, EditTaskSheetRef } from '@/components/tasks/EditTaskSheet';
 import { EmptyTaskState } from '@/components/tasks/EmptyTaskState';
 import { SwipeableTaskCard } from '@/components/tasks/SwipeableTaskCard';
 import { TaskCard } from '@/components/tasks/TaskCard';
@@ -12,10 +12,10 @@ import { useTheme } from '@/lib/ThemeContext';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useTasks } from '@/hooks/useTasks';
 import { useTaskStats } from '@/hooks/useTaskStats';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Activity, CheckCircle2, ChevronLeft, Clock, LayoutGrid, AlignJustify as ListIcon } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import Animated, { FadeInUp, FadeOutDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -29,13 +29,16 @@ export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { theme, isDark, showAlert } = useTheme();
+  const { date: queryDate } = useLocalSearchParams<{ date?: string }>();
   
   const todayDate = new Date().toISOString().split('T')[0];
+  const tomorrowDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
   const { 
     tasks, pendingTasks, completedTasks, completionRate, 
     addTask, updateTask, deleteTask, toggleComplete, 
     reorderTasks, duplicateTask, getOverdue,
-    loadTasks, loadUpcomingTasks, loadAllTasks, loading 
+    loadTasks, loadUpcomingTasks, loadAllTasks, loading, error 
   } = useTasks(todayDate);
   const { stats } = useTaskStats(todayDate);
   const [overdueTasks, setOverdueTasks] = useState<any[]>([]);
@@ -50,18 +53,86 @@ export default function TasksScreen() {
 
   const [completedCount, setCompletedCount] = useState(completedTasks.length);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasMountedRef = useRef(false);
+
+  useEffect(() => {
+    if (queryDate) {
+      if (queryDate > todayDate) {
+        setActiveView('Upcoming');
+      } else if (queryDate === todayDate) {
+        setActiveView('Today');
+      }
+      setTimeout(() => {
+        addTaskRef.current?.open(queryDate);
+      }, 400);
+    }
+  }, [queryDate]);
 
   useEffect(() => {
     setOverdueTasks(getOverdue());
   }, [tasks, getOverdue]);
 
   useEffect(() => {
-    if (tasks.length > 0 && completedTasks.length === tasks.length && completedCount < tasks.length) {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      setCompletedCount(completedTasks.length);
+      return;
+    }
+    const allDone = tasks.length > 0 && completedTasks.length === tasks.length;
+    if (allDone && completedCount < tasks.length) {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 5000);
     }
     setCompletedCount(completedTasks.length);
-  }, [completedTasks.length, tasks.length]);
+  }, [completedTasks.length, tasks.length, completedCount]);
+
+  useEffect(() => {
+    if (error) {
+      showAlert({
+        title: 'Task error',
+        message: error,
+        primaryButton: { text: 'OK', onPress: () => {} },
+      });
+    }
+  }, [error, showAlert]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    if (activeView === 'Today') loadTasks();
+    else if (activeView === 'Upcoming') loadUpcomingTasks();
+    else loadAllTasks();
+    setRefreshing(false);
+  };
+
+  const renderTaskItem = (t: (typeof tasks)[0], options?: { showDate?: boolean; swipeable?: boolean }) => {
+    const showDate = options?.showDate ?? false;
+    const swipeable = options?.swipeable ?? false;
+    const card = (
+      <TaskCard
+        task={t as any}
+        onToggleComplete={() => toggleComplete(t.id)}
+        onUpdate={(u) => updateTask(t.id, u)}
+        onDelete={() => handleDeleteTask(t.id)}
+        onDuplicate={() => duplicateTask(t.id)}
+        onEdit={() => editTaskRef.current?.open(t as any)}
+        showDate={showDate}
+      />
+    );
+    if (swipeable && !t.completed) {
+      return (
+        <SwipeableTaskCard
+          key={t.id}
+          task={t as any}
+          onComplete={() => toggleComplete(t.id)}
+          onUpdate={(u) => updateTask(t.id, u)}
+          onDelete={() => handleDeleteTask(t.id)}
+          onDuplicate={() => duplicateTask(t.id)}
+        />
+      );
+    }
+    return <View key={t.id}>{card}</View>;
+  };
 
   const handleDeleteTask = (id: string) => {
     showAlert({
@@ -80,7 +151,7 @@ export default function TasksScreen() {
   };
 
   const viewIndicatorX = useSharedValue(0);
-  const tabWidth = (width - 72) / 3;
+  const tabWidth = (width - 48) / 3;
 
   useEffect(() => {
     viewIndicatorX.value = withSpring(
@@ -117,7 +188,7 @@ export default function TasksScreen() {
     }
 
     return (
-      <View style={{ flex: 1, paddingHorizontal: 32 }}>
+      <View style={{ flex: 1, paddingHorizontal: 24 }}>
         <DraggableFlatList
           data={pendingTasks}
           onDragEnd={({ data }) => reorderTasks(data)}
@@ -149,6 +220,7 @@ export default function TasksScreen() {
                         onUpdate={(u) => updateTask(t.id, u)}
                         onDelete={() => handleDeleteTask(t.id)}
                         onDuplicate={() => duplicateTask(t.id)}
+                        onEdit={() => editTaskRef.current?.open(t as any)}
                       />
                       <Pressable style={[styles.moveToTodayBtn, { backgroundColor: theme.accent, }]} onPress={() => updateTask(t.id, { date: todayDate })}>
                         <Text style={styles.moveToTodayText}>Add to Today</Text>
@@ -175,6 +247,7 @@ export default function TasksScreen() {
                       onUpdate={(u) => updateTask(t.id, u)}
                       onDelete={() => deleteTask(t.id)}
                       onDuplicate={() => duplicateTask(t.id)}
+                      onEdit={() => editTaskRef.current?.open(t as any)}
                     />
                   ))}
                 </View>
@@ -221,24 +294,50 @@ export default function TasksScreen() {
     else if (activeView === 'All') loadAllTasks();
   }, [activeView, loadTasks, loadUpcomingTasks, loadAllTasks]);
 
+  const groupedUpcoming = React.useMemo(() => {
+    const groups: { [dateStr: string]: any[] } = {};
+    tasks.forEach(t => {
+      const d = t.date || 'Unscheduled';
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(t);
+    });
+    return Object.keys(groups).sort().map(dateStr => ({
+      dateStr,
+      tasks: groups[dateStr]
+    }));
+  }, [tasks]);
+
+  const formatDateHeader = (dateStr: string) => {
+    if (dateStr === 'Unscheduled') return 'UNSCHEDULED';
+    if (dateStr === tomorrowDateStr) {
+      const parts = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
+      return `TOMORROW, ${parts}`;
+    }
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
+  };
+
   const renderUpcoming = () => {
     return (
-      <ScrollView contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 24 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
+      >
         {tasks.length === 0 ? (
-          <View style={[styles.emptyView, { marginTop: 60 }]}>
-            <Text style={{ color: theme.primaryText, fontSize: 16, fontFamily: 'Inter_700Bold' }}>No upcoming tasks</Text>
-            <Text style={{ color: theme.secondaryText, marginTop: 4, fontFamily: 'Inter_500Medium' }}>Plan ahead by adding tasks for later.</Text>
-          </View>
+          <EmptyTaskState
+            onQuickAdd={(title) => addTask({ title, date: tomorrowDateStr })}
+            yesterdayTasks={[]}
+            onAddYesterdayTasks={() => {}}
+          />
         ) : (
-          tasks.map(t => (
-            <TaskCard 
-              key={t.id}
-              task={t as any}
-              onToggleComplete={() => toggleComplete(t.id)}
-              onUpdate={(u) => updateTask(t.id, u)}
-              onDelete={() => handleDeleteTask(t.id)}
-              onDuplicate={() => duplicateTask(t.id)}
-            />
+          groupedUpcoming.map((group) => (
+            <View key={group.dateStr} style={{ marginBottom: 16 }}>
+              <Text style={[styles.sectionHeader, { color: theme.secondaryText, marginTop: 12, marginBottom: 12 }]}>
+                {formatDateHeader(group.dateStr)}
+              </Text>
+              {group.tasks.map(t => renderTaskItem(t, { showDate: true, swipeable: true }))}
+            </View>
           ))
         )}
       </ScrollView>
@@ -247,22 +346,19 @@ export default function TasksScreen() {
 
   const renderAll = () => {
     return (
-      <ScrollView contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 24 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
+      >
         {tasks.length === 0 ? (
-          <View style={[styles.emptyView, { marginTop: 60 }]}>
-            <Text style={{ color: theme.primaryText, fontSize: 16, fontFamily: 'Inter_700Bold' }}>Your task list is empty</Text>
-          </View>
+          <EmptyTaskState
+            onQuickAdd={(title) => addTask({ title, date: todayDate })}
+            yesterdayTasks={[]}
+            onAddYesterdayTasks={() => {}}
+          />
         ) : (
-          tasks.map(t => (
-            <TaskCard 
-              key={t.id}
-              task={t as any}
-              onToggleComplete={() => toggleComplete(t.id)}
-              onUpdate={(u) => updateTask(t.id, u)}
-              onDelete={() => handleDeleteTask(t.id)}
-              onDuplicate={() => duplicateTask(t.id)}
-            />
-          ))
+          tasks.map(t => renderTaskItem(t, { showDate: true, swipeable: !t.completed }))
         )}
       </ScrollView>
     );
@@ -287,6 +383,11 @@ export default function TasksScreen() {
         </View>
       </View>
       <View style={styles.content}>
+        {(loading || refreshing) && (
+          <View style={styles.loadingBar}>
+            <ActivityIndicator size="small" color={theme.accent} />
+          </View>
+        )}
         {activeView === 'Today' && renderToday()}
         {activeView === 'Upcoming' && renderUpcoming()}
         {activeView === 'All' && renderAll()}
@@ -294,14 +395,21 @@ export default function TasksScreen() {
       <Animated.View style={[styles.fabContainer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <Pressable 
           style={[styles.fab, { backgroundColor: theme.accent, }]} 
-          onPress={() => addTaskRef.current?.open()}
+          onPress={() => {
+            const defaultD = activeView === 'Upcoming' ? tomorrowDateStr : todayDate;
+            addTaskRef.current?.open(defaultD);
+          }}
         >
           <Text style={styles.fabText}>+ Add Task</Text>
         </Pressable>
       </Animated.View>
       <AddTaskSheet 
         ref={addTaskRef} 
-        onAdd={(task) => addTask(task as any)} 
+        onAdd={(task) => addTask(task as any, activeView)} 
+      />
+      <EditTaskSheet
+        ref={editTaskRef}
+        onUpdate={(id, updates) => updateTask(id, updates as any)}
       />
       {showConfetti && (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -310,7 +418,7 @@ export default function TasksScreen() {
             origin={{ x: width / 2, y: -20 }}
             autoStart={true}
             fadeOut={true}
-            colors={[theme.accent, '#58A5FF', '#A3D0FF', '#FFFFFF']}
+            colors={[theme.accent, theme.accent + 'CC', theme.accent + '99', '#FFFFFF']}
           />
         </View>
       )}
@@ -319,7 +427,8 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: 32, paddingBottom: 16 },
+  header: { paddingHorizontal: 24, paddingBottom: 16 },
+  loadingBar: { paddingVertical: 8, alignItems: 'center' },
   statIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   viewToggle: { flexDirection: 'row', borderRadius: 20, padding: 4, marginTop: 16, position: 'relative' },
   viewIndicator: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: 16 },
@@ -338,7 +447,7 @@ const styles = StyleSheet.create({
   statBox: { alignItems: 'center', flex: 1 },
   statValue: { fontSize: 18, fontFamily: 'Inter_700Bold', marginVertical: 4 },
   statLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  fabContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 32},
+  fabContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24 },
   fab: { paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
   fabText: { color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' },
   emptyView: { flex: 1, alignItems: 'center', justifyContent: 'center' }

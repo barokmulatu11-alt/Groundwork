@@ -40,7 +40,7 @@ function buildSw(precacheUrls) {
 // AUTO-GENERATED FILE (pwa/generate-precache-sw.mjs)
 // Do not edit dist/sw.js by hand; edit public/sw.js for dev behavior or change the generator.
 
-const CACHE_NAME = 'groundwork-pwa-precache-v1';
+const CACHE_NAME = 'groundwork-pwa-precache-v2';
 const PRECACHE = ${precacheList};
 
 const isCacheableResponse = (res) =>
@@ -149,4 +149,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
-

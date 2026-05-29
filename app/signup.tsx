@@ -83,50 +83,54 @@ export default function SignUpScreen() {
     setLoading(false);
   }
 
-  React.useEffect(() => {
-    const subscription = Linking.addEventListener('url', (event) => {
-      if (event.url) {
-        handleRedirect(event.url);
-      }
-    });
-    return () => subscription.remove();
-  }, []);
-
-  const handleRedirect = async (url: string) => {
-    const parsed = Linking.parse(url);
-    const { access_token, refresh_token } = (parsed.queryParams || {}) as any;
-    
-    if (access_token && refresh_token) {
-      const { error } = await supabase.auth.setSession({
-        access_token,
-        refresh_token });
-      if (!error) {
-        router.replace('/' as any);
-      }
-    }
-  };
-
   async function signInWithGoogle() {
     try {
       setGoogleLoading(true);
-      const redirectUrl = 'groundwork://';
+      const redirectUrl = __DEV__ ? Linking.createURL('/') : 'groundwork://';
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: true } });
+          skipBrowserRedirect: true,
+          queryParams: {
+            prompt: 'select_account consent',
+            access_type: 'offline',
+          },
+        },
+      });
 
-      if (error) { setGoogleLoading(false); return; }
+      if (error) throw error;
 
       if (data?.url) {
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         if (res.type === 'success' && res.url) {
-          handleRedirect(res.url);
+          const url = res.url;
+          const getParam = (name: string) => {
+            const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
+            return match ? decodeURIComponent(match[1]) : null;
+          };
+          const code = getParam('code');
+          const access_token = getParam('access_token');
+          const refresh_token = getParam('refresh_token');
+
+          if (code) {
+            const { data: sessionData, error: exchError } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchError) throw exchError;
+            // onAuthStateChange in useAuthStore handles Zustand state update automatically
+          } else if (access_token && refresh_token) {
+            const { error: sessError } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (sessError) throw sessError;
+            // onAuthStateChange fires automatically after setSession
+          }
+          // AuthMiddleware handles navigation — do NOT call router.replace here
         }
+      } else {
+        throw new Error('No authentication URL returned from Supabase.');
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error('[Auth] Google sign in error:', e);
+      Alert.alert('Google Sign-In Error', e.message || 'Could not start Google authentication.');
     } finally {
       setGoogleLoading(false);
     }

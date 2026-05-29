@@ -1,19 +1,19 @@
-import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
+import { AppText as Text } from '@/components/ui/AppText';
 import { Confetti } from '@/components/ui/Confetti';
 import { CustomAlert } from '@/components/ui/CustomAlert';
+import { TabHeader } from '@/components/ui/TabHeader';
 import { WeeklyBarChart } from '@/components/WeeklyBarChart';
 import { useTheme } from '@/lib/ThemeContext';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'expo-router';
-import { CheckCircle2, ChevronLeft } from 'lucide-react-native';
+import { CheckCircle2 } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
-import { TabHeader } from '@/components/ui/TabHeader';
 
 // ─── Daily Recap Message ─────────────────────────────────────────────────────
 
@@ -36,27 +36,30 @@ function getRecapMessage(completionPercentage: number, completedTasks: number, t
       detail: "Every great day starts with a plan. What do you want to accomplish? ",
       accentColor: '#636366',
       bgLight: 'rgba(99,99,102,0.08)',
-      bgDark: 'rgba(99,99,102,0.15)' };
+      bgDark: 'rgba(99,99,102,0.15)'
+    };
   }
   if (completionPercentage === 100) {
     return {
       badge: '',
       headline: ' Incredible work today! ',
       subline: "You've completed 100% of your tasks ",
-      detail: " You stayed focused, consistent, and finished everything you planned.\n Amazing job — take a well-deserved break!\n\n See you next time!",
+      detail: " You stayed focused, consistent, and finished everything you planned.\n Amazing job. Take a well-deserved break!\n\n See you next time!",
       accentColor: '#34C759',
       bgLight: 'rgba(52,199,89,0.10)',
-      bgDark: 'rgba(52,199,89,0.16)' };
+      bgDark: 'rgba(52,199,89,0.16)'
+    };
   }
   if (completionPercentage === 0) {
     return {
       badge: '',
-      headline: "Today was a slow start — that's okay",
+      headline: "Today was a slow start but that's okay",
       subline: "Every champion has off days.",
       detail: "Rest, reset, and come back stronger tomorrow.\nYou've still got this. Let's make tomorrow count ",
       accentColor: '#FF9500',
       bgLight: 'rgba(255,149,0,0.09)',
-      bgDark: 'rgba(255,149,0,0.16)' };
+      bgDark: 'rgba(255,149,0,0.16)'
+    };
   }
   // Partial
   const emoji = completionPercentage >= 75 ? '' : completionPercentage >= 50 ? '' : '';
@@ -65,13 +68,14 @@ function getRecapMessage(completionPercentage: number, completedTasks: number, t
     headline: "Great progress today!",
     subline: `You completed ${completedTasks} out of ${totalTasks} tasks `,
     detail: completionPercentage >= 75
-      ? "You're almost there — finish strong and close it out! "
+      ? "You're almost there. Finish strong and close it out! "
       : completionPercentage >= 50
-      ? "You're over halfway — keep the momentum rolling "
-      : "Every step forward matters. Keep going — you're building momentum ",
+        ? "You're over halfway. Keep the momentum rolling "
+        : "Every step forward matters. Keep going, you're building momentum ",
     accentColor: theme.accent,
     bgLight: `${theme.accent}15`,
-    bgDark: `${theme.accent}25` };
+    bgDark: `${theme.accent}25`
+  };
 }
 
 const RecapMessageCard = ({
@@ -80,12 +84,12 @@ const RecapMessageCard = ({
   totalTasks,
   isDark,
   theme }: {
-  completionPercentage: number;
-  completedTasks: number;
-  totalTasks: number;
-  isDark: boolean;
-  theme: any;
-}) => {
+    completionPercentage: number;
+    completedTasks: number;
+    totalTasks: number;
+    isDark: boolean;
+    theme: any;
+  }) => {
   const msg = getRecapMessage(completionPercentage, completedTasks, totalTasks, theme);
 
   return (
@@ -95,7 +99,8 @@ const RecapMessageCard = ({
           backgroundColor: isDark ? msg.bgDark : msg.bgLight,
           borderRadius: 22,
           padding: 22,
-          marginBottom: 24 }}
+          marginBottom: 24
+        }}
       >
         {/* Badge row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
@@ -107,7 +112,8 @@ const RecapMessageCard = ({
               backgroundColor: msg.accentColor + '22',
               alignItems: 'center',
               justifyContent: 'center',
-              marginRight: 14 }}
+              marginRight: 14
+            }}
           >
             <Text style={{ fontSize: 22, fontFamily: 'Inter_700Bold' }}>{msg.badge}</Text>
           </View>
@@ -117,7 +123,8 @@ const RecapMessageCard = ({
                 fontSize: 16,
                 fontFamily: 'Inter_700Bold',
                 color: msg.accentColor,
-                marginBottom: 2 }}
+                marginBottom: 2
+              }}
             >
               {msg.headline}
             </Text>
@@ -125,7 +132,8 @@ const RecapMessageCard = ({
               style={{
                 fontSize: 13,
                 fontFamily: 'Inter_600SemiBold',
-                color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' }}
+                color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)'
+              }}
             >
               {msg.subline}
             </Text>
@@ -137,7 +145,8 @@ const RecapMessageCard = ({
           style={{
             height: 1,
             backgroundColor: msg.accentColor + '22',
-            marginBottom: 12 }}
+            marginBottom: 12
+          }}
         />
 
         {/* Detail lines */}
@@ -146,7 +155,8 @@ const RecapMessageCard = ({
             fontSize: 13,
             fontFamily: 'Inter_600SemiBold',
             color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.50)',
-            lineHeight: 20 }}
+            lineHeight: 20
+          }}
         >
           {msg.detail}
         </Text>
@@ -157,26 +167,27 @@ const RecapMessageCard = ({
 
 const StatBox = ({ title, value, label, onPress, theme, isDark }: { title: string, value: string | number, label: string, onPress: () => void, theme: any, isDark: boolean }) => {
   const scale = useSharedValue(1);
-  
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }]
   }));
 
   return (
-    <Pressable 
+    <Pressable
       onPress={onPress}
       onPressIn={() => scale.value = withSpring(0.95)}
       onPressOut={() => scale.value = withSpring(1)}
       style={{ flex: 1 }}
     >
       <Animated.View style={[
-        { 
-          backgroundColor: theme.card, 
-          borderRadius: 20, 
+        {
+          backgroundColor: theme.card,
+          borderRadius: 20,
           padding: 14,
           alignItems: 'center',
           minHeight: 80,
-          justifyContent: 'center' },
+          justifyContent: 'center'
+        },
         animatedStyle
       ]}>
         <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: isDark ? theme.primaryText : theme.secondaryText, marginBottom: 2 }}>{value}</Text>
@@ -224,7 +235,7 @@ export default function RecapScreen() {
   const todayFocusMinutes = focusSessions
     .filter(s => s.date === today)
     .reduce((acc, s) => acc + s.duration_minutes, 0);
-  
+
   const formatTime = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
@@ -282,13 +293,13 @@ export default function RecapScreen() {
     <BackgroundGradient>
       {showConfetti && <Confetti onComplete={() => setShowConfetti(false)} />}
 
-      
-      <ScrollView 
-        style={{ flex: 1, paddingHorizontal: 24 }} 
+
+      <ScrollView
+        style={{ flex: 1, paddingHorizontal: 24 }}
         contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <TabHeader title="Daily Recap" subtitle="How did today go? • v1.1.0" />
+        <TabHeader title="Daily Recap" subtitle="How did today go? • v1.2.1" />
 
         <RecapMessageCard
           completionPercentage={completionPercentage}
@@ -299,27 +310,27 @@ export default function RecapScreen() {
         />
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, gap: 8 }}>
-          <StatBox 
-            title="Tasks" 
-            value={`${completedTasks}/${totalTasks}`} 
-            label="TASKS DONE" 
-            onPress={openTasksPopup} 
+          <StatBox
+            title="Tasks"
+            value={`${completedTasks}/${totalTasks}`}
+            label="TASKS DONE"
+            onPress={openTasksPopup}
             theme={theme}
             isDark={isDark}
           />
-          <StatBox 
-            title="Focus" 
-            value={focusDisplay} 
-            label="FOCUS TIME" 
-            onPress={openFocusPopup} 
+          <StatBox
+            title="Focus"
+            value={focusDisplay}
+            label="FOCUS TIME"
+            onPress={openFocusPopup}
             theme={theme}
             isDark={isDark}
           />
-          <StatBox 
-            title="Streak" 
-            value={` ${totalStreak}`} 
-            label="STREAK" 
-            onPress={openStreakPopup} 
+          <StatBox
+            title="Streak"
+            value={` ${totalStreak}`}
+            label="STREAK"
+            onPress={openStreakPopup}
             theme={theme}
             isDark={isDark}
           />
@@ -327,7 +338,7 @@ export default function RecapScreen() {
 
         <WeeklyBarChart data={weeklyData} />
 
-        <Pressable 
+        <Pressable
           onPress={openProgressPopup}
           onPressIn={() => progressScale.value = withSpring(0.95)}
           onPressOut={() => progressScale.value = withSpring(1)}
@@ -366,7 +377,7 @@ export default function RecapScreen() {
                 </Text>
               </View>
             </View>
-            
+
             <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText }}>
               {completedTasks} of {totalTasks} tasks completed
             </Text>
@@ -375,18 +386,18 @@ export default function RecapScreen() {
 
         {tasks.filter(t => t.completed && t.date === today).length > 0 && (
           <AnimatedCard style={{ padding: 0, paddingVertical: 8 }}>
-            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8}}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
               <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: theme.secondaryText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
                 TODAY'S WINS
               </Text>
             </View>
             {tasks.filter(t => t.completed && t.date === today).map((task, index, arr) => (
               <View key={task.id}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20}}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20 }}>
                   <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
                     <CheckCircle2 size={16} color="#fff" strokeWidth={3} />
                   </View>
-                  <View style={{ flex: 1}}>
+                  <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText, textDecorationLine: 'line-through', marginBottom: 4 }}>
                       {task.title}
                     </Text>
@@ -399,11 +410,11 @@ export default function RecapScreen() {
         )}
       </ScrollView>
 
-      <CustomAlert 
-        visible={popup.visible} 
-        onConfirm={() => setPopup(prev => ({ ...prev, visible: false }))} 
-        title={popup.title} 
-        message={popup.message} 
+      <CustomAlert
+        visible={popup.visible}
+        onConfirm={() => setPopup(prev => ({ ...prev, visible: false }))}
+        title={popup.title}
+        message={popup.message}
         type={popup.type}
       />
     </BackgroundGradient>

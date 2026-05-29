@@ -11,7 +11,9 @@ interface ProfileHeaderProps {
   email: string;
   avatarUri?: string;
   isPro?: boolean;
+  isOwner?: boolean;
   isAdmin?: boolean;
+  isModerator?: boolean;
   onEditPress?: () => void;
 }
 
@@ -21,18 +23,26 @@ export function ProfileHeader({
   email, 
   avatarUri,
   isPro = false,
+  isOwner = false,
   isAdmin = false,
+  isModerator = false,
   onEditPress 
 }: ProfileHeaderProps) {
   const { theme, isDark, showAlert } = useTheme();
   
-  const handleTagPress = (type: 'admin' | 'pro' | 'member') => {
+  const handleTagPress = (type: 'owner' | 'admin' | 'moderator' | 'pro' | 'member') => {
     let title = "";
     let message = "";
     
-    if (type === 'admin') {
+    if (type === 'owner') {
+      title = "Platform Owner";
+      message = "You are the creator and owner of groundwork. You have full access to the system, dashboard, and settings.";
+    } else if (type === 'admin') {
       title = "Admin Account";
       message = "You are an administrator of groundwork. You have access to platform settings and early developer features.";
+    } else if (type === 'moderator') {
+      title = "Moderator Account";
+      message = "You are a platform moderator. Thank you for helping keep groundwork. a safe and productive community!";
     } else if (type === 'pro') {
       title = "Groundwork Pro";
       message = "You are a Pro member! You have unlocked all premium productivity tools, custom themes, and unlimited sync.";
@@ -57,7 +67,7 @@ export function ProfileHeader({
               <Image 
                 source={{ uri: avatarUri }} 
                 style={styles.avatar} 
-              />
+               />
             ) : (
               <View style={[styles.avatarPlaceholder, { backgroundColor: theme.cardBorder }]}>
                 <Text style={{ color: theme.secondaryText, fontSize: 24, fontFamily: 'Inter_700Bold' }}>
@@ -73,7 +83,7 @@ export function ProfileHeader({
             <Text style={[styles.email, { color: theme.tertiaryText }]} numberOfLines={1}>{email}</Text>
           </View>
         </View>
-
+ 
         <TouchableOpacity 
           onPress={onEditPress}
           activeOpacity={0.7}
@@ -82,11 +92,21 @@ export function ProfileHeader({
           <Edit2 size={16} color={theme.accent} />
         </TouchableOpacity>
       </View>
-
+ 
       <View style={[styles.divider, { backgroundColor: theme.cardBorder }]} />
       
       <View style={styles.statContainer}>
-        {isAdmin && (
+        {isOwner && (
+          <TouchableOpacity 
+            onPress={() => handleTagPress('owner')}
+            style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(175,82,222,0.15)' : 'rgba(175,82,222,0.1)' }]}
+          >
+            <CheckCircle2 size={12} color="#AF52DE" />
+            <Text style={[styles.statText, { color: '#AF52DE' }]}>Owner</Text>
+          </TouchableOpacity>
+        )}
+
+        {isAdmin && !isOwner && (
           <TouchableOpacity 
             onPress={() => handleTagPress('admin')}
             style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(52,199,89,0.15)' : 'rgba(52,199,89,0.1)' }]}
@@ -96,17 +116,27 @@ export function ProfileHeader({
           </TouchableOpacity>
         )}
 
-        {isPro && !isAdmin && (
+        {isModerator && !isAdmin && !isOwner && (
           <TouchableOpacity 
-            onPress={() => handleTagPress('pro')}
-            style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(52,199,89,0.15)' : 'rgba(52,199,89,0.1)' }]}
+            onPress={() => handleTagPress('moderator')}
+            style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(88,86,214,0.15)' : 'rgba(88,86,214,0.1)' }]}
           >
-            <CheckCircle2 size={12} color="#34C759" />
-            <Text style={[styles.statText, { color: '#34C759' }]}>Pro Member</Text>
+            <CheckCircle2 size={12} color="#5856D6" />
+            <Text style={[styles.statText, { color: '#5856D6' }]}>Mod</Text>
           </TouchableOpacity>
         )}
 
-        {!isAdmin && !isPro && (
+        {isPro && !isOwner && !isAdmin && !isModerator && (
+          <TouchableOpacity 
+            onPress={() => handleTagPress('pro')}
+            style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(255,149,0,0.15)' : 'rgba(255,149,0,0.1)' }]}
+          >
+            <CheckCircle2 size={12} color="#FF9500" />
+            <Text style={[styles.statText, { color: '#FF9500' }]}>Pro Member</Text>
+          </TouchableOpacity>
+        )}
+
+        {!isOwner && !isAdmin && !isModerator && !isPro && (
           <TouchableOpacity 
             onPress={() => handleTagPress('member')}
             style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(0,122,255,0.15)' : 'rgba(0,122,255,0.1)' }]}

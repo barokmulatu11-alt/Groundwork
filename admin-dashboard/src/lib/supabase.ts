@@ -1,9 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+/** Browser Supabase client — stores session in cookies (required for middleware + dashboard). */
+export const supabase = createClient();
 
 export type AdminRole = 'user' | 'moderator' | 'admin' | 'owner';
 
@@ -17,7 +15,7 @@ export interface Profile {
   role: AdminRole;
   pro_status: boolean;
   pro_until: string | null;
-  is_banned: boolean;
+  is_banned?: boolean;
   created_at: string;
   updated_at: string;
 }

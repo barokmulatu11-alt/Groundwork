@@ -2,12 +2,13 @@
   "expo": {
     "name": "Groundwork",
     "slug": "Groundwork",
-    "version": "1.1.0",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "groundwork",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
@@ -17,6 +18,8 @@
       "supportsTablet": true
     },
     "android": {
+      "jsEngine": "hermes",
+      "enableProguardInRelease": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -26,6 +29,7 @@
       "package": "com.groundwork.app",
       "permissions": [
         "CAMERA",
+        "POST_NOTIFICATIONS",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
@@ -53,10 +57,7 @@
       "expo-sqlite",
       "expo-font",
       "expo-av",
-      "expo-notifications",
       "@react-native-community/datetimepicker",
-      "expo-camera",
-      "expo-media-library",
       "expo-image-picker",
       "expo-document-picker"
     ],

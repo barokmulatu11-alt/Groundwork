@@ -2,6 +2,7 @@ import * as db from '@/lib/db';
 import { rescheduleAll } from '@/lib/notifications';
 import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
+import { supabase } from '@/lib/supabase';
 
 export interface SettingsState {
   theme: 'light' | 'dark' | 'system';
@@ -34,8 +35,15 @@ export interface SettingsState {
   appPin: string | null;
   autoLockTimeout: number; // in seconds, 0 = immediate
   updated_at?: string;
-  loadSettings: () => void;
-  saveSettings: () => void;
+  isLocked: boolean;
+  lastActive: number | null;
+  twoFactorEnabled: boolean;
+  
+  setLocked: (locked: boolean) => void;
+  setLastActive: (time: number | null) => void;
+  setTwoFactorEnabled: (enabled: boolean) => void;
+  loadSettings: () => Promise<void>;
+  saveSettings: () => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setAccentColor: (color: string) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
@@ -97,6 +105,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   faceIdEnabled: false,
   appPin: null,
   autoLockTimeout: 0,
+  isLocked: false,
+  lastActive: null,
+  twoFactorEnabled: false,
   
   setTheme: (theme) => {
     set({ theme });
@@ -206,36 +217,130 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ autoLockTimeout });
     get().saveSettings();
   },
+  setLocked: (isLocked) => set({ isLocked }),
+  setLastActive: (lastActive) => set({ lastActive }),
+  setTwoFactorEnabled: (twoFactorEnabled) => {
+    set({ twoFactorEnabled });
+    get().saveSettings();
+  },
   
-  loadSettings: () => {
+  loadSettings: async () => {
     const userId = useAuthStore.getState().getUserId();
-    const settings = db.getUserSettings(userId);
-    if (settings) {
-      set(settings);
-      console.log(`[SettingsStore] Loaded settings for user: ${userId}`);
+    // If guest, load settings only from local SQLite
+    if (userId === 'guest') {
+      const localGuestSettings = db.getUserSettings('guest');
+      if (localGuestSettings) {
+        console.log('[SettingsStore] Loading guest local settings');
+        set(localGuestSettings);
+      } else {
+        console.log('[SettingsStore] No local settings for guest, using defaults');
+      }
+      return;
+    }
+
+    console.log(`[SettingsStore] Loading settings for user: ${userId}`);
+    
+    // 1. Try local SQLite first
+    const localSettings = db.getUserSettings(userId);
+    
+    // 2. Try Supabase cloud settings (profiles table first, user metadata fallback)
+    try {
+      let cloudSettings: any = null;
+      
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', userId)
+        .single();
+      
+      if (!profileError && profileData?.settings && Object.keys(profileData.settings).length > 0) {
+        cloudSettings = profileData.settings;
+        console.log('[SettingsStore] Found cloud settings in profiles table');
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && user.user_metadata?.settings) {
+          cloudSettings = user.user_metadata.settings;
+          console.log('[SettingsStore] Found cloud settings in user metadata fallback');
+        }
+      }
+
+      if (cloudSettings) {
+        // Merge logic: If local settings exist, compare updated_at
+        if (localSettings) {
+          const cloudTime = cloudSettings.updated_at ? new Date(cloudSettings.updated_at).getTime() : 0;
+          const localTime = localSettings.updated_at ? new Date(localSettings.updated_at).getTime() : 0;
+
+          if (cloudTime > localTime) {
+            console.log('[SettingsStore] Cloud settings are newer, updating local');
+            set(cloudSettings);
+            db.saveUserSettings(userId, cloudSettings);
+          } else {
+            console.log('[SettingsStore] Local settings are newer or equal');
+            set(localSettings);
+          }
+        } else {
+          // No local settings, use cloud
+          console.log('[SettingsStore] No local settings found, applying cloud data');
+          set(cloudSettings);
+          db.saveUserSettings(userId, cloudSettings);
+        }
+      } else if (localSettings) {
+        // No cloud settings but local exists
+        set(localSettings);
+      }
+    } catch (e) {
+      console.warn('[SettingsStore] Failed to fetch cloud settings, falling back to local:', e);
+      if (localSettings) set(localSettings);
     }
   },
   
   saveSettings: async () => {
     const userId = useAuthStore.getState().getUserId();
+    if (userId === 'guest') return;
+
     const state = get();
-    const updatedState = { ...state, updated_at: new Date().toISOString() };
-    set({ updated_at: updatedState.updated_at });
+    const now = new Date().toISOString();
+    const updatedState = { ...state, updated_at: now };
+    
+    // Update local state and DB
+    set({ updated_at: now });
     db.saveUserSettings(userId, updatedState);
     
-    // Sync to cloud
-    const { supabase } = require('@/lib/supabase');
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user && !state.offlineMode) {
-      // Exclude functions and non-serializable fields
-      const { loadSettings, saveSettings, setTheme, setAccentColor, ...serializableSettings } = updatedState as any;
+    // Sync to cloud (Supabase)
+    if (!state.offlineMode) {
+      // Exclude non-serializable fields
+      const { 
+        loadSettings, saveSettings, setTheme, setAccentColor, 
+        setNotificationsEnabled, setTasksLayout, setHabitsLayout, 
+        setNotesLayout, setFontSize, setUpdateBannerDismissed,
+        setDefaultFocusDuration, setDailyGoal, setFocusTimerActive,
+        setFocusTimerTimeLeft, setFocusTimerMode, setFocusTimerDurationMinutes,
+        setFocusTimerSelectedTaskId, setFocusTimerStartTime,
+        setDefaultTaskPriority, setDefaultReminderTime, setWeekStartDay,
+        setAutoSortTasks, setPomodoroFocusDuration, setPomodoroBreakDuration,
+        setPomodoroLongBreakDuration, setPomodoroAutoStartBreaks,
+        setSmartSuggestionsEnabled, setOfflineMode, setFaceIdEnabled,
+        setAppPin, setAutoLockTimeout, setLocked, setLastActive,
+        setTwoFactorEnabled, ...serializableSettings 
+      } = updatedState as any;
       
       try {
+        // 1. Sync to profiles table (main source of truth)
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ settings: serializableSettings })
+          .eq('id', userId);
+        
+        if (profileError) throw profileError;
+
+        // 2. Sync to auth metadata for trigger/cache robustness
         await supabase.auth.updateUser({
           data: { settings: serializableSettings }
         });
+        
+        console.log('[SettingsStore] Successfully synced settings to profiles and user metadata');
       } catch (e) {
-        console.warn('[SettingsStore] Failed to sync settings to cloud', e);
+        console.warn('[SettingsStore] Cloud sync failed (will retry on next foreground):', e);
       }
     }
   },

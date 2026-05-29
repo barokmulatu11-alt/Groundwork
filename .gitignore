@@ -6,6 +6,9 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-vercel/
+dist-vercel-new/
+dist-vercel-*/
 web-build/
 expo-env.d.ts
 
@@ -39,3 +42,13 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# release binaries & scratch
+*.apk
+tsc_output.txt
+test-*.js
+supabase/.temp/
+.vercel
+
+# local scratch folders created during builds/deploys
+tmp-*/

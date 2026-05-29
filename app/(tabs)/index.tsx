@@ -8,62 +8,146 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { useStore } from '@/store/useStore';
 import { BlurView } from 'expo-blur';
 import Constants from 'expo-constants';
-import { useRouter } from 'expo-router';
-import { BarChart, Calendar, ChevronRight, Clock, FileText, Info, LayoutGrid, AlignJustify as ListIcon, Settings, Shield, X } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
+import { NotificationSheet } from '@/components/NotificationSheet';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/store/useAuthStore';
+import { BellRing as Bell, BarChart, Calendar, ChevronRight, Clock, FileText, Info, LayoutGrid, AlignJustify as ListIcon, Settings, Shield, Quote as QuoteIcon, X } from 'lucide-react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, Platform } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { DailyQuoteBanner } from '@/components/DailyQuoteBanner';
+import { DailyQuestCard } from '@/components/DailyQuestCard';
+import { getPersonalizedGreetingParts } from '@/lib/GreetingUtils';
+import { hapticLight } from '@/lib/haptics';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
+  const { profile, session } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
+
   const { tasks, habits, notes, focusSessions, loadAllTasks, loadHabits, loadNotes, loadFocusSessions, isSyncing, syncFromCloud, lastSyncedAt } = useStore();
   const { tasksLayout, setTasksLayout, notificationsEnabled } = useSettingsStore();
-  const [greeting, setGreeting] = useState('');
+  const [greetingHeadline, setGreetingHeadline] = useState('');
+  const [greetingSubline, setGreetingSubline] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+  
+  // Fetch logic omitted here... (it's handled in the hook above)
+
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      const fetchData = async () => {
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          
+          // Migrate any tasks mistakenly saved as 'guest' during the bug
+          const { useAuthStore } = require('@/store/useAuthStore');
+          const { migrateGuestData } = require('@/lib/db');
+          const session = useAuthStore.getState().session;
+          if (session?.user?.id) {
+            migrateGuestData('guest', session.user.id);
+          }
+
+          await loadAllTasks();
+          await loadHabits();
+          await loadNotes();
+          await loadFocusSessions();
+          
+          if (!isActive) return;
+          const currentHabits = useStore.getState().habits;
+          const currentStreak = currentHabits.reduce((acc, h) => acc + h.streak, 0);
+          
+          const { rescheduleAll } = require('@/lib/notifications');
+          if (notificationsEnabled) {
+            await rescheduleAll(true, currentStreak);
+          }
+
+          setIsLoading(false);
+        } catch (e) {
+          console.error("Failed to load dashboard data:", e);
+          if (isActive) setIsLoading(false);
+        }
+      };
+      fetchData();
+      return () => { isActive = false; };
+    }, [loadAllTasks, loadHabits, loadNotes, loadFocusSessions, notificationsEnabled])
+  );
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        await loadAllTasks();
-        await loadHabits();
-        await loadNotes();
-        await loadFocusSessions();
-        
-        const currentHabits = useStore.getState().habits;
-        const currentStreak = currentHabits.reduce((acc, h) => acc + h.streak, 0);
-        
-        const { rescheduleAll } = require('@/lib/notifications');
-        if (notificationsEnabled) {
-          await rescheduleAll(true, currentStreak);
-        }
-
-        setIsLoading(false);
-      } catch (e) {
-        console.error("Failed to load dashboard data:", e);
-        setIsLoading(false);
-      }
+    // Check for unread notifications
+    const checkUnread = async () => {
+      const { session } = useAuthStore.getState();
+      if (!session?.user?.id) return;
+      const { count } = await supabase
+        .from('user_notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', session.user.id)
+        .eq('is_read', false);
+      setHasUnread((count || 0) > 0);
     };
-    fetchData();
+    checkUnread();
 
-    // Use randomized greeting
-    const { getRandomGreeting } = require('@/lib/GreetingUtils');
-    setGreeting(getRandomGreeting());
+    // Subscribe to new notifications
+    const { session } = useAuthStore.getState();
+    let subscription: any;
+    if (session?.user?.id) {
+      const channelName = `user_notifications_changes_${session.user.id}_${Math.random().toString(36).substring(5)}`;
+      subscription = supabase
+        .channel(channelName)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'user_notifications',
+          filter: `user_id=eq.${session.user.id}`
+        }, () => {
+          setHasUnread(true);
+        })
+        .subscribe();
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayTasks = useStore.getState().tasks.filter((t) => t.date === today && !t.deleted_at);
+    const completedToday = todayTasks.filter((t) => t.completed).length;
+    const streak = useStore.getState().habits.reduce((acc, h) => acc + h.streak, 0);
+    const displayName =
+      profile?.full_name ||
+      profile?.username ||
+      session?.user?.user_metadata?.full_name ||
+      session?.user?.email?.split('@')[0] ||
+      null;
+    const { headline, subline } = getPersonalizedGreetingParts({
+      displayName,
+      totalStreak: streak,
+      tasksCompletedToday: completedToday,
+      tasksTotalToday: todayTasks.length,
+    });
+    setGreetingHeadline(headline);
+    setGreetingSubline(subline);
 
     // Request notification permissions
     const { requestPermissionsAsync } = require('@/lib/notifications');
     requestPermissionsAsync();
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
   }, []);
 
   const handleSync = async () => {
     await syncFromCloud();
   };
 
-  const pendingTasksCount = (tasks || []).filter(t => !t.completed).length;
+  const totalTasksCount = (tasks || []).length;
   
   // Calculate max streak across all habits
   const totalStreak = (habits || []).reduce((acc, h) => acc + h.streak, 0);
@@ -76,11 +160,11 @@ export default function DashboardScreen() {
   const isGrid = tasksLayout === 'grid';
 
   const renderCard = (type: string, title: string, count: string | number, Icon: any, color: string, route: string) => {
-    if (isGrid) {
+    if (isGrid || isDesktop) {
       return (
         <AnimatedCard 
           onPress={() => router.push(route as any)} 
-          style={{ width: '48.5%', minHeight: 120, padding: 16, marginBottom: 14 }}
+          style={{ width: isDesktop ? '31%' : '48.5%', minHeight: 120, padding: 16, marginBottom: 14 }}
         >
           <View style={[styles.iconBox, { backgroundColor: 'transparent', marginBottom: 12 }]}>
             <Icon size={22} color={theme.accent} />
@@ -110,17 +194,28 @@ export default function DashboardScreen() {
         contentContainerStyle={{ 
           paddingHorizontal: 24, 
           paddingBottom: insets.bottom + 100, 
-          paddingTop: insets.top + 24 
+          paddingTop: insets.top + 24,
+          maxWidth: isDesktop ? 1000 : undefined,
+          alignSelf: isDesktop ? 'center' : undefined,
+          width: isDesktop ? '100%' : undefined,
         }}
         showsVerticalScrollIndicator={false}
       >
+
         
-        <Animated.View entering={FadeIn.duration(300)} style={styles.headerRow}>
-          <View style={{ flex: 1, marginRight: 8 }}>
+        <Animated.View entering={FadeIn.duration(300)} style={styles.headerBlock}>
+          <View style={styles.headerTopRow}>
             <Text style={[styles.dateText, { color: theme.secondaryText }]}>{todayDateStr}</Text>
-            <Text style={[styles.greetingText, { color: theme.primaryText }]} numberOfLines={2}>{greeting}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <View style={styles.headerIcons}>
+            <Pressable 
+              style={[styles.iconBox, { backgroundColor: 'transparent' }]} 
+              onPress={() => { hapticLight(); setNotificationsVisible(true); }}
+            >
+              <View>
+                <Bell size={18} color={theme.accent} />
+                {hasUnread && <View style={[styles.badge, { backgroundColor: theme.danger }]} />}
+              </View>
+            </Pressable>
             <Pressable 
               style={[styles.iconBox, { backgroundColor: 'transparent' }]} 
               onPress={() => router.push('/calendar')}
@@ -143,8 +238,17 @@ export default function DashboardScreen() {
             >
               <Settings size={18} color={theme.accent} />
             </Pressable>
+            </View>
           </View>
+          <Text style={[styles.greetingText, { color: theme.primaryText }]}>{greetingHeadline}</Text>
+          {greetingSubline ? (
+            <Text style={[styles.greetingSubline, { color: theme.secondaryText }]}>{greetingSubline}</Text>
+          ) : null}
         </Animated.View>
+
+        <AnnouncementBanner />
+        <DailyQuoteBanner />
+        {!isLoading && <DailyQuestCard />}
 
         {/* Sync Status Indicator */}
         {lastSyncedAt && (
@@ -155,33 +259,34 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
-        <Animated.View entering={FadeIn.delay(200).duration(300)} style={[styles.cardsWrapper, !isGrid && { flexDirection: 'column' }]}>
+        <Animated.View entering={FadeIn.delay(200).duration(300)} style={[styles.cardsWrapper, (!isGrid && !isDesktop) && { flexDirection: 'column' }]}>
           {isLoading ? (
             <>
-              <AnimatedCard style={[styles.cardContainer, { width: isGrid ? '48%' : '100%', marginBottom: 16, padding: 16, minHeight: isGrid ? 140 : 80 }]}>
-                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: isGrid ? 12 : 0 }} />
-                <Skeleton width="70%" height={16} style={{ marginTop: isGrid ? 0 : 12, marginBottom: 4 }} />
+              <AnimatedCard style={[styles.cardContainer, { width: (isGrid || isDesktop) ? (isDesktop ? '31%' : '48%') : '100%', marginBottom: 16, padding: 16, minHeight: (isGrid || isDesktop) ? 140 : 80 }]}>
+                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: (isGrid || isDesktop) ? 12 : 0 }} />
+                <Skeleton width="70%" height={16} style={{ marginTop: (isGrid || isDesktop) ? 0 : 12, marginBottom: 4 }} />
                 <Skeleton width="40%" height={12} />
               </AnimatedCard>
-              <AnimatedCard style={[styles.cardContainer, { width: isGrid ? '48%' : '100%', marginBottom: 16, padding: 16, minHeight: isGrid ? 140 : 80 }]}>
-                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: isGrid ? 12 : 0 }} />
-                <Skeleton width="70%" height={16} style={{ marginTop: isGrid ? 0 : 12, marginBottom: 4 }} />
+              <AnimatedCard style={[styles.cardContainer, { width: (isGrid || isDesktop) ? (isDesktop ? '31%' : '48%') : '100%', marginBottom: 16, padding: 16, minHeight: (isGrid || isDesktop) ? 140 : 80 }]}>
+                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: (isGrid || isDesktop) ? 12 : 0 }} />
+                <Skeleton width="70%" height={16} style={{ marginTop: (isGrid || isDesktop) ? 0 : 12, marginBottom: 4 }} />
                 <Skeleton width="40%" height={12} />
               </AnimatedCard>
-              <AnimatedCard style={[styles.cardContainer, { width: isGrid ? '48%' : '100%', marginBottom: 16, padding: 16, minHeight: isGrid ? 140 : 80 }]}>
-                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: isGrid ? 12 : 0 }} />
-                <Skeleton width="70%" height={16} style={{ marginTop: isGrid ? 0 : 12, marginBottom: 4 }} />
+              <AnimatedCard style={[styles.cardContainer, { width: (isGrid || isDesktop) ? (isDesktop ? '31%' : '48%') : '100%', marginBottom: 16, padding: 16, minHeight: (isGrid || isDesktop) ? 140 : 80 }]}>
+                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: (isGrid || isDesktop) ? 12 : 0 }} />
+                <Skeleton width="70%" height={16} style={{ marginTop: (isGrid || isDesktop) ? 0 : 12, marginBottom: 4 }} />
                 <Skeleton width="40%" height={12} />
               </AnimatedCard>
-              <AnimatedCard style={[styles.cardContainer, { width: isGrid ? '48%' : '100%', marginBottom: 16, padding: 16, minHeight: isGrid ? 140 : 80 }]}>
-                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: isGrid ? 12 : 0 }} />
-                <Skeleton width="70%" height={16} style={{ marginTop: isGrid ? 0 : 12, marginBottom: 4 }} />
+              <AnimatedCard style={[styles.cardContainer, { width: (isGrid || isDesktop) ? (isDesktop ? '31%' : '48%') : '100%', marginBottom: 16, padding: 16, minHeight: (isGrid || isDesktop) ? 140 : 80 }]}>
+                <Skeleton width={42} height={42} borderRadius={14} style={{ marginBottom: (isGrid || isDesktop) ? 12 : 0 }} />
+                <Skeleton width="70%" height={16} style={{ marginTop: (isGrid || isDesktop) ? 0 : 12, marginBottom: 4 }} />
                 <Skeleton width="40%" height={12} />
               </AnimatedCard>
             </>
+
           ) : (
             <>
-              {renderCard("tasks", "Tasks", pendingTasksCount, Calendar, theme.accent, { pathname: '/tasks', params: { date: undefined } } as any)}
+              {renderCard("tasks", "Tasks", totalTasksCount, Calendar, theme.accent, { pathname: '/tasks', params: { date: undefined } } as any)}
               {renderCard("streaks", "Habits", totalStreak, Shield, theme.accent, '/habits')}
               {renderCard("sessions", "Focus", focusSessions.length, Clock, theme.accent, '/focus')}
               {renderCard("notes", "Notes", notes.length, FileText, theme.accent, '/notes')}
@@ -194,6 +299,11 @@ export default function DashboardScreen() {
           <Text style={{ fontSize: 12, color: theme.secondaryText, fontFamily: 'Inter_600SemiBold' }}>v{Constants.expoConfig?.version || '1.0.2-beta'}</Text>
         </View>
 
+        <NotificationSheet visible={notificationsVisible} onClose={() => {
+          setNotificationsVisible(false);
+          setHasUnread(false); // Optimistically clear dot
+        }} />
+
       </ScrollView>
 
 
@@ -203,11 +313,21 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
+  headerBlock: {
+    marginBottom: 40,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 40 },
+    marginBottom: 10,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    flexShrink: 0,
+  },
   dateText: {
     fontSize: 11,
     fontFamily: 'Inter_600SemiBold',
@@ -218,7 +338,13 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontFamily: 'Inter_800ExtraBold',
     letterSpacing: -0.5,
-    marginBottom: 8
+    lineHeight: 32,
+  },
+  greetingSubline: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: 6,
+    lineHeight: 20,
   },
   subtitleText: {
     fontSize: 14,
@@ -276,5 +402,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden'
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: 'transparent'
   }
 });

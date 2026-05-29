@@ -20,12 +20,6 @@ const { width } = Dimensions.get('window');
 
 const STEPS = [
   {
-    id: 'camera',
-    icon: Camera,
-    title: 'Camera Access',
-    description: 'groundwork. uses your camera to let you add photos to your notes and capture moments that inspire you. We never access your camera without you starting it.',
-    action: requestCameraPermission },
-  {
     id: 'mic',
     icon: Mic,
     title: 'Microphone Access',
@@ -72,6 +66,8 @@ export default function PermissionsOnboarding() {
 
   const finishOnboarding = async () => {
     await AsyncStorage.setItem('permissions_onboarding_done', 'true');
+    const { useAuthStore } = require('@/store/useAuthStore');
+    useAuthStore.getState().setOnboardingDone(true);
     router.replace('/');
   };
 

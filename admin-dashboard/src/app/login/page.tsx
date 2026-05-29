@@ -1,77 +1,146 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/ThemeContext';
+import { isAdminRole } from '@/lib/admin-actions';
+import clsx from 'clsx';
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { signIn } = useAuth();
+  const { signIn, profile, profileReady, user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { isDark } = useTheme();
+
+  useEffect(() => {
+    const err = searchParams.get('error');
+    if (err === 'unauthorized') {
+      setError('You do not have admin access. Contact an owner if you need access.');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (profileReady && user && profile && isAdminRole(profile.role)) {
+      const redirect = searchParams.get('redirect') || '/dashboard';
+      router.replace(redirect);
+    }
+  }, [profileReady, user, profile, router, searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await signIn(email, password);
-    if (error) {
-      setError(error.message || 'Login failed. Check your credentials.');
+    const { error: signInError } = await signIn(email, password);
+    if (signInError) {
+      setError(signInError);
       setLoading(false);
       return;
     }
-    router.push('/dashboard');
+
+    const { data: { session } } = await (await import('@/lib/supabase')).supabase.auth.getSession();
+    if (!session?.user) {
+      setError('Session could not be established.');
+      setLoading(false);
+      return;
+    }
+
+    const { data: prof, error: profError } = await (await import('@/lib/supabase')).supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (profError) {
+      setError(`Could not load profile: ${profError.message}`);
+      setLoading(false);
+      return;
+    }
+
+    if (!prof) {
+      setError(
+        'No profile row found for this login. In Supabase → profiles, add a row where id matches your auth user UUID and role is owner or admin.'
+      );
+      setLoading(false);
+      return;
+    }
+
+    if (prof.is_banned === true) {
+      setError('This account is banned.');
+      await (await import('@/lib/supabase')).supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+
+    if (!isAdminRole(prof.role)) {
+      setError(`This account has role "${prof.role}". Only owner or admin can access the dashboard.`);
+      await (await import('@/lib/supabase')).supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+
+    const redirect = searchParams.get('redirect') || '/dashboard';
+    // Full navigation so middleware receives auth cookies from @supabase/ssr browser client
+    window.location.href = redirect;
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      {/* Background glow */}
+    <div className={clsx('min-h-screen flex items-center justify-center px-4', isDark ? 'bg-gray-950' : 'bg-slate-100')}>
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-baseline gap-0.5 mb-3">
+          <Link href="/" className="inline-flex items-baseline gap-0.5 mb-3">
             <span className="text-4xl font-black text-[#007AFF]">g</span>
-            <span className="text-3xl font-bold text-white">roundwork.</span>
-          </div>
+            <span className={clsx('text-3xl font-bold', isDark ? 'text-white' : 'text-slate-900')}>roundwork.</span>
+          </Link>
           <p className="text-gray-400 text-sm font-medium tracking-wider uppercase">Admin Dashboard</p>
         </div>
 
-        {/* Card */}
         <div className="glass rounded-2xl p-8 shadow-2xl">
-          <h1 className="text-xl font-bold text-white mb-1">Sign in</h1>
-          <p className="text-gray-400 text-sm mb-8">Admin access only. Unauthorized access is prohibited.</p>
+          <h1 className={clsx('text-xl font-bold mb-1', isDark ? 'text-white' : 'text-slate-900')}>Sign in</h1>
+          <p className="text-gray-400 text-sm mb-8">Admin or owner accounts only.</p>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              <label htmlFor="email" className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 Email
               </label>
               <input
+                id="email"
                 type="email"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@groundwork.app"
                 required
-                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]/50 transition-all"
+                className={clsx(
+                  'w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]/50 transition-all',
+                  isDark ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-600' : 'bg-white border-slate-200 text-slate-900'
+                )}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              <label htmlFor="password" className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 Password
               </label>
               <input
+                id="password"
                 type="password"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]/50 transition-all"
+                className={clsx(
+                  'w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]/50 transition-all',
+                  isDark ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-600' : 'bg-white border-slate-200 text-slate-900'
+                )}
               />
             </div>
 
@@ -86,23 +155,23 @@ export default function LoginPage() {
               disabled={loading}
               className="btn-accent w-full py-3.5 rounded-xl text-white font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Signing in...
-                </>
-              ) : 'Sign In'}
+              {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
         </div>
 
         <p className="text-center text-gray-600 text-xs mt-6">
-          groundwork. Admin • Restricted Access
+          <Link href="/" className="hover:text-[#007AFF] transition-colors">← Back to website</Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-950" />}>
+      <LoginForm />
+    </Suspense>
   );
 }

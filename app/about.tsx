@@ -3,13 +3,13 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { useTheme } from '@/lib/ThemeContext';
 import { useRouter, Stack } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, Heart } from 'lucide-react-native';
 import React from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AboutScreen() {
-  const { theme } = useTheme();
+  const { theme, showAlert } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -28,7 +28,7 @@ export default function AboutScreen() {
         <View style={styles.brandingContainer}>
           <BrandLogo fontSize={32} />
           <Text style={[styles.tagline, { color: theme.secondaryText, marginTop: 8 }]}>Your daily focus companion.</Text>
-          <Text style={[styles.version, { color: theme.tertiaryText }]}>v1.1.0</Text>
+          <Text style={[styles.version, { color: theme.tertiaryText }]}>v1.2.1</Text>
         </View>
 
         <Text style={[styles.paragraph, { color: theme.secondaryText }]}>
@@ -38,13 +38,25 @@ export default function AboutScreen() {
         </Text>
 
         <View style={styles.legalSection}>
-          <TouchableOpacity style={[styles.legalItem, { borderTopWidth: 1, borderTopColor: theme.cardBorder }]}>
+          <TouchableOpacity 
+            style={[styles.legalItem, { borderTopWidth: 1, borderTopColor: theme.cardBorder }]}
+            onPress={() => Linking.openURL('https://v0-barok-labs.vercel.app/privacy')}
+          >
             <Text style={[styles.legalText, { color: theme.primaryText }]}>Privacy Policy</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.legalItem, { borderTopWidth: 1, borderTopColor: theme.cardBorder }]}>
+          <TouchableOpacity 
+            style={[styles.legalItem, { borderTopWidth: 1, borderTopColor: theme.cardBorder }]}
+            onPress={() => Linking.openURL('https://v0-barok-labs.vercel.app/terms')}
+          >
             <Text style={[styles.legalText, { color: theme.primaryText }]}>Terms and Conditions</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.legalItem, { borderTopWidth: 1, borderBottomWidth: 1, borderTopColor: theme.cardBorder, borderBottomColor: theme.cardBorder }]}>
+          <TouchableOpacity 
+            style={[styles.legalItem, { borderTopWidth: 1, borderBottomWidth: 1, borderTopColor: theme.cardBorder, borderBottomColor: theme.cardBorder }]}
+            onPress={() => showAlert({
+              title: "Acknowledgements",
+              message: "I would like to express my sincere gratitude to God for the guidance, strength, and opportunities throughout this journey. I am deeply thankful to my family for their continuous support, encouragement, and belief in me at every stage of the process. I also extend my appreciation to my friends Oliyad Shiferaw, Abel Abraha, and Yosef Tesfaye for their valuable support, ideas, and contributions in helping me shape and improve this app. Their feedback, discussions, and motivation played an important role in preparing and refining the project.",
+            })}
+          >
             <Text style={[styles.legalText, { color: theme.primaryText }]}>Acknowledgements</Text>
           </TouchableOpacity>
         </View>

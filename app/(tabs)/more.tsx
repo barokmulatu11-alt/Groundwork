@@ -1,9 +1,9 @@
 import { BackgroundGradient } from '@/components/BackgroundGradient';
-
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { useRouter } from 'expo-router';
-import { ChevronRight, 
+import { 
+  ChevronRight, 
   Award,
   Camera,
   Code,
@@ -15,12 +15,15 @@ import { ChevronRight,
   Send,
   Share2,
   CreditCard,
-  Crown,
+  Crown as CrownIcon,
   Zap
- } from 'lucide-react-native';
-import React from 'react';
-import { Linking, ScrollView, Share, StyleSheet, View, TouchableOpacity } from 'react-native';
+} from 'lucide-react-native';
+import { RoleBadge } from '@/components/RoleBadge';
+import { useAuthStore } from '@/store/useAuthStore';
+import React, { useState } from 'react';
+import { Linking, ScrollView, Share, StyleSheet, View, TouchableOpacity, Image, useWindowDimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ReportSheet } from '@/components/ReportSheet';
 
 
 const Card = ({ children, theme }: { children: React.ReactNode; theme: any }) => (
@@ -51,6 +54,10 @@ export default function MoreScreen() {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { profile, session } = useAuthStore();
+  const [reportVisible, setReportVisible] = useState(false);
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
 
   const handleInvite = async () => {
     try {
@@ -72,22 +79,48 @@ export default function MoreScreen() {
         style={styles.container}
         contentContainerStyle={{
           paddingTop: insets.top + 24,
-          paddingBottom: insets.bottom + 100,
-          paddingHorizontal: 20
+          paddingBottom: insets.bottom + 20,
+          paddingHorizontal: 20,
+          maxWidth: isDesktop ? 800 : undefined,
+          alignSelf: isDesktop ? 'center' : undefined,
+          width: isDesktop ? '100%' : undefined,
         }}
         showsVerticalScrollIndicator={false}
       >
+
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.primaryText }]}>More</Text>
           <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Tools and utilities</Text>
         </View>
+
+        {/* PROFILE SECTION */}
+        {profile && (
+          <TouchableOpacity 
+            activeOpacity={0.8} 
+            onPress={() => router.push('/edit-profile')}
+            style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+          >
+            <Image 
+              source={{ uri: profile.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Barok' }} 
+              style={styles.profileAvatar} 
+            />
+            <View style={styles.profileInfo}>
+              <View style={styles.nameRow}>
+                <Text style={[styles.profileName, { color: theme.primaryText }]}>{profile.full_name || profile.username || 'Groundwork User'}</Text>
+                <RoleBadge role={profile.role} isPro={profile.pro_status} />
+              </View>
+              <Text style={[styles.profileEmail, { color: theme.tertiaryText }]}>{session?.user?.email}</Text>
+            </View>
+            <ChevronRight size={18} color={theme.tertiaryText} />
+          </TouchableOpacity>
+        )}
 
         {/* SUBSCRIPTION */}
         <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>SUBSCRIPTION</Text>
         <View style={styles.utilitiesStack}>
           <Card theme={theme}>
             <SettingRow 
-              icon={Crown} 
+              icon={CrownIcon} 
               title="Groundwork Pro" 
               subtitle="Manage your premium subscription" 
               theme={theme} 
@@ -100,15 +133,17 @@ export default function MoreScreen() {
         <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>UTILITIES</Text>
         <View style={styles.utilitiesStack}>
           <Card theme={theme}>
-          <SettingRow icon={Download} title="Downloads" subtitle="Manage offline content" theme={theme} onPress={() => router.push('/downloads')} />
-          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-          <SettingRow icon={Award} title="Achievements" subtitle="View your earned badges" theme={theme} onPress={() => router.push('/achievements')} />
-          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-          <SettingRow icon={Share2} title="Invite Friends" subtitle="Earn rewards for referrals" theme={theme} onPress={handleInvite} />
-          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-          <SettingRow icon={MessageSquare} title="Send Feedback" subtitle="Report bugs or suggest features" theme={theme} onPress={handleFeedback} />
-        </Card>
+            <SettingRow icon={Download} title="Downloads" subtitle="Manage offline content" theme={theme} onPress={() => router.push('/downloads')} />
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+            <SettingRow icon={Award} title="Achievements" subtitle="View your earned badges" theme={theme} onPress={() => router.push('/achievements')} />
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+            <SettingRow icon={Share2} title="Invite Friends" subtitle="Earn rewards for referrals" theme={theme} onPress={handleInvite} />
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+            <SettingRow icon={MessageSquare} title="Report an Issue" subtitle="Bug reports or suggestions" theme={theme} onPress={() => setReportVisible(true)} />
+          </Card>
         </View>
+
+        <ReportSheet visible={reportVisible} onClose={() => setReportVisible(false)} />
 
         {/* SUPPORT */}
         <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>SUPPORT & CONTACT</Text>
@@ -136,13 +171,12 @@ export default function MoreScreen() {
 
         {/* BRANDING */}
         <View style={styles.brandingContainer}>
-          <Text style={[styles.logoG, { color: theme.accent }]}>g</Text>
           <View style={styles.logoFull}>
             <Text style={[styles.logoGSmall, { color: theme.accent }]}>g</Text>
             <Text style={[styles.logoText, { color: theme.primaryText }]}>roundwork.</Text>
           </View>
           <Text style={[styles.tagline, { color: theme.secondaryText }]}>Your daily focus companion.</Text>
-          <Text style={[styles.version, { color: theme.tertiaryText }]}>v1.0.0</Text>
+          <Text style={[styles.version, { color: theme.tertiaryText }]}>v{require('expo-constants').default.expoConfig?.version || '1.2.1'}</Text>
         </View>
       </ScrollView>
     </BackgroundGradient>
@@ -201,6 +235,39 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 4,
   },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 32,
+  },
+  profileAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
+  profileName: {
+    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
+  },
+  profileEmail: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    opacity: 0.7,
+  },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
@@ -213,7 +280,8 @@ const styles = StyleSheet.create({
   },
   brandingContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingTop: 10,
+    paddingBottom: 20,
     gap: 8,
   },
   logoG: {

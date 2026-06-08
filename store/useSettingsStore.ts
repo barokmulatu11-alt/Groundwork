@@ -1,12 +1,13 @@
 import * as db from '@/lib/db';
 import { rescheduleAll } from '@/lib/notifications';
+import { supabase } from '@/lib/supabase';
 import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
-import { supabase } from '@/lib/supabase';
 
 export interface SettingsState {
   theme: 'light' | 'dark' | 'system';
   accentColor: string;
+  premiumThemeId: string;
   notificationsEnabled: boolean;
   tasksLayout: 'list' | 'grid';
   habitsLayout: 'list' | 'grid';
@@ -46,6 +47,7 @@ export interface SettingsState {
   saveSettings: () => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setAccentColor: (color: string) => void;
+  setPremiumThemeId: (id: string) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setTasksLayout: (layout: 'list' | 'grid') => void;
   setHabitsLayout: (layout: 'list' | 'grid') => void;
@@ -78,6 +80,7 @@ export interface SettingsState {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   theme: 'system',
   accentColor: '#007AFF',
+  premiumThemeId: 'default',
   notificationsEnabled: false,
   tasksLayout: 'list',
   habitsLayout: 'grid',
@@ -115,6 +118,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setAccentColor: (accentColor) => {
     set({ accentColor });
+    get().saveSettings();
+  },
+  setPremiumThemeId: (premiumThemeId) => {
+    set({ premiumThemeId });
     get().saveSettings();
   },
   setTasksLayout: (tasksLayout) => {
@@ -226,91 +233,92 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   
   loadSettings: async () => {
     const userId = useAuthStore.getState().getUserId();
-    // If guest, load settings only from local SQLite
-    if (userId === 'guest') {
-      const localGuestSettings = db.getUserSettings('guest');
-      if (localGuestSettings) {
-        console.log('[SettingsStore] Loading guest local settings');
-        set(localGuestSettings);
-      } else {
-        console.log('[SettingsStore] No local settings for guest, using defaults');
-      }
-      return;
+
+    // Always load from local SQLite first (synchronous feel)
+    const localSettings = db.getUserSettings(userId);
+    if (localSettings) {
+      // Guard: never allow accentColor or premiumThemeId to be empty
+      if (!localSettings.accentColor) localSettings.accentColor = '#007AFF';
+      if (!localSettings.premiumThemeId) localSettings.premiumThemeId = 'default';
+      set(localSettings);
+      // Keep device mirror in sync
+      try {
+        db.saveUserSettings('__device_theme', {
+          accentColor: localSettings.accentColor,
+          premiumThemeId: localSettings.premiumThemeId,
+          theme: localSettings.theme,
+        });
+      } catch (_) {}
     }
 
-    console.log(`[SettingsStore] Loading settings for user: ${userId}`);
-    
-    // 1. Try local SQLite first
-    const localSettings = db.getUserSettings(userId);
-    
-    // 2. Try Supabase cloud settings (profiles table first, user metadata fallback)
+    // If guest, stop here
+    if (userId === 'guest') return;
+
+    // Then try cloud for newer data
     try {
       let cloudSettings: any = null;
-      
+
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('settings')
         .eq('id', userId)
         .single();
-      
+
       if (!profileError && profileData?.settings && Object.keys(profileData.settings).length > 0) {
         cloudSettings = profileData.settings;
-        console.log('[SettingsStore] Found cloud settings in profiles table');
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (user && user.user_metadata?.settings) {
           cloudSettings = user.user_metadata.settings;
-          console.log('[SettingsStore] Found cloud settings in user metadata fallback');
         }
       }
 
       if (cloudSettings) {
-        // Merge logic: If local settings exist, compare updated_at
-        if (localSettings) {
-          const cloudTime = cloudSettings.updated_at ? new Date(cloudSettings.updated_at).getTime() : 0;
-          const localTime = localSettings.updated_at ? new Date(localSettings.updated_at).getTime() : 0;
+        // Guard visual fields
+        if (!cloudSettings.accentColor) cloudSettings.accentColor = '#007AFF';
+        if (!cloudSettings.premiumThemeId) cloudSettings.premiumThemeId = 'default';
+        const cloudTime = cloudSettings.updated_at ? new Date(cloudSettings.updated_at).getTime() : 0;
+        const localTime = localSettings?.updated_at ? new Date(localSettings.updated_at).getTime() : 0;
 
-          if (cloudTime > localTime) {
-            console.log('[SettingsStore] Cloud settings are newer, updating local');
-            set(cloudSettings);
-            db.saveUserSettings(userId, cloudSettings);
-          } else {
-            console.log('[SettingsStore] Local settings are newer or equal');
-            set(localSettings);
-          }
-        } else {
-          // No local settings, use cloud
-          console.log('[SettingsStore] No local settings found, applying cloud data');
+        if (cloudTime > localTime) {
           set(cloudSettings);
           db.saveUserSettings(userId, cloudSettings);
         }
-      } else if (localSettings) {
-        // No cloud settings but local exists
-        set(localSettings);
       }
     } catch (e) {
-      console.warn('[SettingsStore] Failed to fetch cloud settings, falling back to local:', e);
-      if (localSettings) set(localSettings);
+      console.warn('[SettingsStore] Cloud settings sync failed:', e);
     }
   },
   
   saveSettings: async () => {
     const userId = useAuthStore.getState().getUserId();
-    if (userId === 'guest') return;
 
     const state = get();
     const now = new Date().toISOString();
     const updatedState = { ...state, updated_at: now };
     
-    // Update local state and DB
+    // Always save locally
     set({ updated_at: now });
+    
+    // Save under real user ID (or guest)
     db.saveUserSettings(userId, updatedState);
+    
+    // Mirror visual settings under device key so theme loads before auth
+    try {
+      db.saveUserSettings('__device_theme', {
+        accentColor: state.accentColor,
+        premiumThemeId: state.premiumThemeId,
+        theme: state.theme,
+        updated_at: now,
+      });
+    } catch (_) {}
+
+    if (userId === 'guest') return;
     
     // Sync to cloud (Supabase)
     if (!state.offlineMode) {
-      // Exclude non-serializable fields
       const { 
-        loadSettings, saveSettings, setTheme, setAccentColor, 
+        loadSettings, saveSettings, setTheme, setAccentColor, setPremiumThemeId,
         setNotificationsEnabled, setTasksLayout, setHabitsLayout, 
         setNotesLayout, setFontSize, setUpdateBannerDismissed,
         setDefaultFocusDuration, setDailyGoal, setFocusTimerActive,
@@ -325,22 +333,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       } = updatedState as any;
       
       try {
-        // 1. Sync to profiles table (main source of truth)
         const { error: profileError } = await supabase
           .from('profiles')
           .update({ settings: serializableSettings })
           .eq('id', userId);
-        
         if (profileError) throw profileError;
-
-        // 2. Sync to auth metadata for trigger/cache robustness
-        await supabase.auth.updateUser({
-          data: { settings: serializableSettings }
-        });
-        
-        console.log('[SettingsStore] Successfully synced settings to profiles and user metadata');
+        await supabase.auth.updateUser({ data: { settings: serializableSettings } });
       } catch (e) {
-        console.warn('[SettingsStore] Cloud sync failed (will retry on next foreground):', e);
+        console.warn('[SettingsStore] Cloud sync failed:', e);
       }
     }
   },
@@ -354,3 +354,30 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     get().saveSettings();
   },
 }));
+
+// ─── Synchronous init ─────────────────────────────────────────────────────────
+// Loads visual settings (theme, accent, premiumThemeId) from the device-level
+// cache key before auth is ready, so ThemeContext gets the correct values on
+// the very first render.
+try {
+  const _db = require('@/lib/db');
+  // 1. Try device-level theme cache (fastest, no auth needed)
+  const _device = _db.getUserSettings('__device_theme');
+  if (_device?.accentColor || _device?.premiumThemeId || _device?.theme) {
+    useSettingsStore.setState({
+      accentColor: _device.accentColor,
+      premiumThemeId: _device.premiumThemeId,
+      theme: _device.theme,
+    });
+  } else {
+    // 2. Fallback: try guest settings
+    const _guest = _db.getUserSettings('guest');
+    if (_guest?.accentColor || _guest?.premiumThemeId || _guest?.theme) {
+      useSettingsStore.setState({
+        accentColor: _guest.accentColor,
+        premiumThemeId: _guest.premiumThemeId,
+        theme: _guest.theme,
+      });
+    }
+  }
+} catch (_) {}

@@ -299,7 +299,7 @@ export default function RecapScreen() {
         contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <TabHeader title="Daily Recap" subtitle="How did today go? • v1.2.1" />
+        <TabHeader title="Daily Recap" subtitle="How did today go? • v1.2.2" />
 
         <RecapMessageCard
           completionPercentage={completionPercentage}

@@ -1,6 +1,7 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
-import { X } from 'lucide-react-native';
+import { hapticLight } from '@/lib/haptics';
+import { X, Share2 } from 'lucide-react-native';
 import React from 'react';
 import {
   Dimensions,
@@ -26,6 +27,7 @@ interface CelebrationModalProps {
   description?: string;
   badge?: string;
   actionLabel?: string;
+  onShare?: () => void;
   children?: React.ReactNode;
   contentStyle?: ViewStyle;
 }
@@ -41,6 +43,7 @@ export function CelebrationModal({
   description,
   badge,
   actionLabel = 'Continue',
+  onShare,
   children,
   contentStyle,
 }: CelebrationModalProps) {
@@ -99,13 +102,25 @@ export function CelebrationModal({
 
             {children}
 
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: accent }]}
-              onPress={onClose}
-              accessibilityRole="button"
-            >
-              <Text style={styles.actionText}>{actionLabel}</Text>
-            </Pressable>
+            <View style={onShare ? styles.actionRow : undefined}>
+              {onShare && (
+                <Pressable
+                  style={[styles.shareBtn, { backgroundColor: accent + '20', borderColor: accent + '50' }]}
+                  onPress={() => { hapticLight(); onShare(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share"
+                >
+                  <Share2 size={20} color={accent} />
+                </Pressable>
+              )}
+              <Pressable
+                style={[styles.actionBtn, { backgroundColor: accent, flex: onShare ? 1 : undefined }]}
+                onPress={onClose}
+                accessibilityRole="button"
+              >
+                <Text style={styles.actionText}>{actionLabel}</Text>
+              </Pressable>
+            </View>
           </Animated.View>
         </Animated.View>
       </View>
@@ -190,9 +205,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_800ExtraBold',
   },
+  actionRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    gap: 10,
+    marginTop: 4,
+  },
+  shareBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   actionBtn: {
     alignSelf: 'stretch',
-    width: '100%',
     minHeight: 52,
     borderRadius: 16,
     alignItems: 'center',

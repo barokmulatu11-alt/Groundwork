@@ -1,17 +1,18 @@
-import { AppText as Text } from '@/components/ui/AppText';
 import { AddHabitSheet } from '@/components/AddHabitSheet';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
+import { ProPaywall } from '@/components/ProPaywall';
+import { HabitDetailSheet } from '@/components/habits/HabitDetailSheet';
+import {
+    HabitCategoryChips,
+    HabitEmptyPlaceholder,
+    HabitRowCard,
+    HabitTodayHero,
+} from '@/components/habits/HabitScreenUI';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
-import { AnimatedCard } from '@/components/ui/AnimatedCard';
+import { AppText as Text } from '@/components/ui/AppText';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { NativeSheet } from '@/components/ui/NativeSheet';
 import { TabHeader } from '@/components/ui/TabHeader';
-import {
-  HabitCategoryChips,
-  HabitEmptyPlaceholder,
-  HabitRowCard,
-  HabitTodayHero,
-} from '@/components/habits/HabitScreenUI';
 import { useTheme } from '@/lib/ThemeContext';
 import type { Habit } from '@/lib/db';
 import { habitCompletedOnDate, isHabitDueOnDate } from '@/lib/habitUtils';
@@ -20,8 +21,7 @@ import { useStore } from '@/store/useStore';
 import { useFocusEffect } from '@react-navigation/native';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
-import { HabitDetailSheet } from '@/components/habits/HabitDetailSheet';
-import { Flame, Lock, Pause, Play, Trash2 } from 'lucide-react-native';
+import { Lock, Pause, Play, Plus, Trash2 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +35,7 @@ export default function HabitsScreen() {
   const insets = useSafeAreaInsets();
 
   const [isHabitSheetVisible, setHabitSheetVisible] = useState(false);
+  const [paywallVisible, setPaywallVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [confettiHabitId, setConfettiHabitId] = useState<string | null>(null);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
@@ -54,10 +55,24 @@ export default function HabitsScreen() {
 
   const handleAddHabit = async (h: Parameters<typeof addHabit>[0]) => {
     try {
-      await addHabit(h);
+      const result = await addHabit(h);
+      if (result && !result.allowed) {
+        setHabitSheetVisible(false);
+        setPaywallVisible(true);
+      }
     } catch (e) {
       console.error('Failed to add habit:', e);
     }
+  };
+
+  const handleNewHabitPress = () => {
+    const { canAddHabit } = require('@/lib/subscriptionService');
+    const gate = canAddHabit();
+    if (!gate.allowed) {
+      setPaywallVisible(true);
+      return;
+    }
+    setHabitSheetVisible(true);
   };
 
   const handleToggle = async (id: string, force = false) => {
@@ -134,7 +149,7 @@ export default function HabitsScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: 24,
-          paddingBottom: 24,
+          paddingBottom: 120,
           paddingTop: insets.top + 16,
         }}
         showsVerticalScrollIndicator={false}
@@ -183,23 +198,14 @@ export default function HabitsScreen() {
         <Text style={[styles.hint, { color: theme.tertiaryText }]}>Long-press a habit for pause or delete</Text>
       </ScrollView>
 
-      <View
-        style={[
-          styles.footer,
-          {
-            paddingBottom: Math.max(insets.bottom, 16) + 8,
-            borderTopColor: theme.cardBorder,
-            backgroundColor: theme.background + 'F2',
-          },
-        ]}
+      </View>
+
+      <Pressable
+        style={[styles.fab, { backgroundColor: theme.accent, bottom: insets.bottom + 24 }]}
+        onPress={handleNewHabitPress}
       >
-        <AnimatedButton
-          title="New Habit"
-          onPress={() => setHabitSheetVisible(true)}
-          style={{ alignSelf: 'stretch', width: '100%' }}
-        />
-      </View>
-      </View>
+        <Plus size={26} color="#FFF" />
+      </Pressable>
 
       <HabitDetailSheet
         visible={isDetailVisible}
@@ -251,6 +257,14 @@ export default function HabitsScreen() {
 
       <AddHabitSheet visible={isHabitSheetVisible} onClose={() => setHabitSheetVisible(false)} onAddHabit={handleAddHabit} />
 
+      <ProPaywall
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+        featureName="Unlimited Habits"
+        featureDescription="Free users can track up to 5 habits. Upgrade to Pro for unlimited habit tracking."
+        source="habits_screen"
+      />
+
       <ConfirmDialog
         visible={deleteDialogVisible}
         title="Delete Habit"
@@ -271,11 +285,7 @@ export default function HabitsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  footer: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+  fab: { position: 'absolute', right: 20, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', elevation: 8 },
   loginWrap: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center' },
   loginIcon: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
   loginTitle: { fontSize: 28, fontFamily: 'Inter_800ExtraBold', marginBottom: 12, textAlign: 'center' },

@@ -1,49 +1,66 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Dimensions, Image, Linking } from 'react-native';
-import { AppText as Text } from '@/components/ui/AppText';
-import { useTheme } from '@/lib/ThemeContext';
-import { useProfile } from '@/hooks/connect/useProfile';
-import { useXP } from '@/hooks/connect/useXP';
-import { useFriends } from '@/hooks/connect/useFriends';
-import { useProfileStats } from '@/hooks/connect/useProfileStats';
-import { useTimeline } from '@/hooks/connect/useTimeline';
-import { usePrivacySettings } from '@/hooks/connect/usePrivacySettings';
-import { useIdentityTitle } from '@/hooks/connect/useIdentityTitle';
-import { useStore } from '@/store/useStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { AppText as Text } from "@/components/ui/AppText";
+import { useFriends } from "@/hooks/connect/useFriends";
+import { useIdentityTitle } from "@/hooks/connect/useIdentityTitle";
+import { usePrivacySettings } from "@/hooks/connect/usePrivacySettings";
+import { useProfile } from "@/hooks/connect/useProfile";
+import { useProfileStats } from "@/hooks/connect/useProfileStats";
+import { useTimeline } from "@/hooks/connect/useTimeline";
+import { useXP } from "@/hooks/connect/useXP";
+import { useTheme } from "@/lib/ThemeContext";
+import { useAuthStore } from "@/store/useAuthStore";
+import { useStore } from "@/store/useStore";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
+import {
+    Dimensions,
+    Image,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View
+} from "react-native";
 
 // Custom Components
-import { ProfileHeader } from '@/components/connect/ProfileHeader';
-import { XPBar } from '@/components/connect/XPBar';
-import { StatCard } from '@/components/connect/StatCard';
-import { AchievementsShowcase } from '@/components/connect/AchievementsShowcase';
-import { HabitStreak } from '@/components/connect/HabitStreak';
-import { NotesPortfolio } from '@/components/connect/NotesPortfolio';
-import { ActivityTimeline } from '@/components/connect/ActivityTimeline';
-import { ConnectionsSection } from '@/components/connect/ConnectionsSection';
-import { SocialLinksSection } from '@/components/connect/SocialLinksSection';
-import { DesignTokens } from '@/constants/designTokens';
-import { getWeeklyHabitActivity } from '@/lib/GreetingUtils';
-import { ACHIEVEMENTS } from '@/lib/connect/achievementEngine';
+import { AchievementsShowcase } from "@/components/connect/AchievementsShowcase";
+import { ActivityTimeline } from "@/components/connect/ActivityTimeline";
+import { ConnectionsSection } from "@/components/connect/ConnectionsSection";
+import { HabitStreak } from "@/components/connect/HabitStreak";
+import { NotesPortfolio } from "@/components/connect/NotesPortfolio";
+import { ProfileHeader } from "@/components/connect/ProfileHeader";
+import { SocialLinksSection } from "@/components/connect/SocialLinksSection";
+import { StatCard } from "@/components/connect/StatCard";
+import { XPBar } from "@/components/connect/XPBar";
+import { DesignTokens } from "@/constants/designTokens";
+import { getWeeklyHabitActivity } from "@/lib/GreetingUtils";
+import { ACHIEVEMENTS } from "@/lib/connect/achievementEngine";
 
 // Icons
-import * as Icons from 'lucide-react-native';
+import * as Icons from "lucide-react-native";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-type TabType = 'overview' | 'activity' | 'achievements' | 'notes' | 'stats' | 'connections';
+type TabType =
+  | "overview"
+  | "activity"
+  | "achievements"
+  | "notes"
+  | "stats"
+  | "connections";
 
 interface ProfileScreenProps {
   onSwitchToFriendsTab?: () => void;
   setParentScrollEnabled?: (enabled: boolean) => void;
 }
 
-export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEnabled }: ProfileScreenProps = {}) {
+export default function ProfileScreen({
+  onSwitchToFriendsTab,
+  setParentScrollEnabled,
+}: ProfileScreenProps = {}) {
   const { theme, isDark, showAlert } = useTheme();
   const router = useRouter();
   const { profile: authProfile } = useAuthStore();
-  
+
   // Custom Hooks & Stores
   const { notes, habits, loadNotes } = useStore();
   const {
@@ -57,14 +74,36 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
     addSocialLink,
     deleteSocialLink,
   } = useProfile();
-  const { xp, level, nextLevelTitle, nextLevelXp, progress, refresh: refreshXP } = useXP();
-  const { incomingRequests, acceptFriendRequest, declineFriendRequest, refresh: refreshFriends } = useFriends();
+  const {
+    xp,
+    level,
+    nextLevelTitle,
+    nextLevelXp,
+    progress,
+    refresh: refreshXP,
+  } = useXP();
+  const {
+    incomingRequests,
+    acceptFriendRequest,
+    declineFriendRequest,
+    refresh: refreshFriends,
+  } = useFriends();
   const { stats: computedStats, refresh: refreshStats } = useProfileStats();
-  const { events: timelineEvents, loading: timelineLoading, hasMore: timelineHasMore, loadMore: loadMoreTimeline, refresh: refreshTimeline } = useTimeline();
-  const { privacyLevel, updatePrivacyLevel, refresh: refreshPrivacy } = usePrivacySettings();
+  const {
+    events: timelineEvents,
+    loading: timelineLoading,
+    hasMore: timelineHasMore,
+    loadMore: loadMoreTimeline,
+    refresh: refreshTimeline,
+  } = useTimeline();
+  const {
+    privacyLevel,
+    updatePrivacyLevel,
+    refresh: refreshPrivacy,
+  } = usePrivacySettings();
   const { title: identityTitle, refresh: refreshIdentity } = useIdentityTitle();
 
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [refreshing, setRefreshing] = useState(false);
 
   // Sync data on tab focus
@@ -78,7 +117,7 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
       refreshPrivacy();
       refreshIdentity();
       loadNotes();
-    }, [])
+    }, []),
   );
 
   const onRefresh = async () => {
@@ -91,7 +130,7 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
       refreshTimeline(),
       refreshPrivacy(),
       refreshIdentity(),
-      loadNotes()
+      loadNotes(),
     ]);
     setRefreshing(false);
   };
@@ -114,20 +153,24 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
     }
   };
 
-  const cardBg = isDark ? DesignTokens.colors.cardBgDark : DesignTokens.colors.cardBgLight;
-  const cardBorder = isDark ? DesignTokens.colors.cardBorderDark : DesignTokens.colors.cardBorderLight;
+  const cardBg = isDark
+    ? DesignTokens.colors.cardBgDark
+    : DesignTokens.colors.cardBgLight;
+  const cardBorder = isDark
+    ? DesignTokens.colors.cardBorderDark
+    : DesignTokens.colors.cardBorderLight;
 
   // Unlocked achievement keys set
-  const unlockedKeys = new Set(unlockedAchievements.map(a => a.key));
+  const unlockedKeys = new Set(unlockedAchievements.map((a) => a.key));
 
   // Determine status classification dynamically
   const getStatusLabel = () => {
     if (computedStats.totalStudyHours > 0) {
-      return 'Active Learner';
+      return "Active Learner";
     } else if (computedStats.currentStreak >= 3) {
-      return 'Consistent Student';
+      return "Consistent Student";
     } else {
-      return 'Active Learner';
+      return "Active Learner";
     }
   };
 
@@ -142,12 +185,32 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
         {/* Core Stats Grid */}
         <View style={styles.statsGrid}>
           <View style={styles.statsRow}>
-            <StatCard label="Total Notes" value={computedStats.totalNotes} icon="FileText" color={theme.accent} />
-            <StatCard label="Tasks Done" value={computedStats.totalTasksCompleted} icon="CheckCircle" color="#34C759" />
+            <StatCard
+              label="Total Notes"
+              value={computedStats.totalNotes}
+              icon="FileText"
+              color={theme.accent}
+            />
+            <StatCard
+              label="Tasks Done"
+              value={computedStats.totalTasksCompleted}
+              icon="CheckCircle"
+              color="#34C759"
+            />
           </View>
           <View style={styles.statsRow}>
-            <StatCard label="Study Hours" value={computedStats.totalStudyHours} icon="Clock" color="#8B5CF6" />
-            <StatCard label="Subjects" value={computedStats.activeSubjectsCount} icon="FolderOpen" color="#FF9500" />
+            <StatCard
+              label="Study Hours"
+              value={computedStats.totalStudyHours}
+              icon="Clock"
+              color="#8B5CF6"
+            />
+            <StatCard
+              label="Subjects"
+              value={computedStats.activeSubjectsCount}
+              icon="FolderOpen"
+              color="#FF9500"
+            />
           </View>
         </View>
 
@@ -170,21 +233,20 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
         {/* Achievements Showcase */}
         <AchievementsShowcase
           unlockedKeys={unlockedKeys}
-          onViewAllPress={() => setActiveTab('achievements')}
+          onViewAllPress={() => setActiveTab("achievements")}
         />
 
         {/* Pinned Notes Portfolio */}
-        <NotesPortfolio
-          notes={notes}
-          onNotePress={handleNotePress}
-        />
+        <NotesPortfolio notes={notes} onNotePress={handleNotePress} />
 
         {/* Study Network Panel */}
         <ConnectionsSection
           followersCount={followersCount}
           followingCount={followingCount}
           privacyLevel={privacyLevel}
-          onManagePress={onSwitchToFriendsTab || (() => setActiveTab('connections'))}
+          onManagePress={
+            onSwitchToFriendsTab || (() => setActiveTab("connections"))
+          }
         />
       </View>
     );
@@ -205,39 +267,71 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
 
   const renderAchievementsList = () => {
     return (
-      <View style={[styles.fullCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-        <Text style={[styles.cardTitle, { color: theme.primaryText }]}>All Achievements</Text>
-        <Text style={[styles.cardSub, { color: theme.secondaryText, marginBottom: 16 }]}>
+      <View
+        style={[
+          styles.fullCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+        ]}
+      >
+        <Text style={[styles.cardTitle, { color: theme.primaryText }]}>
+          All Achievements
+        </Text>
+        <Text
+          style={[
+            styles.cardSub,
+            { color: theme.secondaryText, marginBottom: 16 },
+          ]}
+        >
           Unlocked {unlockedAchievements.length} / {ACHIEVEMENTS.length}
         </Text>
 
         <View style={styles.achievementsGrid}>
-          {ACHIEVEMENTS.map(ach => {
+          {ACHIEVEMENTS.map((ach) => {
             const unlocked = unlockedKeys.has(ach.key);
             const IconComponent = (Icons as any)[ach.icon] || Icons.Award;
-            
+
             return (
               <TouchableOpacity
                 key={ach.key}
                 style={[
                   styles.fullAchRow,
                   { borderColor: cardBorder },
-                  unlocked ? { opacity: 1 } : { opacity: 0.5 }
+                  unlocked ? { opacity: 1 } : { opacity: 0.5 },
                 ]}
                 onPress={() => {
                   showAlert({
                     title: ach.name,
-                    message: `${ach.description}\n\nStatus: ${unlocked ? '✅ Unlocked' : '🔒 Locked'}\nReward: +${ach.xpReward} XP`,
-                    primaryButton: { text: 'Awesome!', onPress: () => {} },
+                    message: `${ach.description}\n\nStatus: ${unlocked ? "Unlocked" : "Locked"}\nReward: +${ach.xpReward} XP`,
+                    primaryButton: { text: "Awesome!", onPress: () => {} },
                   });
                 }}
               >
-                <View style={[styles.fullAchIcon, { backgroundColor: unlocked ? ach.color + '15' : 'rgba(150,150,150,0.1)' }]}>
-                  <IconComponent size={20} color={unlocked ? ach.color : theme.secondaryText} />
+                <View
+                  style={[
+                    styles.fullAchIcon,
+                    {
+                      backgroundColor: unlocked
+                        ? ach.color + "15"
+                        : "rgba(150,150,150,0.1)",
+                    },
+                  ]}
+                >
+                  <IconComponent
+                    size={20}
+                    color={unlocked ? ach.color : theme.secondaryText}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fullAchName, { color: theme.primaryText }]}>{ach.name}</Text>
-                  <Text style={[styles.fullAchDesc, { color: theme.secondaryText }]}>{ach.description}</Text>
+                  <Text
+                    style={[styles.fullAchName, { color: theme.primaryText }]}
+                  >
+                    {ach.name}
+                  </Text>
+                  <Text
+                    style={[styles.fullAchDesc, { color: theme.secondaryText }]}
+                  >
+                    {ach.description}
+                  </Text>
                 </View>
                 {unlocked ? (
                   <Icons.CheckCircle2 size={16} color="#34C759" />
@@ -255,38 +349,63 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
   const renderNotesTab = () => {
     return (
       <View style={styles.tabContent}>
-        <NotesPortfolio
-          notes={notes}
-          onNotePress={handleNotePress}
-        />
+        <NotesPortfolio notes={notes} onNotePress={handleNotePress} />
       </View>
     );
   };
 
   const renderStatsTab = () => {
     return (
-      <View style={[styles.fullCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-        <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Advanced Metrics</Text>
-        <Text style={[styles.cardSub, { color: theme.secondaryText, marginBottom: 20 }]}>
+      <View
+        style={[
+          styles.fullCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+        ]}
+      >
+        <Text style={[styles.cardTitle, { color: theme.primaryText }]}>
+          Advanced Metrics
+        </Text>
+        <Text
+          style={[
+            styles.cardSub,
+            { color: theme.secondaryText, marginBottom: 20 },
+          ]}
+        >
           Deep dive into your study habits.
         </Text>
 
         <View style={styles.analyticsList}>
           <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>Focus Score</Text>
-            <Text style={[styles.analyticValue, { color: theme.accent }]}>{computedStats.focusScore} / 100</Text>
+            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
+              Focus Score
+            </Text>
+            <Text style={[styles.analyticValue, { color: theme.accent }]}>
+              {computedStats.focusScore} / 100
+            </Text>
           </View>
           <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>Daily Activity Score</Text>
-            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>{computedStats.averageDailyActivityScore}</Text>
+            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
+              Daily Activity Score
+            </Text>
+            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>
+              {computedStats.averageDailyActivityScore}
+            </Text>
           </View>
           <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>Active Recall Notes</Text>
-            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>{computedStats.revisionSessionsCompleted}</Text>
+            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
+              Active Recall Notes
+            </Text>
+            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>
+              {computedStats.revisionSessionsCompleted}
+            </Text>
           </View>
           <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>Subjects Studied</Text>
-            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>{computedStats.activeSubjectsCount}</Text>
+            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
+              Subjects Studied
+            </Text>
+            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>
+              {computedStats.activeSubjectsCount}
+            </Text>
           </View>
         </View>
       </View>
@@ -297,33 +416,80 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
     return (
       <View style={styles.tabContent}>
         {incomingRequests.length > 0 && (
-          <View style={[styles.fullCard, { backgroundColor: cardBg, borderColor: cardBorder, marginBottom: 16 }]}>
-            <Text style={[styles.cardTitle, { color: theme.primaryText, marginBottom: 12 }]}>
+          <View
+            style={[
+              styles.fullCard,
+              {
+                backgroundColor: cardBg,
+                borderColor: cardBorder,
+                marginBottom: 16,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.cardTitle,
+                { color: theme.primaryText, marginBottom: 12 },
+              ]}
+            >
               Pending Connection Requests
             </Text>
             <View style={styles.requestsList}>
-              {incomingRequests.map(req => (
-                <View key={req.user_id} style={[styles.requestRow, { borderColor: cardBorder }]}>
+              {incomingRequests.map((req) => (
+                <View
+                  key={req.user_id}
+                  style={[styles.requestRow, { borderColor: cardBorder }]}
+                >
                   <View style={styles.requestLeft}>
                     {req.avatar_url ? (
-                      <Image source={{ uri: req.avatar_url }} style={styles.reqAvatar} />
+                      <Image
+                        source={{ uri: req.avatar_url }}
+                        style={styles.reqAvatar}
+                      />
                     ) : (
-                      <View style={[styles.reqAvatarPlaceholder, { backgroundColor: theme.accent }]}>
+                      <View
+                        style={[
+                          styles.reqAvatarPlaceholder,
+                          { backgroundColor: theme.accent },
+                        ]}
+                      >
                         <Text style={styles.reqAvatarText}>
-                          {req.username ? req.username.charAt(0).toUpperCase() : '?'}
+                          {req.username
+                            ? req.username.charAt(0).toUpperCase()
+                            : "?"}
                         </Text>
                       </View>
                     )}
                     <View>
-                      <Text style={[styles.reqUsername, { color: theme.primaryText }]}>@{req.username}</Text>
-                      <Text style={[styles.reqLevel, { color: theme.secondaryText }]}>Level {req.level}</Text>
+                      <Text
+                        style={[
+                          styles.reqUsername,
+                          { color: theme.primaryText },
+                        ]}
+                      >
+                        @{req.username}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.reqLevel,
+                          { color: theme.secondaryText },
+                        ]}
+                      >
+                        Level {req.level}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.reqActions}>
-                    <TouchableOpacity style={styles.declineBtn} onPress={() => handleDeclineRequest(req.requestId!)}>
+                    <TouchableOpacity
+                      style={styles.declineBtn}
+                      onPress={() => handleDeclineRequest(req.requestId!)}
+                    >
                       <Icons.X size={14} color={theme.secondaryText} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.acceptBtn, { backgroundColor: '#34C759' }]} onPress={() => handleAcceptRequest(req.requestId!)}>
+                    <TouchableOpacity
+                      style={[styles.acceptBtn, { backgroundColor: "#34C759" }]}
+                      onPress={() => handleAcceptRequest(req.requestId!)}
+                    >
                       <Icons.Check size={14} color="white" />
                     </TouchableOpacity>
                   </View>
@@ -345,15 +511,15 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
-      case 'activity':
+      case "activity":
         return renderTimeline();
-      case 'achievements':
+      case "achievements":
         return renderAchievementsList();
-      case 'notes':
+      case "notes":
         return renderNotesTab();
-      case 'stats':
+      case "stats":
         return renderStatsTab();
-      case 'connections':
+      case "connections":
         return renderConnectionsTab();
       default:
         return renderOverview();
@@ -364,7 +530,9 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {/* Identity Layer */}
       <ProfileHeader
@@ -372,7 +540,7 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
         authProfile={authProfile}
         levelTitle={levelTitle}
         isOwnProfile={true}
-        onEditPress={() => router.push('/edit-profile')}
+        onEditPress={() => router.push("/edit-profile")}
         followersCount={followersCount}
         followingCount={followingCount}
         privacyLevel={privacyLevel}
@@ -402,21 +570,33 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
           onTouchEnd={() => setParentScrollEnabled?.(true)}
           onTouchCancel={() => setParentScrollEnabled?.(true)}
         >
-          {(['overview', 'activity', 'achievements', 'notes', 'stats', 'connections'] as TabType[]).map(t => {
+          {(
+            [
+              "overview",
+              "activity",
+              "achievements",
+              "notes",
+              "stats",
+              "connections",
+            ] as TabType[]
+          ).map((t) => {
             const isActive = activeTab === t;
             return (
               <TouchableOpacity
                 key={t}
                 style={[
                   styles.tabItem,
-                  isActive && [styles.activeTabItem, { borderBottomColor: theme.accent }]
+                  isActive && [
+                    styles.activeTabItem,
+                    { borderBottomColor: theme.accent },
+                  ],
                 ]}
                 onPress={() => setActiveTab(t)}
               >
                 <Text
                   style={[
                     styles.tabItemText,
-                    { color: isActive ? theme.accent : theme.secondaryText }
+                    { color: isActive ? theme.accent : theme.secondaryText },
                   ]}
                 >
                   {t.toUpperCase()}
@@ -436,7 +616,7 @@ export default function ProfileScreen({ onSwitchToFriendsTab, setParentScrollEna
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   content: {
     padding: 16,
@@ -445,7 +625,7 @@ const styles = StyleSheet.create({
   tabBar: {
     borderBottomWidth: 1.5,
     marginBottom: 16,
-    width: '100%',
+    width: "100%",
   },
   tabBarScroll: {
     paddingRight: 10,
@@ -454,7 +634,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    borderBottomColor: "transparent",
   },
   activeTabItem: {
     borderBottomWidth: 2.5,
@@ -465,15 +645,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tabContent: {
-    flexDirection: 'column',
+    flexDirection: "column",
   },
   statsGrid: {
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: 10,
     marginBottom: 16,
   },
   statsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   fullCard: {
@@ -493,12 +673,12 @@ const styles = StyleSheet.create({
     fontFamily: DesignTokens.fonts.regular,
   },
   achievementsGrid: {
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: 8,
   },
   fullAchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderRadius: DesignTokens.borderRadius.md,
     padding: 10,
@@ -508,8 +688,8 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   fullAchName: {
     fontSize: 12,
@@ -521,13 +701,13 @@ const styles = StyleSheet.create({
     fontFamily: DesignTokens.fonts.medium,
   },
   analyticsList: {
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: 8,
   },
   analyticRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
@@ -543,16 +723,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   requestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderWidth: 1,
     borderRadius: DesignTokens.borderRadius.md,
     padding: 10,
   },
   requestLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   reqAvatar: {
@@ -564,11 +744,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   reqAvatarText: {
-    color: 'white',
+    color: "white",
     fontSize: 14,
     fontFamily: DesignTokens.fonts.bold,
   },
@@ -581,7 +761,7 @@ const styles = StyleSheet.create({
     fontFamily: DesignTokens.fonts.medium,
   },
   reqActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   declineBtn: {
@@ -589,15 +769,15 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(150,150,150,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(150,150,150,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   acceptBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

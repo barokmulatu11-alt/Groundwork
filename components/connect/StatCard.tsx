@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: DesignTokens.borderRadius.md,
+    borderRadius: 14,
     borderWidth: 1,
     padding: 12,
     gap: 12,

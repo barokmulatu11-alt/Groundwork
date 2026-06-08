@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import * as db from '../lib/db';
+import { canAddTask } from '@/lib/subscriptionService';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useStore } from '@/store/useStore';
@@ -69,13 +70,19 @@ export const useTasks = (date?: string) => {
     setViewMode('upcoming');
   }, []);
 
+  /** Returns gate result so the caller can show a paywall if not allowed */
   const addTask = async (input: Partial<db.Task>, currentView?: 'Today' | 'Upcoming' | 'All') => {
     try {
       setLoading(true);
       setError(null);
-      await storeAddTask(input);
+      const gate = canAddTask();
+      if (!gate.allowed) return gate;  // caller shows paywall
+      const result = await storeAddTask(input);
+      if (result && !result.allowed) return result;
+      return { allowed: true };
     } catch (e: any) {
       setError(e.message);
+      return { allowed: true };
     } finally {
       setLoading(false);
     }

@@ -194,31 +194,58 @@ export default function TabLayout() {
           ]}
         >
           {/* Top section: brand + collapse button */}
-          <View style={styles.sidebarTop}>
-            <View style={[styles.sidebarHeader]}>
+          <View style={[
+            styles.sidebarTop,
+            {
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingHorizontal: 0,
+              marginTop: 4,
+            }
+          ]}>
+            <View style={[
+              styles.sidebarHeader,
+              {
+                flexDirection: isCollapsed ? 'column' : 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: '100%',
+              }
+            ]}>
               {/* Brand mark — always visible */}
               <View style={[styles.brandMark, { backgroundColor: theme.accent }]}>
                 <Text style={styles.brandMarkText}>G</Text>
               </View>
 
               {/* Brand name — fades out when collapsed */}
-              <Animated.View style={{ flex: 1, opacity: contentOpacity, marginLeft: 10 }} pointerEvents={isCollapsed ? 'none' : 'auto'}>
-                <Text style={[styles.brandName, { color: theme.primaryText }]}>
-                  ground<Text style={{ color: theme.accent }}>work</Text>
-                </Text>
-                {profile?.pro_status && (
-                  <View style={[styles.proBadge, { backgroundColor: theme.accent + '20', borderColor: theme.accent + '50' }]}>
-                    <Zap size={9} color={theme.accent} fill={theme.accent} />
-                    <Text style={[styles.proBadgeText, { color: theme.accent }]}>PRO</Text>
-                  </View>
-                )}
-              </Animated.View>
+              {!isCollapsed && (
+                <Animated.View style={{ opacity: contentOpacity, marginLeft: 10 }} pointerEvents="auto">
+                  <Text style={[styles.brandName, { color: theme.primaryText }]}>
+                    <Text style={{ color: theme.accent }}>g</Text>roundwork<Text style={{ color: theme.accent }}>.</Text>
+                  </Text>
+                  {profile?.pro_status && (
+                    <View style={[styles.proBadge, { backgroundColor: theme.accent + '20', borderColor: theme.accent + '50' }]}>
+                      <Zap size={9} color={theme.accent} fill={theme.accent} />
+                      <Text style={[styles.proBadgeText, { color: theme.accent }]}>PRO</Text>
+                    </View>
+                  )}
+                </Animated.View>
+              )}
             </View>
 
             {/* Collapse toggle button */}
             <TouchableOpacity
               onPress={() => { hapticSelection(); setIsCollapsed(!isCollapsed); }}
-              style={[styles.collapseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}
+              style={[
+                styles.collapseBtn,
+                {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+                  marginTop: isCollapsed ? 4 : 8,
+                }
+              ]}
               activeOpacity={0.7}
             >
               <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
@@ -228,7 +255,7 @@ export default function TabLayout() {
           </View>
 
           {/* Divider */}
-          <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} />
+          <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', marginVertical: 8 }]} />
 
           {/* Nav Items */}
           <View style={styles.sidebarMenu}>
@@ -266,19 +293,21 @@ export default function TabLayout() {
                     />
                   </View>
 
-                  <Animated.View style={{ flex: 1, opacity: contentOpacity }} pointerEvents={isCollapsed ? 'none' : 'auto'}>
-                    <Text
-                      style={[
-                        styles.navLabel,
-                        {
-                          color: active ? theme.accent : theme.secondaryText,
-                          fontFamily: active ? 'Inter_700Bold' : 'Inter_500Medium',
-                        }
-                      ]}
-                    >
-                      {route.title}
-                    </Text>
-                  </Animated.View>
+                  {!isCollapsed && (
+                    <Animated.View style={{ flex: 1, opacity: contentOpacity }} pointerEvents="auto">
+                      <Text
+                        style={[
+                          styles.navLabel,
+                          {
+                            color: active ? theme.accent : theme.secondaryText,
+                            fontFamily: active ? 'Inter_700Bold' : 'Inter_500Medium',
+                          }
+                        ]}
+                      >
+                        {route.title}
+                      </Text>
+                    </Animated.View>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -287,20 +316,22 @@ export default function TabLayout() {
           {/* Footer */}
           <View style={[styles.sidebarFooter, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
             {/* User card */}
-            <View style={styles.userCard}>
+            <View style={[styles.userCard, { justifyContent: 'center', alignItems: 'center' }]}>
               <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
                 <Text style={styles.avatarText}>
                   {profile?.username?.charAt(0).toUpperCase() || 'U'}
                 </Text>
               </View>
-              <Animated.View style={[{ flex: 1, marginLeft: 10, overflow: 'hidden' }, { opacity: contentOpacity }]} pointerEvents={isCollapsed ? 'none' : 'auto'}>
-                <Text style={[styles.userName, { color: theme.primaryText }]} numberOfLines={1}>
-                  {profile?.full_name || profile?.username || 'User'}
-                </Text>
-                <Text style={[styles.userSub, { color: theme.secondaryText }]}>
-                  Level {profile?.level || 1} · {profile?.xp || 0} XP
-                </Text>
-              </Animated.View>
+              {!isCollapsed && (
+                <Animated.View style={[{ flex: 1, marginLeft: 10, overflow: 'hidden' }, { opacity: contentOpacity }]} pointerEvents="auto">
+                  <Text style={[styles.userName, { color: theme.primaryText }]} numberOfLines={1}>
+                    {profile?.full_name || profile?.username || 'User'}
+                  </Text>
+                  <Text style={[styles.userSub, { color: theme.secondaryText }]}>
+                    Level {profile?.level || 1} · {profile?.xp || 0} XP
+                  </Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Sign out */}

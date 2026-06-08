@@ -39,17 +39,29 @@ export function AnimatedButton({
   const isPrimary = variant === 'primary';
   const isSecondary = variant === 'secondary';
 
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const buttonStyle = [
     styles.base,
-    isPrimary && { backgroundColor: theme.accent },
-    isSecondary && { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.accentBorder },
-    variant === 'ghost' && { backgroundColor: theme.pillInactive },
+    isPrimary && { 
+      backgroundColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.15,
+      shadowRadius: 10,
+    },
+    isSecondary && { 
+      backgroundColor: theme.card, 
+      borderWidth: 1, 
+      borderColor: theme.cardBorder,
+    },
+    variant === 'ghost' && { 
+      backgroundColor: 'transparent',
+    },
     style,
   ];
 
-  const textColor = isPrimary ? '#FFFFFF' : theme.accent;
+  const textColor = isPrimary ? '#FFFFFF' : theme.primaryText;
 
   return (
     <AnimatedPressable
@@ -66,15 +78,19 @@ export function AnimatedButton({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 100,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    borderRadius: 14, // curver curvature matching profile card
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   ghost: {},
   text: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#FFFFFF',
-    fontWeight: '600' } });
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  }
+});

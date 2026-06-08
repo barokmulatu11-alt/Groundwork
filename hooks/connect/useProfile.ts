@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/connect/connectSupabase';
-import { getLevelTitle, subscribeToConnectEvents, emitConnectEvent } from '@/lib/connect/xpSystem';
+import { getLevelFromXP, getLevelTitle, subscribeToConnectEvents, emitConnectEvent } from '@/lib/connect/xpSystem';
 import { getUserStats, ACHIEVEMENTS } from '@/lib/connect/achievementEngine';
 import { normalizePlatformId, normalizeSocialUrl } from '@/lib/socialPlatforms';
 
@@ -77,6 +77,8 @@ export const useProfile = (targetUserId?: string) => {
         }
 
         if (cloudProfileData) {
+          // Compute the correct level from XP right away — never trust the stored level
+          const correctLevel = getLevelFromXP(cloudProfileData.xp || 0);
           db.runSync(
             'INSERT OR REPLACE INTO connect_profiles (id, user_id, username, bio, avatar_url, xp, level, productivity_category, joined_at, updated_at, privacy_level, institution) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
@@ -86,7 +88,7 @@ export const useProfile = (targetUserId?: string) => {
               cloudProfileData.bio || '',
               cloudProfileData.avatar_url || null,
               cloudProfileData.xp || 0,
-              cloudProfileData.level || 1,
+              correctLevel,  // always computed, never the potentially-corrupted cloud value
               cloudProfileData.productivity_category || 'General',
               cloudProfileData.joined_at,
               cloudProfileData.updated_at,
@@ -95,6 +97,8 @@ export const useProfile = (targetUserId?: string) => {
             ]
           );
           p = db.getFirstSync<ConnectProfile>('SELECT * FROM connect_profiles WHERE user_id = ?', [userId]);
+          // Notify useXP and any other subscribers that XP data is now available
+          emitConnectEvent({ type: 'XP_UPDATED', xp: cloudProfileData.xp || 0, level: correctLevel });
         } else {
           const id = Math.random().toString(36).substring(7);
           const now = new Date().toISOString();
@@ -169,8 +173,8 @@ export const useProfile = (targetUserId?: string) => {
         try {
           const { data: cloudProfile, error: cpError } = await supabase.from('connect_profiles').select('*').eq('user_id', userId).single();
           
-          const uStats = getUserStats(userId);
-          const focusHours = Math.round((uStats.totalFocusMinutes || 0) / 60);
+          // Always compute level from XP — never trust any cached level value
+          p.level = getLevelFromXP(p.xp || 0);
 
           if (cpError || !cloudProfile) {
             // Missing on cloud! Let's upload immediately so other users can see it!
@@ -186,9 +190,6 @@ export const useProfile = (targetUserId?: string) => {
               productivity_category: p.productivity_category,
               joined_at: p.joined_at,
               updated_at: p.updated_at,
-              tasks_completed_count: uStats.totalTasksCompleted,
-              longest_streak: uStats.longestStreak,
-              focus_hours: focusHours,
               privacy_level: p.privacy_level || 'public',
               institution: p.institution || null
             }, { onConflict: 'user_id' });
@@ -197,15 +198,65 @@ export const useProfile = (targetUserId?: string) => {
             let updatedLocal = false;
             let updatedCloud = false;
 
-            if (cloudProfile.xp !== p.xp || cloudProfile.level !== p.level) {
-              const highestXp = Math.max(cloudProfile.xp, p.xp);
-              const highestLevel = Math.max(cloudProfile.level, p.level);
-              if (p.xp !== highestXp || p.level !== highestLevel) {
+            // ─── SELF-HEALING XP & LEVEL FROM LOGS ───
+            const localLogSum = db.getFirstSync<{ total: number }>(
+              'SELECT SUM(xp_amount) as total FROM connect_xp_log WHERE user_id = ?',
+              [userId]
+            )?.total || 0;
+
+            if (localLogSum > 0 && p.xp !== localLogSum) {
+              console.log('[useProfile] Correcting local profile XP from local logs sum:', localLogSum);
+              p.xp = localLogSum;
+              p.level = getLevelFromXP(localLogSum);
+              updatedLocal = true;
+            }
+
+            try {
+              const { data: cloudLogs } = await supabase
+                .from('connect_xp_log')
+                .select('xp_amount')
+                .eq('user_id', userId);
+
+              if (cloudLogs && cloudLogs.length > 0) {
+                const cloudLogSum = cloudLogs.reduce((acc: number, log: any) => acc + (log.xp_amount || 0), 0);
+                if (cloudLogSum > 0 && (p.xp !== cloudLogSum || cloudProfile.xp !== cloudLogSum)) {
+                  console.log('[useProfile] Correcting profile XP from cloud logs sum:', cloudLogSum);
+                  p.xp = cloudLogSum;
+                  p.level = getLevelFromXP(cloudLogSum);
+                  cloudProfile.xp = cloudLogSum;
+                  cloudProfile.level = getLevelFromXP(cloudLogSum);
+                  updatedLocal = true;
+                  updatedCloud = true;
+                }
+              }
+            } catch (err) {
+              console.warn('[useProfile] Could not fetch cloud logs sum:', err);
+            }
+
+            if (cloudProfile.xp !== p.xp) {
+              // Always take the highest XP (user earns XP on either device)
+              const highestXp = Math.max(cloudProfile.xp || 0, p.xp || 0);
+              // ALWAYS recompute level from XP — never trust any stored level value
+              // which can be corrupted (e.g. set to 2026 by a timestamp bug)
+              const correctLevel = getLevelFromXP(highestXp);
+              if (p.xp !== highestXp || p.level !== correctLevel) {
                 p.xp = highestXp;
-                p.level = highestLevel;
+                p.level = correctLevel;
                 updatedLocal = true;
               }
-              if (cloudProfile.xp !== highestXp || cloudProfile.level !== highestLevel) {
+              if (cloudProfile.xp !== highestXp || cloudProfile.level !== correctLevel) {
+                updatedCloud = true;
+              }
+            } else if (p.level !== undefined) {
+              // XP matches — still recompute level to fix any pre-existing corruption
+              // on EITHER side (e.g. cloud or local showing 2026 instead of 5)
+              const correctLevel = getLevelFromXP(p.xp || 0);
+              if (p.level !== correctLevel) {
+                p.level = correctLevel;
+                updatedLocal = true;
+                updatedCloud = true;
+              } else if (cloudProfile.level !== correctLevel) {
+                // Local is already correct, but cloud is still corrupted
                 updatedCloud = true;
               }
             }
@@ -249,14 +300,6 @@ export const useProfile = (targetUserId?: string) => {
               }
             }
 
-            // Verify if cloud stats are outdated compared to local fresh stats
-            if (
-              cloudProfile.tasks_completed_count !== uStats.totalTasksCompleted ||
-              cloudProfile.longest_streak !== uStats.longestStreak ||
-              cloudProfile.focus_hours !== focusHours
-            ) {
-              updatedCloud = true;
-            }
 
             if (updatedLocal) {
               db.runSync(
@@ -272,10 +315,7 @@ export const useProfile = (targetUserId?: string) => {
                 bio: p.bio,
                 avatar_url: p.avatar_url,
                 xp: p.xp,
-                level: p.level,
-                tasks_completed_count: uStats.totalTasksCompleted,
-                longest_streak: uStats.longestStreak,
-                focus_hours: focusHours,
+                level: p.level, // already corrected to getLevelFromXP above
                 privacy_level: p.privacy_level || 'public',
                 institution: p.institution || null,
                 updated_at: new Date().toISOString()
@@ -283,13 +323,46 @@ export const useProfile = (targetUserId?: string) => {
             }
           }
           
-          p.tasks_completed_count = uStats.totalTasksCompleted;
-          p.longest_streak = uStats.longestStreak;
-          p.focus_hours = focusHours;
-        } catch (err) {
-          console.warn('[useProfile] cloud sync-down catch:', err);
+            // Calculate real-time stats for own profile
+            const notesCountRes = db.getFirstSync<{ count: number }>(
+              'SELECT COUNT(*) as count FROM notes WHERE user_id = ? AND deleted_at IS NULL',
+              [userId]
+            );
+            const tasksCountRes = db.getFirstSync<{ count: number }>(
+              'SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND completed = 1 AND deleted_at IS NULL',
+              [userId]
+            );
+            const focusMinutesRes = db.getFirstSync<{ sum: number }>(
+              'SELECT SUM(duration_minutes) as sum FROM focus_sessions WHERE user_id = ?',
+              [userId]
+            );
+            const habitStreakRes = db.getFirstSync<{ max_streak: number }>(
+              'SELECT MAX(best_streak) as max_streak FROM habits WHERE user_id = ? AND deleted_at IS NULL',
+              [userId]
+            );
+            const profileStreakRes = db.getFirstSync<{ longest_streak: number }>(
+              'SELECT longest_streak FROM connect_profiles WHERE user_id = ?',
+              [userId]
+            );
+
+            const localNotesCount = notesCountRes?.count || 0;
+            const focusHours = Math.round(((focusMinutesRes?.sum || 0) / 60) * 10) / 10;
+            const uStats = {
+              totalTasksCompleted: tasksCountRes?.count || 0,
+              longestStreak: Math.max(
+                profileStreakRes?.longest_streak || 0,
+                habitStreakRes?.max_streak || 0
+              ),
+            };
+
+            p.tasks_completed_count = uStats.totalTasksCompleted;
+            p.longest_streak = uStats.longestStreak;
+            p.focus_hours = focusHours;
+            (p as any).notes_count = localNotesCount;
+          } catch (err) {
+            console.warn('[useProfile] cloud sync-down catch:', err);
+          }
         }
-      }
 
       if (!isOwnProfile && userId !== 'guest') {
         try {
@@ -406,10 +479,54 @@ export const useProfile = (targetUserId?: string) => {
           totalTasksCompleted: (p as any).tasks_completed_count || 0,
           longestStreak: (p as any).longest_streak || 0,
           totalFocusMinutes: ((p as any).focus_hours || 0) * 60,
+          totalNotes: (p as any).notes_count || 0,
+          totalStudyHours: (p as any).focus_hours || 0,
+          activeSubjectsCount: 0,
         });
       } else {
-        const userStats = getUserStats(userId);
-        setStats(userStats);
+        // OWN Profile: Let's aggregate local counts directly for maximum accuracy!
+        const notesCountRes = db.getFirstSync<{ count: number }>(
+          'SELECT COUNT(*) as count FROM notes WHERE user_id = ? AND deleted_at IS NULL',
+          [userId]
+        );
+        const tasksCountRes = db.getFirstSync<{ count: number }>(
+          'SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND completed = 1 AND deleted_at IS NULL',
+          [userId]
+        );
+        const focusMinutesRes = db.getFirstSync<{ sum: number }>(
+          'SELECT SUM(duration_minutes) as sum FROM focus_sessions WHERE user_id = ?',
+          [userId]
+        );
+        const habitStreakRes = db.getFirstSync<{ max_streak: number }>(
+          'SELECT MAX(best_streak) as max_streak FROM habits WHERE user_id = ? AND deleted_at IS NULL',
+          [userId]
+        );
+        const profileStreakRes = db.getFirstSync<{ longest_streak: number }>(
+          'SELECT longest_streak FROM connect_profiles WHERE user_id = ?',
+          [userId]
+        );
+        const subjectsRes = db.getFirstSync<{ count: number }>(
+          'SELECT COUNT(DISTINCT folder) as count FROM notes WHERE user_id = ? AND deleted_at IS NULL',
+          [userId]
+        );
+
+        const totalNotes = notesCountRes?.count || 0;
+        const totalTasksCompleted = tasksCountRes?.count || 0;
+        const longestStreak = Math.max(
+          profileStreakRes?.longest_streak || 0,
+          habitStreakRes?.max_streak || 0
+        );
+        const totalStudyHours = Math.round(((focusMinutesRes?.sum || 0) / 60) * 10) / 10;
+        const activeSubjectsCount = subjectsRes?.count || 0;
+
+        setStats({
+          totalNotes,
+          totalTasksCompleted,
+          longestStreak,
+          totalFocusMinutes: focusMinutesRes?.sum || 0,
+          totalStudyHours,
+          activeSubjectsCount,
+        });
       }
 
       // Sync friendships from cloud to local SQLite to ensure the friendsCount is perfectly accurate

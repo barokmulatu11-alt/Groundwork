@@ -1,6 +1,7 @@
 -- Update profiles table to include missing identity fields
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS provider TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT;
 
 -- Create or update the function to handle user synchronization
 -- This function extracts metadata from auth.users (including Google profiles)
@@ -12,6 +13,7 @@ BEGIN
     full_name, 
     avatar_url, 
     email, 
+    username,
     provider, 
     role,
     updated_at
@@ -23,8 +25,15 @@ BEGIN
       new.raw_user_meta_data->>'name', 
       'Anonymous'
     ),
-    new.raw_user_meta_data->>'avatar_url',
+    COALESCE(
+      new.raw_user_meta_data->>'avatar_url',
+      new.raw_user_meta_data->>'picture'
+    ),
     new.email,
+    COALESCE(
+      new.raw_user_meta_data->>'username',
+      SPLIT_PART(new.email, '@', 1)
+    ),
     COALESCE(new.raw_app_meta_data->>'provider', 'email'),
     'user',
     NOW()
@@ -32,8 +41,15 @@ BEGIN
   ON CONFLICT (id) DO UPDATE
   SET
     full_name = EXCLUDED.full_name,
-    avatar_url = EXCLUDED.avatar_url,
+    avatar_url = COALESCE(
+      EXCLUDED.avatar_url,
+      public.profiles.avatar_url
+    ),
     email = EXCLUDED.email,
+    username = COALESCE(
+      public.profiles.username,
+      EXCLUDED.username
+    ),
     provider = EXCLUDED.provider,
     updated_at = NOW();
   RETURN new;
@@ -48,12 +64,19 @@ CREATE TRIGGER on_auth_user_sync
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- Backfill existing users into the profiles table if they are missing
-INSERT INTO public.profiles (id, full_name, avatar_url, email, provider, role, created_at, updated_at)
+INSERT INTO public.profiles (id, full_name, avatar_url, email, username, provider, role, created_at, updated_at)
 SELECT 
   id, 
   COALESCE(raw_user_meta_data->>'full_name', raw_user_meta_data->>'name', 'Anonymous'),
-  raw_user_meta_data->>'avatar_url',
+  COALESCE(
+    raw_user_meta_data->>'avatar_url',
+    raw_user_meta_data->>'picture'
+  ),
   email,
+  COALESCE(
+    raw_user_meta_data->>'username',
+    SPLIT_PART(email, '@', 1)
+  ),
   COALESCE(raw_app_meta_data->>'provider', 'email'),
   'user',
   created_at,

@@ -30,7 +30,7 @@ import {
     Pencil
 } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Dimensions, LayoutAnimation, Pressable, ScrollView, StatusBar, StyleSheet, TextInput, View } from 'react-native';
+import { Dimensions, LayoutAnimation, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 
@@ -215,9 +215,7 @@ export default function CalendarScreen() {
   // ─── Main Render ───────────────────────────────────────────────────────────
 
   return (
-    <BackgroundGradient>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScrollView
+    <BackgroundGradient>      <ScrollView
         style={{ flex: 1, paddingHorizontal: 24 }}
         contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 120 }}
         showsVerticalScrollIndicator={false}
@@ -430,3 +428,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   }
 });
+

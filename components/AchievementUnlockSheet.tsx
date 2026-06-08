@@ -1,8 +1,9 @@
 import { CelebrationModal } from '@/components/ui/CelebrationModal';
+import { GlobalShareSheet } from '@/components/GlobalShareSheet';
 import { useTheme } from '@/lib/ThemeContext';
 import { hapticSuccess } from '@/lib/haptics';
 import { Trophy } from 'lucide-react-native';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface AchievementUnlockSheetProps {
   visible: boolean;
@@ -12,6 +13,7 @@ interface AchievementUnlockSheetProps {
 
 export function AchievementUnlockSheet({ visible, achievement, onClose }: AchievementUnlockSheetProps) {
   const { theme } = useTheme();
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     if (visible && achievement) hapticSuccess();
@@ -22,16 +24,29 @@ export function AchievementUnlockSheet({ visible, achievement, onClose }: Achiev
   const accent = achievement.color || theme.accent;
 
   return (
-    <CelebrationModal
-      visible={visible}
-      onClose={onClose}
-      accentColor={accent}
-      icon={<Trophy size={44} color={accent} strokeWidth={2} />}
-      eyebrow="Achievement unlocked"
-      title={achievement.name}
-      description={achievement.description}
-      badge={achievement.xpReward ? `+${achievement.xpReward} XP` : undefined}
-      actionLabel="Awesome!"
-    />
+    <>
+      <CelebrationModal
+        visible={visible}
+        onClose={onClose}
+        accentColor={accent}
+        icon={<Trophy size={44} color={accent} strokeWidth={2} />}
+        eyebrow="Achievement unlocked"
+        title={achievement.name}
+        description={achievement.description}
+        badge={achievement.xpReward ? `+${achievement.xpReward} XP` : undefined}
+        actionLabel="Awesome!"
+        onShare={() => {
+          onClose();
+          setTimeout(() => setShareOpen(true), 350);
+        }}
+      />
+
+      <GlobalShareSheet
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        contentType="achievement"
+        contentData={achievement}
+      />
+    </>
   );
 }

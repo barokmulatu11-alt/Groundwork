@@ -1,22 +1,22 @@
 const MORNING_GREETINGS = [
-  'Rise and grind',
-  'Fresh start today',
-  'Let\'s make today count',
-  'Morning momentum',
+  "Rise and grind",
+  "Fresh start today",
+  "Let's make today count",
+  "Morning momentum",
 ];
 
 const AFTERNOON_GREETINGS = [
-  'Keep the flow going',
-  'Afternoon push time',
-  'You\'re on a roll',
-  'Stay in the zone',
+  "Keep the flow going",
+  "Afternoon push time",
+  "You're on a roll",
+  "Stay in the zone",
 ];
 
 const EVENING_GREETINGS = [
-  'Finish strong tonight',
-  'Evening focus mode',
-  'Wrap up with intention',
-  'One more push',
+  "Finish strong tonight",
+  "Evening focus mode",
+  "Wrap up with intention",
+  "One more push",
 ];
 
 function pickRandom<T>(arr: T[]): T {
@@ -47,34 +47,49 @@ export function getPersonalizedGreetingParts(options: {
   tasksCompletedToday?: number;
   tasksTotalToday?: number;
 }): { headline: string; subline?: string } {
-  const { displayName, totalStreak = 0, tasksCompletedToday = 0, tasksTotalToday = 0 } = options;
+  const {
+    displayName,
+    totalStreak = 0,
+    tasksCompletedToday = 0,
+    tasksTotalToday = 0,
+  } = options;
   const base = getRandomGreeting();
   const name = displayName?.trim();
   const headline = name ? `${base}, ${name}` : base;
 
   if (totalStreak >= 7) {
-    return { headline, subline: `${totalStreak} streak days 🔥` };
+    return { headline, subline: `${totalStreak} day streak` };
   }
   if (tasksTotalToday > 0 && tasksCompletedToday === tasksTotalToday) {
-    return { headline, subline: 'All tasks done today ✨' };
+    return { headline, subline: "All tasks done today" };
   }
   if (tasksTotalToday > 0 && tasksCompletedToday > 0) {
-    return { headline, subline: `${tasksCompletedToday}/${tasksTotalToday} tasks done` };
+    return {
+      headline,
+      subline: `${tasksCompletedToday}/${tasksTotalToday} tasks done`,
+    };
   }
   return { headline };
 }
 
-export function getWeeklyHabitActivity(habits: { dates_completed?: string | string[] }[]): boolean[] {
+export function getWeeklyHabitActivity(
+  habits: { dates_completed?: string | string[] }[],
+): boolean[] {
   const result: boolean[] = [];
   const today = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().split('T')[0];
+    const key = d.toISOString().split("T")[0];
     const active = habits.some((h) => {
       try {
         const raw = h.dates_completed;
-        const dates: string[] = typeof raw === 'string' ? JSON.parse(raw || '[]') : Array.isArray(raw) ? raw : [];
+        const dates: string[] =
+          typeof raw === "string"
+            ? JSON.parse(raw || "[]")
+            : Array.isArray(raw)
+              ? raw
+              : [];
         return dates.includes(key);
       } catch {
         return false;

@@ -1,29 +1,29 @@
 import { BackgroundGradient } from '@/components/BackgroundGradient';
+import { ReportSheet } from '@/components/ReportSheet';
+import { RoleBadge } from '@/components/RoleBadge';
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
-import { useRouter } from 'expo-router';
-import { 
-  ChevronRight, 
-  Award,
-  Camera,
-  Code,
-  Download,
-  Globe,
-  Heart,
-  Info,
-  MessageSquare,
-  Send,
-  Share2,
-  CreditCard,
-  Crown as CrownIcon,
-  Zap
-} from 'lucide-react-native';
-import { RoleBadge } from '@/components/RoleBadge';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useRouter } from 'expo-router';
+import {
+    Award,
+    BarChart2,
+    Camera,
+    ChevronRight,
+    Code,
+    Crown as CrownIcon,
+    Download,
+    Globe,
+    Heart,
+    Info,
+    MessageSquare,
+    ReceiptText,
+    Send,
+    Share2
+} from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Linking, ScrollView, Share, StyleSheet, View, TouchableOpacity, Image, useWindowDimensions, Platform } from 'react-native';
+import { Image, Linking, Platform, ScrollView, Share, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ReportSheet } from '@/components/ReportSheet';
 
 
 const Card = ({ children, theme }: { children: React.ReactNode; theme: any }) => (
@@ -97,7 +97,7 @@ export default function MoreScreen() {
         {profile && (
           <TouchableOpacity 
             activeOpacity={0.8} 
-            onPress={() => router.push('/edit-profile')}
+            onPress={() => router.push('/profile')}
             style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
           >
             <Image 
@@ -126,6 +126,14 @@ export default function MoreScreen() {
               theme={theme} 
               onPress={() => router.push('/subscription-settings' as any)} 
             />
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+            <SettingRow
+              icon={ReceiptText}
+              title="Payment History"
+              subtitle="View your payment requests"
+              theme={theme}
+              onPress={() => router.push('/payment-history' as any)}
+            />
           </Card>
         </View>
 
@@ -133,6 +141,8 @@ export default function MoreScreen() {
         <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>UTILITIES</Text>
         <View style={styles.utilitiesStack}>
           <Card theme={theme}>
+            <SettingRow icon={BarChart2} title="Analytics & Insights" subtitle="Productivity, focus, habits & reports" theme={theme} onPress={() => router.push('/analytics' as any)} />
+            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
             <SettingRow icon={Download} title="Downloads" subtitle="Manage offline content" theme={theme} onPress={() => router.push('/downloads')} />
             <View style={[styles.separator, { backgroundColor: theme.separator }]} />
             <SettingRow icon={Award} title="Achievements" subtitle="View your earned badges" theme={theme} onPress={() => router.push('/achievements')} />
@@ -176,7 +186,7 @@ export default function MoreScreen() {
             <Text style={[styles.logoText, { color: theme.primaryText }]}>roundwork.</Text>
           </View>
           <Text style={[styles.tagline, { color: theme.secondaryText }]}>Your daily focus companion.</Text>
-          <Text style={[styles.version, { color: theme.tertiaryText }]}>v{require('expo-constants').default.expoConfig?.version || '1.2.1'}</Text>
+          <Text style={[styles.version, { color: theme.tertiaryText }]}>v1.2.2</Text>
         </View>
       </ScrollView>
     </BackgroundGradient>

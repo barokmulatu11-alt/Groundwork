@@ -1,18 +1,29 @@
 'use client';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/ThemeContext';
-import {
-  LayoutDashboard, Users, Star, Flag, Megaphone,
-  AlertTriangle, Settings, LogOut, ChevronRight, Shield,
-  Sun, Moon
-} from 'lucide-react';
 import clsx from 'clsx';
+import {
+    AlertTriangle,
+    ChevronRight,
+    CreditCard,
+    Flag,
+    LayoutDashboard,
+    LogOut,
+    Megaphone,
+    Moon,
+    Settings,
+    Shield,
+    Star,
+    Sun,
+    Users
+} from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 const navItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/users', label: 'Users', icon: Users },
+  { href: '/dashboard/payments', label: 'Payment Requests', icon: CreditCard },
   { href: '/dashboard/subscriptions', label: 'Pro Subscriptions', icon: Star },
   { href: '/dashboard/flags', label: 'Feature Flags', icon: Flag },
   { href: '/dashboard/announcements', label: 'Announcements', icon: Megaphone },
@@ -23,7 +34,7 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, premiumThemeId, setPremiumThemeId, premiumThemes } = useTheme();
 
   return (
     <aside className="w-64 min-h-screen glass border-r border-gray-800/50 flex flex-col">
@@ -49,6 +60,32 @@ export default function Sidebar() {
         >
           {isDark ? <Sun size={14} /> : <Moon size={14} />}
         </button>
+      </div>
+
+      <div className={clsx("px-4 pt-3 pb-2 border-b", isDark ? "border-gray-800/50" : "border-slate-200")}>
+        <label
+          htmlFor="dashboard-premium-theme"
+          className={clsx("text-[10px] uppercase tracking-widest font-bold block mb-2", isDark ? "text-gray-500" : "text-slate-500")}
+        >
+          Theme Surface
+        </label>
+        <select
+          id="dashboard-premium-theme"
+          value={premiumThemeId}
+          onChange={(e) => setPremiumThemeId(e.target.value)}
+          className={clsx(
+            "w-full rounded-lg border px-2.5 py-2 text-xs font-semibold outline-none",
+            isDark
+              ? "bg-white/5 border-white/10 text-white"
+              : "bg-white border-slate-300 text-slate-900"
+          )}
+        >
+          {premiumThemes.map((theme) => (
+            <option key={theme.id} value={theme.id}>
+              {theme.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Nav */}
@@ -99,3 +136,4 @@ export default function Sidebar() {
     </aside>
   );
 }
+

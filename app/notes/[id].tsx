@@ -317,10 +317,21 @@ export default function NoteEditorScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete note', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteNote(id as string); router.back(); } },
-    ]);
+    setAlertConfig({
+      title: 'Delete note',
+      message: 'This cannot be undone.',
+      type: 'error',
+      showCancel: true,
+      cancelText: 'Cancel',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        setAlertVisible(false);
+        await deleteNote(id as string);
+        router.back();
+      },
+      onCancel: () => setAlertVisible(false),
+    });
+    setAlertVisible(true);
   };
 
   if (!isNew && existingNote?.is_locked && !isAuthenticated) {

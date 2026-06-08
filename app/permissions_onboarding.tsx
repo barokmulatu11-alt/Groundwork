@@ -1,10 +1,10 @@
-import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient as BG } from '@/components/BackgroundGradient';
-import { Camera, Mic, Image as ImageIcon, Folder, CheckCircle } from 'lucide-react-native';
+import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { requestCameraPermission, requestMediaPermission, requestMicrophonePermission } from '@/lib/permissions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { Camera, CheckCircle, Folder, Image as ImageIcon, Mic } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, {
@@ -20,24 +20,33 @@ const { width } = Dimensions.get('window');
 
 const STEPS = [
   {
+    id: 'camera',
+    icon: Camera,
+    title: 'Camera Access',
+    description: 'groundwork. uses your camera to let you attach photos to your notes and capture images directly. Photos are only taken when you choose to.',
+    action: requestCameraPermission,
+  },
+  {
     id: 'mic',
     icon: Mic,
     title: 'Microphone Access',
     description: 'We use your microphone to let you record voice notes and attach audio to your habits and daily entries. Your recordings stay on your device.',
-    action: requestMicrophonePermission },
+    action: requestMicrophonePermission,
+  },
   {
     id: 'media',
     icon: ImageIcon,
     title: 'Photo Library Access',
     description: 'groundwork. can pull images from your gallery to attach to notes, habits or your profile. We only access photos you choose to share with us.',
-    action: requestMediaPermission },
+    action: requestMediaPermission,
+  },
   {
     id: 'files',
     icon: Folder,
     title: 'File Access',
     description: 'File access lets you attach PDFs, documents and other files to your notes and download course materials for offline use. Your files are never shared.',
-    action: async () => true, // On Android, implicit for picker
-  }
+    action: async () => true,
+  },
 ];
 
 export default function PermissionsOnboarding() {

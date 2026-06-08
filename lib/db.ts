@@ -82,9 +82,11 @@ export type FocusSession = {
   duration_minutes: number;
   mode: string;
   task_id?: string | null;
+  started_at?: string | null;
   completed_at?: string | null;
   date: string;
   created_at: string;
+  updated_at?: string | null;
 };
 
 /**
@@ -142,6 +144,22 @@ function createWebDb() {
       // Setup tables in localStorage if empty
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
         // Just mock-initialize
+      } else if (sql.toUpperCase().startsWith('UPDATE')) {
+        // Run update query on local storage
+        const key = getStorageKey(sql);
+        let data = getTableData(key);
+        if (sql.includes("SET deleted_at = NULL")) {
+          data = data.map(item => {
+            if (item && 'deleted_at' in item) {
+              const v = item.deleted_at;
+              if (v === '[]' || v === '{}' || v === 'null' || v === '') {
+                item.deleted_at = null;
+              }
+            }
+            return item;
+          });
+          saveTableData(key, data);
+        }
       }
     },
     runSync: (sql: string, params: any[] = []) => {
@@ -159,7 +177,30 @@ function createWebDb() {
         
         // Build mock object based on table type
         let newRecord: any = { id };
-        if (key === 'gw_tasks') {
+        const colNamesMatch = sql.match(/(?:INSERT|REPLACE)\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\(([^)]+)\)/i);
+        const valuesMatch = sql.match(/VALUES\s*\((.+?)\)/i);
+        if (colNamesMatch && valuesMatch && !sql.toUpperCase().includes('SELECT')) {
+          const colNames = colNamesMatch[1].split(',').map(c => c.trim());
+          const values = valuesMatch[1].split(',').map(v => v.trim());
+          let paramIdx = 0;
+          colNames.forEach((colName, idx) => {
+            const valStr = values[idx];
+            if (valStr === '?') {
+              newRecord[colName] = params[paramIdx++];
+            } else if (valStr !== undefined) {
+              let parsedVal: any = valStr;
+              if (valStr.toUpperCase() === 'NULL') {
+                parsedVal = null;
+              } else if (valStr.startsWith("'") || valStr.startsWith('"')) {
+                parsedVal = valStr.substring(1, valStr.length - 1);
+              } else {
+                const num = Number(valStr);
+                if (!isNaN(num)) parsedVal = num;
+              }
+              newRecord[colName] = parsedVal;
+            }
+          });
+        } else if (key === 'gw_tasks') {
           newRecord = {
             id: params[0],
             user_id: params[1],
@@ -325,11 +366,22 @@ function createWebDb() {
               item.deleted_at = params[0];
               item.updated_at = params[1];
             } else {
-              // Generic update: set first param to whatever property is being set
-              // E.g., UPDATE tasks SET order_index = ? WHERE id = ?
-              const matches = sql.match(/SET\s+(\w+)\s*=/i);
-              if (matches && matches[1]) {
-                item[matches[1]] = params[0];
+              // Generic update: set param to whatever property is being set
+              const setMatch = sql.match(/SET\s+([\s\S]+?)\s+WHERE/i);
+              if (setMatch) {
+                const assignments = setMatch[1].split(',');
+                let paramIdx = 0;
+                assignments.forEach(assign => {
+                  const parts = assign.split('=');
+                  if (parts.length === 2 && parts[1].trim() === '?') {
+                    item[parts[0].trim()] = params[paramIdx++];
+                  }
+                });
+              } else {
+                const matches = sql.match(/SET\s+(\w+)\s*=/i);
+                if (matches && matches[1]) {
+                  item[matches[1]] = params[0];
+                }
               }
             }
           }
@@ -347,15 +399,56 @@ function createWebDb() {
       const key = getStorageKey(sql);
       let data = getTableData(key);
 
-      // Filtering mock query logic: e.g. WHERE user_id = ?
-      const userIdParam = params[0];
-      if (userIdParam) {
-        data = data.filter((item) => item.user_id === userIdParam || item.follower_id === userIdParam || item.user_id1 === userIdParam || item.user_id2 === userIdParam);
-      }
+      // Repair corrupted deleted_at values (e.g. '[]' set by old mock bug)
+      data = data.map(item => {
+        if (item && 'deleted_at' in item) {
+          const v = item.deleted_at;
+          if (v === '[]' || v === '{}' || v === 'null' || v === '') {
+            item.deleted_at = null;
+          }
+        }
+        return item;
+      });
 
-      // Filter out soft deleted records if query doesn't ask for them
-      if (!sql.includes('deleted_at IS NOT NULL') && data.length > 0 && 'deleted_at' in data[0]) {
-        data = data.filter((item) => !item.deleted_at);
+      // Parse WHERE clause for filtering
+      const whereMatch = sql.match(/WHERE\s+([\s\S]+?)(?:ORDER|LIMIT|GROUP|$)/i);
+      if (whereMatch && whereMatch[1]) {
+        const whereClause = whereMatch[1];
+        const conditions = whereClause.split(/\s+AND\s+/i).map(c => c.trim());
+        let paramIdx = 0;
+        conditions.forEach(cond => {
+          const eqParts = cond.split(/\s*=\s*/);
+          if (eqParts.length === 2 && eqParts[1].trim() === '?') {
+            const colName = eqParts[0].trim();
+            if (paramIdx < params.length) {
+              const filterVal = params[paramIdx];
+              data = data.filter(item => item && item[colName] == filterVal);
+              paramIdx++;
+            }
+          } else if (cond.match(/IS\s+NULL/i)) {
+            const colName = cond.replace(/\s+IS\s+NULL/i, '').trim();
+            data = data.filter(item => item && (item[colName] === null || item[colName] === undefined || item[colName] === ''));
+          } else if (cond.match(/IS\s+NOT\s+NULL/i)) {
+            const colName = cond.replace(/\s+IS\s+NOT\s+NULL/i, '').trim();
+            data = data.filter(item => item && item[colName] !== null && item[colName] !== undefined && item[colName] !== '');
+          } else if (eqParts.length === 2) {
+            const colName = eqParts[0].trim();
+            let rawVal: any = eqParts[1].trim().replace(/['"]/g, '');
+            const numericVal = Number(rawVal);
+            if (!isNaN(numericVal) && rawVal.trim() !== '') rawVal = numericVal;
+            data = data.filter(item => item && item[colName] == rawVal);
+          }
+        });
+      } else {
+        // Fallback: filter by first param as user_id
+        const userIdParam = params[0];
+        if (userIdParam) {
+          data = data.filter((item) => item && (item.user_id === userIdParam || item.follower_id === userIdParam || item.user_id1 === userIdParam || item.user_id2 === userIdParam));
+        }
+        // Still filter out soft-deleted records
+        if (data.length > 0 && data[0] && 'deleted_at' in data[0]) {
+          data = data.filter((item) => !item.deleted_at);
+        }
       }
 
       return data;
@@ -364,9 +457,103 @@ function createWebDb() {
       const key = getStorageKey(sql);
       let data = getTableData(key);
 
-      const filterId = params[0];
-      if (filterId) {
-        data = data.filter((item) => item.id === filterId || item.user_id === filterId || item.user_id1 === filterId || item.user_id2 === filterId);
+      // Repair corrupted deleted_at values (e.g. '[]' set by old mock bug)
+      data = data.map(item => {
+        if (item && 'deleted_at' in item) {
+          const v = item.deleted_at;
+          if (v === '[]' || v === '{}' || v === 'null' || v === '') {
+            item.deleted_at = null;
+          }
+        }
+        return item;
+      });
+
+      // Filter out soft-deleted records unless query explicitly asks for them
+      if (!sql.includes('deleted_at IS NOT NULL') && data.length > 0 && data[0] && 'deleted_at' in data[0]) {
+        data = data.filter((item) => !item.deleted_at);
+      }
+
+      // Parse WHERE clause for filtering
+      const whereMatch = sql.match(/WHERE\s+([\s\S]+?)(?:ORDER|LIMIT|GROUP|$)/i);
+      if (whereMatch && whereMatch[1]) {
+        const whereClause = whereMatch[1];
+        const conditions = whereClause.split(/\s+AND\s+/i).map(c => c.trim());
+        let paramIdx = 0;
+        conditions.forEach(cond => {
+          const eqParts = cond.split(/\s*=\s*/);
+          if (eqParts.length === 2 && eqParts[1].trim() === '?') {
+            const colName = eqParts[0].trim();
+            if (paramIdx < params.length) {
+              const filterVal = params[paramIdx];
+              data = data.filter(item => item && item[colName] == filterVal);
+              paramIdx++;
+            }
+          } else if (cond.match(/IS\s+NULL/i)) {
+            const colName = cond.replace(/\s+IS\s+NULL/i, '').trim();
+            data = data.filter(item => item && (item[colName] === null || item[colName] === undefined || item[colName] === ''));
+          } else if (cond.match(/IS\s+NOT\s+NULL/i)) {
+            const colName = cond.replace(/\s+IS\s+NOT\s+NULL/i, '').trim();
+            data = data.filter(item => item && item[colName] !== null && item[colName] !== undefined && item[colName] !== '');
+          } else if (eqParts.length === 2) {
+            const colName = eqParts[0].trim();
+            let rawVal: any = eqParts[1].trim().replace(/['"]/g, '');
+            const numericVal = Number(rawVal);
+            if (!isNaN(numericVal) && rawVal.trim() !== '') rawVal = numericVal;
+            data = data.filter(item => item && item[colName] == rawVal);
+          }
+        });
+      } else {
+        const filterId = params[0];
+        if (filterId) {
+          data = data.filter((item) => item && (item.id === filterId || item.user_id === filterId || item.user_id1 === filterId || item.user_id2 === filterId));
+        }
+      }
+
+      // Handle aggregate queries: SELECT COUNT(*), SUM(col), MAX(col), MIN(col), AVG(col)
+      const aggMatch = sql.match(/SELECT\s+([\s\S]+?)\s+FROM/i);
+      if (aggMatch && aggMatch[1]) {
+        const selectClause = aggMatch[1].trim();
+        // Check for any aggregate function
+        if (/COUNT|SUM|MAX|MIN|AVG/i.test(selectClause)) {
+          const result: any = {};
+          const parts = selectClause.split(',').map(s => s.trim());
+          parts.forEach(part => {
+            const aliasMatch = part.match(/(.+?)\s+as\s+(\w+)/i);
+            const expr = aliasMatch ? aliasMatch[1].trim() : part;
+            const alias = aliasMatch ? aliasMatch[2] : part.replace(/[^a-zA-Z0-9_]/g, '_');
+
+            const countDistinctMatch = expr.match(/COUNT\s*\(\s*DISTINCT\s+(\w+)\s*\)/i);
+            const countMatch = expr.match(/COUNT\s*\(\s*\*?\s*\)/i);
+            const sumMatch = expr.match(/SUM\s*\(\s*(\w+)\s*\)/i);
+            const maxMatch = expr.match(/MAX\s*\(\s*(\w+)\s*\)/i);
+            const minMatch = expr.match(/MIN\s*\(\s*(\w+)\s*\)/i);
+            const avgMatch = expr.match(/AVG\s*\(\s*(\w+)\s*\)/i);
+
+            if (countDistinctMatch) {
+              const col = countDistinctMatch[1];
+              const uniqueVals = new Set(data.map(item => item[col]).filter(v => v !== null && v !== undefined));
+              result[alias] = uniqueVals.size;
+            } else if (countMatch) {
+              result[alias] = data.length;
+            } else if (sumMatch) {
+              const col = sumMatch[1];
+              result[alias] = data.reduce((acc, item) => acc + (Number(item[col]) || 0), 0);
+            } else if (maxMatch) {
+              const col = maxMatch[1];
+              const nums = data.map(item => Number(item[col])).filter(n => !isNaN(n));
+              result[alias] = nums.length > 0 ? Math.max(...nums) : null;
+            } else if (minMatch) {
+              const col = minMatch[1];
+              const nums = data.map(item => Number(item[col])).filter(n => !isNaN(n));
+              result[alias] = nums.length > 0 ? Math.min(...nums) : null;
+            } else if (avgMatch) {
+              const col = avgMatch[1];
+              const nums = data.map(item => Number(item[col])).filter(n => !isNaN(n));
+              result[alias] = nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+            }
+          });
+          return result;
+        }
       }
 
       return data.length > 0 ? data[0] : null;
@@ -389,7 +576,7 @@ if (Platform.OS === 'web') {
   }
 }
 
-export const db = _db as ReturnType<typeof createNoopDb> | SQLite.SQLiteDatabase;
+export const db = _db as ReturnType<typeof createWebDb> | SQLite.SQLiteDatabase;
 
 export function initDb() {
   // Add user_id column to existing tables if they don't have it (migration)
@@ -542,9 +729,11 @@ export function initDb() {
       duration_minutes INTEGER NOT NULL,
       mode TEXT NOT NULL,
       task_id TEXT,
+      started_at TEXT,
       completed_at TEXT,
       date TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT
     );
     CREATE TABLE IF NOT EXISTS notes (
       id TEXT PRIMARY KEY NOT NULL,
@@ -662,7 +851,11 @@ export function initDb() {
   
   addCol('focus_sessions', 'user_id', "TEXT NOT NULL DEFAULT 'guest'");
   addCol('focus_sessions', 'task_id', "TEXT");
+  addCol('focus_sessions', 'started_at', "TEXT");
   addCol('focus_sessions', 'completed_at', "TEXT");
+  addCol('focus_sessions', 'updated_at', "TEXT");
+  addCol('focus_sessions', 'mode', "TEXT NOT NULL DEFAULT 'Focus'");
+  addCol('focus_sessions', 'date', "TEXT");
   
   addCol('notes', 'user_id', "TEXT NOT NULL DEFAULT 'guest'");
   addCol('notes', 'deleted_at', "TEXT");
@@ -684,6 +877,13 @@ export function initDb() {
   addCol('notes', 'drawing_uris', "TEXT DEFAULT '[]'");
   addCol('notes', 'image_uris', "TEXT DEFAULT '[]'");
   addCol('notes', 'folder', "TEXT DEFAULT 'General'");
+  addCol('notes', 'priority', "TEXT DEFAULT 'Medium'");
+  addCol('notes', 'study_hours', "REAL DEFAULT 0.0");
+  addCol('notes', 'revision_score', "INTEGER DEFAULT 0");
+  addCol('notes', 'last_reviewed_at', "TEXT");
+  addCol('notes', 'flashcards', "TEXT DEFAULT '[]'");
+  addCol('notes', 'formulas', "TEXT DEFAULT '[]'");
+  addCol('notes', 'updated_at', "TEXT");
   
   addCol('habits', 'category', "TEXT DEFAULT 'All'");
   addCol('habits', 'difficulty', "TEXT DEFAULT 'Medium'");
@@ -812,6 +1012,13 @@ export function initDb() {
     } catch (_) {}
   } catch (err) {
     console.error('[DB] Error initializing connect tables in initDb:', err);
+  }
+
+  // Repair notes deleted_at corrupted fields on load/init
+  try {
+    db.execSync(`UPDATE notes SET deleted_at = NULL WHERE deleted_at = '[]' OR deleted_at = '{}' OR deleted_at = 'null' OR deleted_at = ''`);
+  } catch (e) {
+    console.error('[DB] Error repairing notes deleted_at:', e);
   }
 }
 
@@ -1222,19 +1429,21 @@ export function getFocusSessions(userId: string = 'guest') {
 
 export function addFocusSession(session: Partial<FocusSession>) {
   try {
-    const id = Math.random().toString(36).substring(7);
+    const id = session.id || Math.random().toString(36).substring(7);
     const now = new Date().toISOString();
     const duration_minutes = session.duration_minutes || 0;
     const mode = session.mode || 'Focus';
     const date = session.date || now.split('T')[0];
     const user_id = session.user_id || 'guest';
+    const started_at = (session as any).started_at || session.created_at || now;
 
     db.runSync(
-      `INSERT INTO focus_sessions (id, user_id, duration_minutes, mode, task_id, completed_at, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, user_id, duration_minutes, mode, session.task_id || null, session.completed_at || null, date, now]
+      `INSERT INTO focus_sessions (id, user_id, duration_minutes, mode, task_id, started_at, completed_at, date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, user_id, duration_minutes, mode, session.task_id || null, started_at, session.completed_at || null, date, now, now]
     );
-    return { ...session, id, user_id, duration_minutes, mode, task_id: session.task_id || null, completed_at: session.completed_at || null, date, created_at: now } as FocusSession;
+    return { ...session, id, user_id, duration_minutes, mode, task_id: session.task_id || null, started_at, completed_at: session.completed_at || null, date, created_at: now, updated_at: now } as FocusSession;
   } catch (e) {
+    console.warn('[DB] addFocusSession failed:', e);
     return null;
   }
 }
@@ -1278,7 +1487,9 @@ export function getUserSettings(userId: string) {
     const result = db.getFirstSync<any>('SELECT * FROM user_settings WHERE user_id = ?', [userId]);
     if (result) {
       return {
-        theme: result.theme || 'light',
+        theme: result.theme || 'system',
+        accentColor: result.accent_color || '#007AFF',
+        premiumThemeId: result.premium_theme_id || 'default',
         notificationsEnabled: !!result.notifications_enabled,
         tasksLayout: result.tasks_layout || 'list',
         habitsLayout: result.habits_layout || 'grid',
@@ -1318,18 +1529,27 @@ export function getUserSettings(userId: string) {
 export function saveUserSettings(userId: string, settings: any) {
   try {
     const now = new Date().toISOString();
+    // Add accent_color and premium_theme_id columns if they don't exist yet
+    try {
+      db.execSync(`ALTER TABLE user_settings ADD COLUMN accent_color TEXT`);
+    } catch (_) {}
+    try {
+      db.execSync(`ALTER TABLE user_settings ADD COLUMN premium_theme_id TEXT`);
+    } catch (_) {}
     db.runSync(
       `INSERT OR REPLACE INTO user_settings 
-       (user_id, theme, notifications_enabled, tasks_layout, habits_layout, notes_layout, 
+       (user_id, theme, accent_color, premium_theme_id, notifications_enabled, tasks_layout, habits_layout, notes_layout, 
         is_update_banner_dismissed, default_focus_duration, daily_goal, focus_timer_active, 
         focus_timer_time_left, focus_timer_mode, focus_timer_duration_minutes, focus_timer_selected_task_id, 
         focus_timer_start_time, default_task_priority, default_reminder_time, week_start_day, 
         auto_sort_tasks, pomodoro_focus_duration, pomodoro_break_duration, pomodoro_long_break_duration, 
         pomodoro_auto_start_breaks, smart_suggestions_enabled, offline_mode, face_id_enabled, app_pin, auto_lock_timeout, updated_at) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
-        settings.theme || 'light',
+        settings.theme || 'system',
+        settings.accentColor || '#007AFF',
+        settings.premiumThemeId || 'default',
         settings.notificationsEnabled ? 1 : 0,
         settings.tasksLayout || 'list',
         settings.habitsLayout || 'grid',
@@ -1359,7 +1579,6 @@ export function saveUserSettings(userId: string, settings: any) {
         now
       ]
     );
-    console.log(`[DB] Saved settings for user_id: ${userId}`);
   } catch (e) {
     console.error('[DB] Error saving user settings:', e);
   }
@@ -1414,9 +1633,7 @@ export function updateConnectProfileStats(userId: string) {
         updated_at: now,
         tasks_completed_count: tasksCount,
         focus_hours: focusHours,
-        longest_streak: longestStreak,
-        privacy_level: profile.privacy_level || 'public',
-        institution: profile.institution || null
+        longest_streak: longestStreak
       }, { onConflict: 'user_id' }).then(({ error }: any) => {
         if (error) console.error('[DB] Supabase connect_profile stats sync error:', error);
         else console.log('[DB] Supabase connect_profile stats synced successfully!');

@@ -122,15 +122,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontFamily: 'System',
-    fontWeight: '800',
+    fontFamily: 'Inter_800ExtraBold',
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 14,
-    fontFamily: 'System',
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
     lineHeight: 20,
     textAlign: 'center',
     marginBottom: 24,
@@ -153,13 +151,11 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 15,
-    fontFamily: 'System',
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
   },
   confirmText: {
     fontSize: 15,
-    fontFamily: 'System',
-    fontWeight: '800',
+    fontFamily: 'Inter_700Bold',
     color: '#FFF',
   },
 });

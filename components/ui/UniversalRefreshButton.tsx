@@ -13,10 +13,15 @@ export function UniversalRefreshButton() {
   const spinAnim = useRef(new RNAnimated.Value(0)).current;
   const pathname = usePathname();
 
-  // Initial position: bottom left
+  const isDesktop = Platform.OS === 'web' && SCREEN_WIDTH >= 768;
+
+  // Initial position: bottom right on desktop to avoid overlapping the sidebar, bottom left on mobile
+  const initialX = isDesktop ? SCREEN_WIDTH - 80 : 24;
+  const initialY = SCREEN_HEIGHT - (Platform.OS === 'ios' ? 140 : 120);
+
   const pan = useRef(new RNAnimated.ValueXY({ 
-    x: 24, 
-    y: SCREEN_HEIGHT - (Platform.OS === 'ios' ? 140 : 120) 
+    x: initialX, 
+    y: initialY 
   })).current;
 
   const panResponder = useRef(

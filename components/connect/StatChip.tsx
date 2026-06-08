@@ -30,7 +30,7 @@ export const StatChip: React.FC<Props> = ({ label, value }) => {
 const styles = StyleSheet.create({
   chip: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     paddingVertical: 6,
     paddingHorizontal: 8,

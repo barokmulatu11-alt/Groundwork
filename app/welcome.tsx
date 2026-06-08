@@ -1,41 +1,58 @@
-import { AppText as Text } from '@/components/ui/AppText';
-import { BrandLogo } from '@/components/ui/BrandLogo';
-import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { useTheme } from '@/lib/ThemeContext';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useRouter } from 'expo-router';
-import { supabase } from '@/lib/supabase';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import React from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import { BackgroundGradient } from "@/components/BackgroundGradient";
+import { AppText as Text } from "@/components/ui/AppText";
+import { BrandLogo } from "@/components/ui/BrandLogo";
+import { migrateGuestData } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { useTheme } from "@/lib/ThemeContext";
+import { useAuthStore } from "@/store/useAuthStore";
+import { FontAwesome } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import React from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import Animated, { FadeInUp } from "react-native-reanimated";
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const { setIsGuest } = useAuthStore();
   const [googleLoading, setGoogleLoading] = React.useState(false);
+  const { width } = useWindowDimensions();
+
+  const isDesktop = Platform.OS === "web" && width >= 768;
 
   React.useEffect(() => {
     WebBrowser.warmUpAsync();
-    return () => { WebBrowser.coolDownAsync(); };
+    return () => {
+      WebBrowser.coolDownAsync();
+    };
   }, []);
 
   const handleSignInWithGoogle = async () => {
     try {
       setGoogleLoading(true);
-      const redirectUrl = __DEV__ ? Linking.createURL('/') : 'groundwork://';
+      const redirectUrl = "groundwork://auth/callback";
+      console.log(
+        "[Auth] Starting Google OAuth (Welcome) with redirect:",
+        redirectUrl,
+      );
 
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: "google",
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: true,
           queryParams: {
-            prompt: 'select_account consent',
-            access_type: 'offline',
+            prompt: "select_account consent",
+            access_type: "offline",
           },
         },
       });
@@ -43,64 +60,102 @@ export default function WelcomeScreen() {
       if (error) throw error;
 
       if (data?.url) {
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        if (res.type === 'success' && res.url) {
+        const res = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          "groundwork://",
+        );
+        if (res.type === "success" && res.url) {
           const url = res.url;
           const getParam = (name: string) => {
             const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
             return match ? decodeURIComponent(match[1]) : null;
           };
-          const code = getParam('code');
-          const access_token = getParam('access_token');
-          const refresh_token = getParam('refresh_token');
+          const code = getParam("code");
+          const access_token = getParam("access_token");
+          const refresh_token = getParam("refresh_token");
+
+          let userId: string | null = null;
 
           if (code) {
-            const { data: sessionData, error: exchError } = await supabase.auth.exchangeCodeForSession(code);
+            const { data: sessionData, error: exchError } =
+              await supabase.auth.exchangeCodeForSession(code);
             if (exchError) throw exchError;
-            // onAuthStateChange handles Zustand state update — AuthMiddleware handles navigation
+            userId = sessionData.session?.user.id || null;
           } else if (access_token && refresh_token) {
-            const { error: sessError } = await supabase.auth.setSession({ access_token, refresh_token });
+            const { data: sessionData, error: sessError } =
+              await supabase.auth.setSession({ access_token, refresh_token });
             if (sessError) throw sessError;
-            // onAuthStateChange fires automatically
+            userId = sessionData.session?.user.id || null;
           }
-          // AuthMiddleware will handle navigation when session updates — do NOT call router.replace here
+
+          if (userId) {
+            await migrateGuestData("guest", userId);
+            useAuthStore.getState().setIsGuest(false);
+
+            const { useStore } = await import("@/store/useStore");
+            await useStore.getState().syncFromCloud();
+            console.log("[Auth] Google welcome sync complete");
+          }
         }
       } else {
-        throw new Error('No authentication URL returned from Supabase.');
+        throw new Error("No authentication URL returned from Supabase.");
       }
     } catch (e: any) {
-      console.error('[Auth] Google sign in error:', e);
+      console.error("[Auth] Google sign in error:", e);
     } finally {
       setGoogleLoading(false);
     }
   };
 
   const handleCreateAccount = () => {
-    router.push('/signup' as any);
+    router.push("/signup" as any);
   };
 
   const handleSignIn = () => {
-    router.push('/login' as any);
+    router.push("/login" as any);
   };
 
   const handleContinueWithoutAccount = () => {
     setIsGuest(true);
-    router.replace('/');
+    router.replace("/");
   };
 
   return (
     <BackgroundGradient>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={{ flex: 1, justifyContent: 'center', padding: 24 }}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={
+          isDesktop
+            ? styles.desktopContainer
+            : { flex: 1, justifyContent: "center", padding: 24 }
+        }
       >
-        {Platform.OS === 'web' ? (
-          <View style={{ position: 'absolute', top: 16, right: 16, flexDirection: 'row', gap: 10, zIndex: 10 }}>
+        {Platform.OS === "web" && !isDesktop ? (
+          <View
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              flexDirection: "row",
+              gap: 10,
+              zIndex: 10,
+            }}
+          >
             <Pressable
               onPress={handleSignIn}
-              style={[styles.webTopSecondary, { borderColor: theme.cardBorder, backgroundColor: theme.card }]}
+              style={[
+                styles.webTopSecondary,
+                { borderColor: theme.cardBorder, backgroundColor: theme.card },
+              ]}
             >
-              <Text style={[styles.webTopSecondaryText, { color: theme.primaryText }]}>Log in</Text>
+              <Text
+                style={[
+                  styles.webTopSecondaryText,
+                  { color: theme.primaryText },
+                ]}
+              >
+                Log in
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleCreateAccount}
@@ -110,69 +165,126 @@ export default function WelcomeScreen() {
             </Pressable>
           </View>
         ) : null}
-        <View style={{ alignItems: 'center', zIndex: 1 }}>
-          <Animated.View entering={FadeInUp.delay(0).duration(300)} style={{ alignItems: 'center', marginBottom: 40 }}>
+        <View
+          style={
+            isDesktop
+              ? [
+                  styles.desktopCard,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                  },
+                ]
+              : { alignItems: "center", zIndex: 1 }
+          }
+        >
+          <Animated.View
+            entering={FadeInUp.delay(0).duration(300)}
+            style={{ alignItems: "center", marginBottom: 40 }}
+          >
             <BrandLogo fontSize={42} />
           </Animated.View>
 
-          <Animated.Text 
+          <Animated.Text
             entering={FadeInUp.delay(100).duration(300)}
             style={[styles.tagline, { color: theme.primaryText }]}
           >
             Your daily focus companion.
           </Animated.Text>
 
-          <Animated.Text 
+          <Animated.Text
             entering={FadeInUp.delay(200).duration(300)}
             style={[styles.subtitle, { color: theme.secondaryText }]}
           >
             Plan. Focus. Build habits. Learn.
           </Animated.Text>
 
-          <Animated.View entering={FadeInUp.delay(300).duration(300)} style={{ width: '100%', marginTop: 48 }}>
+          <Animated.View
+            entering={FadeInUp.delay(300).duration(300)}
+            style={{ width: "100%", marginTop: 48 }}
+          >
             <Pressable
               onPress={handleCreateAccount}
-              style={[styles.primaryButton, { backgroundColor: theme.accent, }]}
+              style={[styles.primaryButton, { backgroundColor: theme.accent }]}
             >
               <Text style={styles.primaryButtonText}>Create Account</Text>
             </Pressable>
 
             <Pressable
               onPress={handleSignIn}
-              style={[styles.secondaryButton, { 
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder
-              }]}
+              style={[
+                styles.secondaryButton,
+                {
+                  backgroundColor: isDesktop ? "transparent" : theme.card,
+                  borderColor: theme.cardBorder,
+                },
+              ]}
             >
-              <Text style={[styles.secondaryButtonText, { color: theme.primaryText }]}>{'Sign In'}</Text>
+              <Text
+                style={[
+                  styles.secondaryButtonText,
+                  { color: theme.primaryText },
+                ]}
+              >
+                {"Sign In"}
+              </Text>
             </Pressable>
 
             <Pressable
               onPress={handleSignInWithGoogle}
               disabled={googleLoading}
-              style={[styles.secondaryButton, { 
-                backgroundColor: theme.accentLight,
-                borderColor: theme.accentBorder,
-                marginTop: 12,
-                opacity: googleLoading ? 0.7 : 1
-              }]}
+              style={[
+                styles.secondaryButton,
+                {
+                  backgroundColor: theme.accentLight,
+                  borderColor: theme.accentBorder,
+                  marginTop: 12,
+                  opacity: googleLoading ? 0.7 : 1,
+                },
+              ]}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 {googleLoading ? (
                   <ActivityIndicator size="small" color={theme.accent} />
                 ) : (
                   <>
-                    <FontAwesome name="google" size={18} color={theme.accent} style={{ marginRight: 10 }} />
-                    <Text style={[styles.secondaryButtonText, { color: theme.accent }]}>Continue with Google</Text>
+                    <FontAwesome
+                      name="google"
+                      size={18}
+                      color={theme.accent}
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text
+                      style={[
+                        styles.secondaryButtonText,
+                        { color: theme.accent },
+                      ]}
+                    >
+                      Continue with Google
+                    </Text>
                   </>
                 )}
               </View>
             </Pressable>
           </Animated.View>
 
-          <Animated.View entering={FadeInUp.delay(400).duration(300)} style={{ marginTop: 24 }}>
-            <Pressable onPress={handleContinueWithoutAccount} style={{ backgroundColor: 'transparent' }}>
-              <Text style={[styles.skipText, { color: theme.primaryText }]}>{'Continue without account'}</Text>
+          <Animated.View
+            entering={FadeInUp.delay(400).duration(300)}
+            style={{ marginTop: 24 }}
+          >
+            <Pressable
+              onPress={handleContinueWithoutAccount}
+              style={{ backgroundColor: "transparent" }}
+            >
+              <Text style={[styles.skipText, { color: theme.primaryText }]}>
+                {"Continue without account"}
+              </Text>
             </Pressable>
           </Animated.View>
         </View>
@@ -182,57 +294,81 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  desktopContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+    minHeight: "100%",
+  },
+  desktopCard: {
+    width: "100%",
+    maxWidth: 460,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 40,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+    zIndex: 1,
+  },
   logoText: {
     fontSize: 32,
-    fontFamily: 'Inter_800ExtraBold' },
+    fontFamily: "Inter_800ExtraBold",
+  },
   tagline: {
     fontSize: 28,
-    fontFamily: 'Inter_800ExtraBold',
+    fontFamily: "Inter_800ExtraBold",
     letterSpacing: -0.5,
-    textAlign: 'center',
-    marginBottom: 12 },
+    textAlign: "center",
+    marginBottom: 12,
+  },
   subtitle: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    textAlign: 'center',
-    marginBottom: 8 },
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
+    marginBottom: 8,
+  },
   primaryButton: {
     borderRadius: 50,
     paddingVertical: 14,
     paddingHorizontal: 32,
-    alignItems: 'center',
-    
-    
-    
-    
-    marginBottom: 12 },
+    alignItems: "center",
+    marginBottom: 12,
+  },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 15,
-    fontFamily: 'Inter_700Bold' },
+    fontFamily: "Inter_700Bold",
+  },
   secondaryButton: {
     borderRadius: 50,
     borderWidth: 1,
     paddingVertical: 14,
     paddingHorizontal: 32,
-    alignItems: 'center' },
+    alignItems: "center",
+  },
   secondaryButtonText: {
     fontSize: 15,
-    fontFamily: 'Inter_600SemiBold' },
+    fontFamily: "Inter_600SemiBold",
+  },
   skipText: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    textAlign: 'center' }
-  ,
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
+  },
   webTopPrimary: {
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   webTopPrimaryText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   webTopSecondary: {
     borderRadius: 999,
@@ -242,6 +378,6 @@ const styles = StyleSheet.create({
   },
   webTopSecondaryText: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
 });

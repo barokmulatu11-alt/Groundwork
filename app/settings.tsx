@@ -137,7 +137,7 @@ export default function SettingsScreen() {
           isAdmin={profile?.role === 'admin'}
           isModerator={profile?.role === 'moderator'}
           avatarUri={profile?.avatar_url || session?.user?.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/png?seed=${session?.user?.email || 'Barok'}`}
-          onEditPress={() => router.push('/edit-profile' as any)}
+          onEditPress={() => router.push('/profile' as any)}
         />
 
         <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>USER ACCOUNT</Text>

@@ -129,16 +129,16 @@ export default function ConnectRootScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={{ width: contentWidth, flex: 1 }}>
-            <LeaderboardScreen onSwitchToFriendsTab={() => handleTabPress(2)} setParentScrollEnabled={setParentScrollEnabled} />
+            <LeaderboardScreen key={`leaderboard-${activeIndex}`} onSwitchToFriendsTab={() => handleTabPress(2)} setParentScrollEnabled={setParentScrollEnabled} />
           </View>
           <View style={{ width: contentWidth, flex: 1 }}>
-            <AchievementsScreen />
+            <AchievementsScreen key={`achievements-${activeIndex}`} />
           </View>
           <View style={{ width: contentWidth, flex: 1 }}>
-            <FriendsScreen />
+            <FriendsScreen key={`friends-${activeIndex}`} />
           </View>
           <View style={{ width: contentWidth, flex: 1 }}>
-            <ProfileScreen onSwitchToFriendsTab={() => handleTabPress(2)} setParentScrollEnabled={setParentScrollEnabled} />
+            <ProfileScreen key={`profile-${activeIndex}`} onSwitchToFriendsTab={() => handleTabPress(2)} setParentScrollEnabled={setParentScrollEnabled} />
           </View>
         </ScrollView>
       </View>

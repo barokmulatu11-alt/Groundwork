@@ -28,29 +28,21 @@ export const getXPRequiredForLevel = (level: number): number => {
   if (level === 3) return 250;
   if (level === 4) return 500;
   if (level === 5) return 900;
-  if (level === 6) return 1500;
-  if (level === 7) return 2300;
-  if (level === 8) return 3300;
-  if (level === 9) return 4500;
-  if (level === 10) return 6000;
   
-  // Mid levels (11 to 25) scale moderately
-  // High levels (26+) scale significantly harder
-  let accum = 6000;
-  for (let i = 11; i <= level; i++) {
-    if (i <= 25) {
-      accum += 2000 + (i - 10) * 300; // linear step
-    } else {
-      accum += 6500 + Math.pow(i - 25, 1.5) * 800; // steep exponential scaling
-    }
+  // High levels (6+) scale exponentially to prevent fast leveling
+  let accum = 900;
+  for (let i = 6; i <= level; i++) {
+    accum += 500 + (i - 5) * 400; 
   }
   return Math.round(accum);
 };
 
 export const getLevelFromXP = (xp: number): number => {
+  if (!xp || xp <= 0) return 1;
   let level = 1;
   while (getXPRequiredForLevel(level + 1) <= xp) {
     level++;
+    if (level >= 100) break; // Hard cap
   }
   return level;
 };

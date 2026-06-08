@@ -4,19 +4,21 @@ import { useTheme } from '@/lib/ThemeContext';
 import { hapticLight } from '@/lib/haptics';
 import { INITIAL_QUOTES } from '@/store/useQuotesStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Quote as QuoteIcon, X } from 'lucide-react-native';
+import { Quote as QuoteIcon, X, Share2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import { GlobalShareSheet } from './GlobalShareSheet';
 
 const STORAGE_KEY = '@groundwork_last_quote_shown_date';
 const DISMISS_KEY = '@groundwork_quote_dismissed_date';
 
 export function DailyQuoteBanner() {
   const { theme } = useTheme();
-  const [quote, setQuote] = useState<{ text: string; author: string } | null>(null);
+  const [quote, setQuote] = useState<{ text: string; author: string; category?: string } | null>(null);
   const [visible, setVisible] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -32,7 +34,10 @@ export function DailyQuoteBanner() {
         const index = dayStamp % INITIAL_QUOTES.length;
         const todayQuote = INITIAL_QUOTES[index];
         if (todayQuote) {
-          setQuote(todayQuote);
+          setQuote({
+            ...todayQuote,
+            category: todayQuote.category || 'Inspiration',
+          });
           setVisible(true);
           await AsyncStorage.setItem(STORAGE_KEY, todayStr);
         }
@@ -55,6 +60,12 @@ export function DailyQuoteBanner() {
     setModalOpen(true);
   };
 
+  const openShare = () => {
+    hapticLight();
+    setModalOpen(false);
+    setShareOpen(true);
+  };
+
   if (!visible || !quote) return null;
 
   return (
@@ -66,7 +77,9 @@ export function DailyQuoteBanner() {
               <QuoteIcon size={16} color={theme.accent} />
             </View>
             <View style={styles.textCol}>
-              <Text style={[styles.label, { color: theme.accent }]}>Quote of the day · Tap to expand</Text>
+              <View style={styles.headerRow}>
+                <Text style={[styles.label, { color: theme.accent }]}>Quote of the day · Tap to expand</Text>
+              </View>
               <Text style={[styles.quote, { color: theme.primaryText }]} numberOfLines={3}>
                 "{quote.text}"
               </Text>
@@ -79,6 +92,7 @@ export function DailyQuoteBanner() {
         </View>
       </Animated.View>
 
+      {/* Expanded Modal view */}
       <CenterModal visible={modalOpen} onClose={() => setModalOpen(false)} maxWidth={380}>
         <View style={styles.modalContent}>
           <View style={[styles.modalIcon, { backgroundColor: theme.accentLight }]}>
@@ -89,14 +103,56 @@ export function DailyQuoteBanner() {
             "{quote.text}"
           </Text>
           <Text style={[styles.modalAuthor, { color: theme.secondaryText }]}>— {quote.author}</Text>
-          <Pressable
-            style={[styles.modalBtn, { backgroundColor: theme.accent }]}
-            onPress={() => setModalOpen(false)}
-          >
-            <Text style={styles.modalBtnText}>Close</Text>
-          </Pressable>
+          
+          <View style={styles.modalActionsRow}>
+            <Pressable
+              style={[
+                styles.modalBtn,
+                {
+                  backgroundColor: theme.cardBorder,
+                  flex: 1.5,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: theme.cardBorder,
+                  height: 48,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }
+              ]}
+              onPress={() => setModalOpen(false)}
+            >
+              <Text style={[styles.modalBtnText, { color: theme.primaryText, fontFamily: 'Inter_700Bold', fontSize: 14 }]}>Close</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.modalIconBtn,
+                {
+                  backgroundColor: theme.accent,
+                  flex: 1,
+                  borderRadius: 14,
+                  height: 48,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                }
+              ]}
+              onPress={openShare}
+            >
+              <Share2 size={16} color="#FFF" />
+              <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold', fontSize: 14 }}>Share</Text>
+            </Pressable>
+          </View>
         </View>
       </CenterModal>
+
+      {/* Premium Global Share Sheet */}
+      <GlobalShareSheet
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        contentType="quote"
+        contentData={quote}
+      />
     </>
   );
 }
@@ -125,12 +181,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textCol: { flex: 1 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   label: {
     fontSize: 11,
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    marginBottom: 4,
   },
   quote: {
     fontSize: 14,
@@ -144,7 +204,7 @@ const styles = StyleSheet.create({
   },
   closeBtn: { padding: 4 },
   modalContent: {
-    padding: 28,
+    padding: 24,
     alignItems: 'center',
   },
   modalIcon: {
@@ -163,28 +223,40 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalQuote: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: 'Inter_700Bold',
-    lineHeight: 32,
+    lineHeight: 30,
     textAlign: 'center',
     marginBottom: 16,
   },
   modalAuthor: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
     textAlign: 'center',
     marginBottom: 24,
   },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
   modalBtn: {
-    paddingHorizontal: 32,
-    paddingVertical: 12,
+    flex: 1,
+    height: 48,
     borderRadius: 14,
-    minWidth: 140,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalIconBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBtnText: {
-    color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Inter_700Bold',
   },
 });
+

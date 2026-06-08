@@ -4,12 +4,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import React, { useCallback, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withDelay,
-    withSpring,
-    withTiming
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming
 } from 'react-native-reanimated';
 
 interface AnimatedSplashScreenProps {
@@ -37,7 +37,7 @@ export function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenProps) {
     // Step 3: Full word fades in after "g" is gone (1250ms)
     wordOpacity.value = withDelay(1250, withTiming(1, { duration: 500 }));
 
-    // Step 4: "Barok M." fades in (1800ms)
+    // Step 4: "Barok Labs" fades in (1800ms)
     authorOpacity.value = withDelay(1800, withTiming(1, { duration: 400 }));
 
     // Step 5: Blue blobs fade in (2300ms)
@@ -112,7 +112,7 @@ export function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenProps) {
           <Text style={[styles.wordBlue, { color: theme.accent }]}>.</Text>
         </View>
         <Animated.View style={[styles.brandingRow, authorStyle]}>
-          <Text style={[styles.author, { color: theme.secondaryText }]}>Barok M.</Text>
+          <Text style={[styles.author, { color: theme.secondaryText }]}>Barok Labs</Text>
         </Animated.View>
       </Animated.View>
     </Animated.View>

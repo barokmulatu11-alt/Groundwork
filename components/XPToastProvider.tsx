@@ -1,4 +1,6 @@
 import { AchievementUnlockSheet } from '@/components/AchievementUnlockSheet';
+import { GlobalShareSheet } from '@/components/GlobalShareSheet';
+import { CelebrationModal } from '@/components/ui/CelebrationModal';
 import { Confetti } from '@/components/ui/Confetti';
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
@@ -26,6 +28,10 @@ export function XPToastProvider({ children }: { children: React.ReactNode }) {
   const [showConfetti, setShowConfetti] = useState(false);
   const [achievementSheet, setAchievementSheet] = useState<any>(null);
 
+  // Level-up celebration modal
+  const [levelUpModal, setLevelUpModal] = useState<{ level: number; title: string } | null>(null);
+  const [levelShareOpen, setLevelShareOpen] = useState(false);
+
   useEffect(() => {
     const hide = () => {
       toastY.value = withSpring(-160, { damping: 14, stiffness: 90 });
@@ -46,6 +52,8 @@ export function XPToastProvider({ children }: { children: React.ReactNode }) {
         hapticSuccess();
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 3500);
+        // Show the level-up celebration modal after a brief delay
+        setTimeout(() => setLevelUpModal({ level: event.level, title: event.title }), 600);
         return show({ type: 'LEVEL_UP', level: event.level, title: event.title }, 4000);
       }
 
@@ -131,10 +139,39 @@ export function XPToastProvider({ children }: { children: React.ReactNode }) {
           </View>
         </Animated.View>
       )}
+
+      {/* Achievement unlock sheet with embedded share trigger */}
       <AchievementUnlockSheet
         visible={!!achievementSheet}
         achievement={achievementSheet}
         onClose={() => setAchievementSheet(null)}
+      />
+
+      {/* Level-Up celebration modal */}
+      {levelUpModal && (
+        <CelebrationModal
+          visible={!!levelUpModal}
+          onClose={() => setLevelUpModal(null)}
+          accentColor={theme.success}
+          icon={<ArrowUpCircle size={44} color={theme.success} strokeWidth={2} />}
+          eyebrow="Level Up!"
+          title={`Level ${levelUpModal.level}`}
+          description={`You've reached the "${levelUpModal.title}" rank. Keep the momentum going!`}
+          badge={`Level ${levelUpModal.level} unlocked`}
+          actionLabel="Let's go!"
+          onShare={() => {
+            setLevelUpModal(null);
+            setTimeout(() => setLevelShareOpen(true), 350);
+          }}
+        />
+      )}
+
+      {/* Level-up GlobalShareSheet */}
+      <GlobalShareSheet
+        visible={levelShareOpen}
+        onClose={() => setLevelShareOpen(false)}
+        contentType="level"
+        contentData={levelUpModal ?? { level: 1, title: 'Beginner' }}
       />
     </>
   );

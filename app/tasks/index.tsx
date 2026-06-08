@@ -1,24 +1,25 @@
-import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { AnimatedCard } from '@/components/ui/AnimatedCard';
+import { ProPaywall } from '@/components/ProPaywall';
 import { AddTaskSheet, AddTaskSheetRef } from '@/components/tasks/AddTaskSheet';
 import { EditTaskSheet, EditTaskSheetRef } from '@/components/tasks/EditTaskSheet';
 import { EmptyTaskState } from '@/components/tasks/EmptyTaskState';
 import { SwipeableTaskCard } from '@/components/tasks/SwipeableTaskCard';
 import { TaskCard } from '@/components/tasks/TaskCard';
 import { TaskProgressBar } from '@/components/tasks/TaskProgressBar';
+import { AnimatedCard } from '@/components/ui/AnimatedCard';
+import { AppText as Text } from '@/components/ui/AppText';
 import { TabHeader } from '@/components/ui/TabHeader';
-import { useTheme } from '@/lib/ThemeContext';
-import { useSettingsStore } from '@/store/useSettingsStore';
 import { useTasks } from '@/hooks/useTasks';
 import { useTaskStats } from '@/hooks/useTaskStats';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Activity, CheckCircle2, ChevronLeft, Clock, LayoutGrid, AlignJustify as ListIcon } from 'lucide-react-native';
+import { useTheme } from '@/lib/ThemeContext';
+import { useSettingsStore } from '@/store/useSettingsStore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Activity, CheckCircle2, Clock, Plus } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
-import Animated, { FadeInUp, FadeOutDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
@@ -54,6 +55,7 @@ export default function TasksScreen() {
   const [completedCount, setCompletedCount] = useState(completedTasks.length);
   const [showConfetti, setShowConfetti] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [paywallVisible, setPaywallVisible] = useState(false);
   const hasMountedRef = useRef(false);
 
   useEffect(() => {
@@ -96,6 +98,13 @@ export default function TasksScreen() {
       });
     }
   }, [error, showAlert]);
+
+  const handleAddTask = async (task: any, view?: any) => {
+    const result = await addTask(task, view);
+    if (result && !result.allowed) {
+      setPaywallVisible(true);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -392,24 +401,29 @@ export default function TasksScreen() {
         {activeView === 'Upcoming' && renderUpcoming()}
         {activeView === 'All' && renderAll()}
       </View>
-      <Animated.View style={[styles.fabContainer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-        <Pressable 
-          style={[styles.fab, { backgroundColor: theme.accent, }]} 
-          onPress={() => {
-            const defaultD = activeView === 'Upcoming' ? tomorrowDateStr : todayDate;
-            addTaskRef.current?.open(defaultD);
-          }}
-        >
-          <Text style={styles.fabText}>+ Add Task</Text>
-        </Pressable>
-      </Animated.View>
+      <Pressable 
+        style={[styles.fab, { backgroundColor: theme.accent }]} 
+        onPress={() => {
+          const defaultD = activeView === 'Upcoming' ? tomorrowDateStr : todayDate;
+          addTaskRef.current?.open(defaultD);
+        }}
+      >
+        <Plus size={26} color="#FFF" />
+      </Pressable>
       <AddTaskSheet 
         ref={addTaskRef} 
-        onAdd={(task) => addTask(task as any, activeView)} 
+        onAdd={(task) => handleAddTask(task as any, activeView)} 
       />
       <EditTaskSheet
         ref={editTaskRef}
         onUpdate={(id, updates) => updateTask(id, updates as any)}
+      />
+      <ProPaywall
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+        featureName="Unlimited Tasks"
+        featureDescription="Free users can create up to 100 tasks total. Upgrade to Pro for unlimited task creation."
+        source="tasks_screen"
       />
       {showConfetti && (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -430,8 +444,8 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingBottom: 16 },
   loadingBar: { paddingVertical: 8, alignItems: 'center' },
   statIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  viewToggle: { flexDirection: 'row', borderRadius: 20, padding: 4, marginTop: 16, position: 'relative' },
-  viewIndicator: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: 16 },
+  viewToggle: { flexDirection: 'row', borderRadius: 14, padding: 4, marginTop: 16, position: 'relative' },
+  viewIndicator: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: 10 },
   viewBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, zIndex: 1 },
   viewText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   content: { flex: 1 },
@@ -448,7 +462,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, fontFamily: 'Inter_700Bold', marginVertical: 4 },
   statLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   fabContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24 },
-  fab: { paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
+  fab: { position: 'absolute', right: 20, bottom: 96, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', elevation: 8 },
   fabText: { color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' },
   emptyView: { flex: 1, alignItems: 'center', justifyContent: 'center' }
 });

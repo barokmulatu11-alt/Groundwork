@@ -1,6 +1,5 @@
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
+import notifee, { EventType } from '@/lib/safeNotifee';
+import { supabase } from '@/lib/supabase';
 import {
   Inter_500Medium,
   Inter_600SemiBold,
@@ -8,8 +7,10 @@ import {
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 import { FontAwesome } from '@expo/vector-icons';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import notifee, { EventType } from '@/lib/safeNotifee';
+import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -19,24 +20,22 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
-import * as Linking from 'expo-linking';
-import { supabase } from '@/lib/supabase';
 
+import { AnimatedSplashScreen } from '@/components/AnimatedSplashScreen';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
+import { XPToastProvider } from '@/components/XPToastProvider';
+import { SecurityProvider } from '@/components/security/SecurityProvider';
+import { UniversalRefreshButton } from '@/components/ui/UniversalRefreshButton';
+import { WebAuthHeader } from '@/components/ui/WebAuthHeader';
 import { ThemeProvider, useTheme } from '@/lib/ThemeContext';
-import { initDb } from '@/lib/db';
 import { initConnectDb } from '@/lib/connect/connectDatabase';
+import { initDb } from '@/lib/db';
 import { handleNotificationResponse } from '@/lib/notifications';
 import { useAuthStore } from '@/store/useAuthStore';
 import { startSyncManager } from '@/store/useStore';
-import { SecurityProvider } from '@/components/security/SecurityProvider';
-import { AnimatedSplashScreen } from '@/components/AnimatedSplashScreen';
-import { UniversalRefreshButton } from '@/components/ui/UniversalRefreshButton';
-import { XPToastProvider } from '@/components/XPToastProvider';
-import { WebAuthHeader } from '@/components/ui/WebAuthHeader';
 
 export {
-  ErrorBoundary,
+  ErrorBoundary
 } from 'expo-router';
 
 export const unstable_settings = {
@@ -268,6 +267,8 @@ function RootLayoutNav() {
                 <Stack.Screen name="recap" options={{ headerShown: false }} />
                 <Stack.Screen name="calendar" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
+                <Stack.Screen name="profile" options={{ headerShown: false }} />
+                <Stack.Screen name="journey" options={{ headerShown: false }} />
                 <Stack.Screen name="edit-profile" options={{ presentation: 'modal', headerShown: false }} />
                 <Stack.Screen name="change-password" options={{ presentation: 'modal', headerShown: false }} />
                 <Stack.Screen name="permissions_onboarding" options={{ headerShown: false }} />
@@ -280,6 +281,11 @@ function RootLayoutNav() {
                 <Stack.Screen name="support-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="subscription-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="analytics" options={{ headerShown: false }} />
+                <Stack.Screen name="upgrade" options={{ headerShown: false }} />
+                <Stack.Screen name="payment-history" options={{ headerShown: false }} />
+                <Stack.Screen name="reports" options={{ headerShown: false }} />
+                <Stack.Screen name="revision-insights" options={{ headerShown: false }} />
               </Stack>
               </XPToastProvider>
             </BottomSheetModalProvider>

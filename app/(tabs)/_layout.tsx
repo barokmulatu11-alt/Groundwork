@@ -1,8 +1,9 @@
 import { useTheme } from '@/lib/ThemeContext';
 import { Tabs, usePathname } from 'expo-router';
-import { BookOpen, Home, Menu, Users, Star, MoreHorizontal, ChevronLeft, ChevronRight, LogOut, Zap } from 'lucide-react-native';
+import { Home, Menu, Users, Star, MoreHorizontal, ChevronLeft, ChevronRight, LogOut, Zap } from 'lucide-react-native';
 import React, { useEffect, useRef } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   StyleSheet,
   View,
@@ -100,6 +101,9 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
                 onPress={onPress}
                 style={styles.tabButton}
                 activeOpacity={0.7}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isFocused }}
+                accessibilityLabel={options.title || route.name}
               >
                 <View style={styles.iconWrapper}>
                   {Icon && Icon({ color: isFocused ? theme.accent : theme.secondaryText, focused: isFocused, size: 24 })}
@@ -127,10 +131,21 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 export default function TabLayout() {
   const { theme, isDark } = useTheme();
   const { width } = useWindowDimensions();
-  const { profile, signOut } = useAuthStore();
+  const { profile, signOut, isSigningOut } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const isDesktop = width >= 768;
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    try {
+      await signOut();
+      router.replace('/login');
+    } catch (e) {
+      console.warn('Sign out error:', e);
+      router.replace('/login');
+    }
+  };
 
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
@@ -169,7 +184,6 @@ export default function TabLayout() {
 
   const sidebarRoutes = [
     { name: 'index', title: 'Home', path: '/(tabs)/', Icon: Home },
-    { name: 'courses', title: 'Courses', path: '/(tabs)/courses', Icon: BookOpen },
     { name: 'connect', title: 'Connect', path: '/(tabs)/connect', Icon: Users },
     { name: 'more', title: 'More', path: '/(tabs)/more', Icon: MoreHorizontal },
   ];
@@ -336,21 +350,27 @@ export default function TabLayout() {
 
             {/* Sign out */}
             <TouchableOpacity
-              onPress={() => signOut()}
+              onPress={handleSignOut}
+              disabled={isSigningOut}
               style={[
                 styles.signOutBtn,
                 {
                   borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
                   justifyContent: isCollapsed ? 'center' : 'flex-start',
                   paddingHorizontal: isCollapsed ? 0 : 12,
+                  opacity: isSigningOut ? 0.6 : 1,
                 }
               ]}
               activeOpacity={0.7}
             >
-              <LogOut size={14} color={theme.danger} strokeWidth={2} />
+              {isSigningOut ? (
+                <ActivityIndicator size="small" color={theme.danger} />
+              ) : (
+                <LogOut size={14} color={theme.danger} strokeWidth={2} />
+              )}
               <Animated.View style={{ opacity: contentOpacity, marginLeft: 8 }} pointerEvents={isCollapsed ? 'none' : 'auto'}>
                 <Text style={{ color: theme.danger, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
-                  Sign Out
+                  {isSigningOut ? 'Signing out...' : 'Sign Out'}
                 </Text>
               </Animated.View>
             </TouchableOpacity>
@@ -368,13 +388,6 @@ export default function TabLayout() {
               options={{
                 title: 'Home',
                 tabBarIcon: ({ color }) => <Home size={22} color={color} />,
-              }}
-            />
-            <Tabs.Screen
-              name="courses"
-              options={{
-                title: 'Courses',
-                tabBarIcon: ({ color }) => <BookOpen size={22} color={color} />,
               }}
             />
             <Tabs.Screen
@@ -407,13 +420,6 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <Home size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="courses"
-        options={{
-          title: 'Courses',
-          tabBarIcon: ({ color }) => <BookOpen size={22} color={color} />,
         }}
       />
       <Tabs.Screen

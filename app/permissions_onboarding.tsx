@@ -44,7 +44,7 @@ const STEPS = [
     id: 'files',
     icon: Folder,
     title: 'File Access',
-    description: 'File access lets you attach PDFs, documents and other files to your notes and download course materials for offline use. Your files are never shared.',
+    description: 'File access lets you attach PDFs, documents and other files to your notes and save documents for offline use. Your files are never shared.',
     action: async () => true,
   },
 ];

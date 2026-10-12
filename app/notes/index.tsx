@@ -48,7 +48,7 @@ const SPACE_META: Record<string, { icon: typeof FileText; color: string }> = {
 export default function NotesScreen() {
   const router = useRouter();
   const { notes, loadNotes, deleteNote, updateNote } = useStore();
-  const { session } = useAuthStore();
+  const { session, isGuest } = useAuthStore();
   const { theme } = useTheme();
   const { notesLayout, setNotesLayout } = useSettingsStore();
   const insets = useSafeAreaInsets();
@@ -71,10 +71,10 @@ export default function NotesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!session) return;
+      if (!session && !isGuest) return;
       setNotesLoading(true);
       loadNotes().finally(() => setNotesLoading(false));
-    }, [session, loadNotes])
+    }, [session, isGuest, loadNotes])
   );
 
   const onRefresh = useCallback(async () => {
@@ -173,7 +173,7 @@ export default function NotesScreen() {
     setRevealedSections(new Set());
   };
 
-  if (!session) {
+  if (!session && !isGuest) {
     return (
       <BackgroundGradient>
         <View style={[styles.centered, { paddingHorizontal: 24 }]}>
@@ -197,6 +197,9 @@ export default function NotesScreen() {
         return (
           <Pressable
             key={tab}
+            testID={`notes-tab-${tab.toLowerCase()}`}
+            accessibilityRole="tab"
+            accessibilityLabel={`${tab} tab`}
             onPress={() => { setActiveTab(tab); if (tab !== 'Study') setRevisionNoteId(null); }}
             style={[styles.tab, active && { backgroundColor: theme.accent, borderColor: theme.accent }]}
           >
@@ -216,12 +219,15 @@ export default function NotesScreen() {
 
       <View style={styles.captureRow}>
         {[
-          { label: 'Write', icon: PenLine, color: theme.accent, onPress: () => router.push('/notes/new') },
-          { label: 'Voice', icon: Mic, color: '#34C759', onPress: () => router.push('/notes/new?mode=voice' as any) },
-          { label: 'Quick', icon: Zap, color: '#FF9500', onPress: () => setQuickThoughtVisible(true) },
+          { label: 'Write', testID: 'notes-write-btn', icon: PenLine, color: theme.accent, onPress: () => router.push('/notes/new') },
+          { label: 'Voice', testID: 'notes-voice-btn', icon: Mic, color: '#34C759', onPress: () => router.push('/notes/new?mode=voice' as any) },
+          { label: 'Quick', testID: 'notes-quick-btn', icon: Zap, color: '#FF9500', onPress: () => setQuickThoughtVisible(true) },
         ].map(item => (
           <Pressable
             key={item.label}
+            testID={item.testID}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
             onPress={item.onPress}
             style={[styles.captureBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
           >
@@ -243,6 +249,9 @@ export default function NotesScreen() {
               return (
                 <Pressable
                   key={note.id}
+                  testID={`note-recent-card-${note.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open note ${note.title || 'Untitled'}`}
                   onPress={() => router.push(`/notes/${note.id}`)}
                   style={[styles.recentCard, { backgroundColor: meta.color }]}
                 >
@@ -310,6 +319,7 @@ export default function NotesScreen() {
       <View style={[styles.searchBox, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
         <Search size={18} color={theme.secondaryText} />
         <TextInput
+          testID="notes-search-input"
           style={[styles.searchInput, { color: theme.primaryText }]}
           placeholder="Search notes, tags, spaces…"
           placeholderTextColor={theme.secondaryText}
@@ -501,7 +511,13 @@ export default function NotesScreen() {
         {activeTab === 'Study' && renderStudy()}
       </ScrollView>
 
-      <Pressable onPress={() => setFabOpen(true)} style={[styles.fab, { backgroundColor: theme.accent }]}>
+      <Pressable 
+        testID="notes-fab-btn"
+        accessibilityRole="button"
+        accessibilityLabel="Create Note"
+        onPress={() => setFabOpen(true)} 
+        style={[styles.fab, { backgroundColor: theme.accent }]}
+      >
         <Plus size={26} color="#FFF" />
       </Pressable>
 
@@ -511,6 +527,9 @@ export default function NotesScreen() {
             {fabActions.map((action, i) => (
               <Animated.View key={action.label} entering={FadeInDown.delay(i * 50)}>
                 <Pressable
+                  testID={`notes-fab-${action.label.toLowerCase()}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
                   onPress={action.onPress}
                   style={[styles.fabItem, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder }]}
                 >
@@ -529,6 +548,8 @@ export default function NotesScreen() {
         title="Quick capture"
       >
         <TextInput
+          testID="notes-quick-input"
+          accessibilityLabel="Quick capture note text"
           style={[styles.quickInput, { color: theme.primaryText, backgroundColor: theme.card, borderColor: theme.cardBorder }]}
           placeholder="Jot it down…"
           placeholderTextColor={theme.secondaryText}
@@ -541,7 +562,13 @@ export default function NotesScreen() {
           <Pressable onPress={() => setQuickThoughtVisible(false)} style={[styles.quickBtn, { backgroundColor: theme.card }]}>
             <Text style={{ color: theme.secondaryText, fontFamily: 'Inter_700Bold' }}>Cancel</Text>
           </Pressable>
-          <Pressable onPress={handleQuickThought} style={[styles.quickBtn, { backgroundColor: theme.accent }]}>
+          <Pressable 
+            testID="notes-quick-save-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Save Quick Note"
+            onPress={handleQuickThought} 
+            style={[styles.quickBtn, { backgroundColor: theme.accent }]}
+          >
             <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold' }}>Save</Text>
           </Pressable>
         </View>

@@ -1,9 +1,11 @@
 import { BackgroundGradient } from "@/components/BackgroundGradient";
-import { AppText as Text } from "@/components/ui/AppText";
 import { ProPaywall } from "@/components/ProPaywall";
-import { hapticLight, hapticSelection } from "@/lib/haptics";
+import { AppText as Text } from "@/components/ui/AppText";
+import { hapticLight, hapticSelection, hapticSuccess } from "@/lib/haptics";
+import { LOGO_VARIANTS, LogoVariant, LogoVariantId, useLogoStore } from "@/lib/logoStore";
 import { PREMIUM_THEMES } from "@/lib/premiumThemes";
 import { canUsePremiumTheme, trackProEvent } from "@/lib/subscriptionService";
+import { isRewardUnlocked, initializeAccountRewards } from "@/lib/rewardsService";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -18,8 +20,9 @@ import {
     Moon,
     Sparkles,
     Sun,
+    Award,
 } from "lucide-react-native";
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
     Animated,
     Easing,
@@ -63,6 +66,7 @@ const ACCENT_COLORS = [
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
+// Renders an uppercase section header label
 function SectionLabel({ label, theme }: { label: string; theme: any }) {
   return (
     <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>
@@ -79,6 +83,7 @@ interface SegmentedControlProps {
   accentColor: string;
 }
 
+// A row of pressable segments where only one can be active at a time (like a tab bar)
 function SegmentedControl({
   options,
   value,
@@ -93,6 +98,9 @@ function SegmentedControl({
         return (
           <Pressable
             key={opt.value}
+            testID={`theme-segment-${opt.value}`}
+            accessibilityRole="button"
+            accessibilityLabel={`${opt.label} theme`}
             onPress={() => onChange(opt.value)}
             style={[
               styles.segmentButton,
@@ -123,6 +131,7 @@ function SegmentedControl({
   );
 }
 
+// A rounded container card used to group related settings
 function Card({ children, theme }: { children: React.ReactNode; theme: any }) {
   return (
     <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -140,6 +149,7 @@ interface AccentColorPillProps {
   onPress: () => void;
 }
 
+// A circular color swatch with a spring scale animation. Tapping selects the accent color.
 function AccentColorPill({
   color,
   name,
@@ -175,6 +185,9 @@ function AccentColorPill({
       ]}
     >
       <Pressable
+        testID={`accent-color-${name.toLowerCase().replace(/\s+/g, '-')}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Accent color ${name}`}
         onPress={handlePress}
         style={[
           styles.accentPill,
@@ -214,6 +227,8 @@ interface CompactThemePillProps {
   onPreviewPress?: () => void;
 }
 
+// A compact pill for premium themes — shows a gradient preview, lock icon for Pro-gated items,
+// and handles tap-to-unlock or preview flows depending on subscription status
 function CompactThemePill({
   themeItem,
   isSelected,
@@ -316,8 +331,307 @@ function CompactThemePill({
   );
 }
 
+// ─── Logo Mark (inline renderer, no image assets) ────────────────────────────
+
+// Renders the "g." logo mark as pure RN primitives — no image files needed.
+// Supports gradient backgrounds, glow effects, and responsive sizing.
+function LogoMark({ variant, size = "md" }: { variant: LogoVariant; size?: "sm" | "md" }) {
+  const dim = size === "sm" ? 52 : 72;
+  const fontSize = size === "sm" ? 24 : 34;
+  const radius = size === "sm" ? 14 : 20;
+
+  const textStyle = {
+    fontSize,
+    fontFamily: "Inter_800ExtraBold" as const,
+    letterSpacing: -1,
+    includeFontPadding: false,
+    textAlignVertical: "center" as const,
+    lineHeight: dim * 0.75,
+    height: dim,
+    textAlign: "center" as const,
+  };
+
+  return (
+    <View
+      style={{
+        width: dim, height: dim, borderRadius: radius,
+        backgroundColor: variant.background,
+        alignItems: "center", justifyContent: "center",
+        shadowColor: variant.glowColor ?? variant.letterColor,
+        shadowOpacity: variant.glowColor ? 0.65 : 0.18,
+        shadowRadius: variant.glowColor ? 18 : 6,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: variant.glowColor ? 10 : 3,
+      }}
+    >
+      {variant.isGradient ? (
+        <LinearGradient
+          colors={[variant.letterColor, variant.letterColorSecondary]}
+          start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
+          style={{ width: dim, height: dim, borderRadius: radius, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ ...textStyle, color: "#fff" }}>g.</Text>
+        </LinearGradient>
+      ) : (
+        <Text style={{
+          ...textStyle,
+          color: variant.letterColor,
+          textShadowColor: variant.glowColor ?? "transparent",
+          textShadowRadius: variant.glowColor ? 14 : 0,
+          textShadowOffset: { width: 0, height: 0 },
+        }}>g.</Text>
+      )}
+    </View>
+  );
+}
+
+// ─── Logo Center Inline Component ────────────────────────────────────────────
+
+// Embedded logo picker — lets users browse, preview, and apply logo variants
+function LogoCenterInline({ theme, isDark, accentColor, isPro, router }: {
+  theme: any; isDark: boolean; accentColor: string; isPro: boolean; router: any;
+}) {
+  const { selectedLogoId, setSelectedLogo, loadSavedLogo, isLoaded } = useLogoStore();
+  const [previewId, setPreviewId] = useState<LogoVariantId>(selectedLogoId);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => { if (!isLoaded) loadSavedLogo(); }, []);
+  useEffect(() => { setPreviewId(selectedLogoId); }, [selectedLogoId]);
+
+  const previewVariant = LOGO_VARIANTS.find((v) => v.id === previewId) ?? LOGO_VARIANTS[0];
+  const selectedVariant = LOGO_VARIANTS.find((v) => v.id === selectedLogoId) ?? LOGO_VARIANTS[0];
+  const isApplyDisabled = previewId === selectedLogoId;
+
+  const handleApply = async () => {
+    if (previewVariant.isPro && !isPro) {
+      router.push("/rewards" as any);
+      return;
+    }
+    await setSelectedLogo(previewId);
+    hapticSuccess();
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
+  };
+
+  return (
+    <View>
+      {/* Milestone hint for locked variants */}
+      {!isPro && (
+        <View style={[lcStyles.proHint, { backgroundColor: accentColor + "14", borderColor: accentColor + "33" }]}>
+          <Award size={12} color={accentColor} />
+          <Text style={[lcStyles.proHintText, { color: accentColor }]}>
+            Exclusive logo variants unlock through Milestone Rewards. Tap any to preview.
+          </Text>
+        </View>
+      )}
+
+      {/* Gallery grid */}
+      <View style={lcStyles.grid}>
+        {LOGO_VARIANTS.map((variant) => (
+          <LogoVariantCard
+            key={variant.id}
+            variant={variant}
+            isSelected={variant.id === previewId}
+            isApplied={variant.id === selectedLogoId}
+            isPro={isPro}
+            accentColor={accentColor}
+            theme={theme}
+            onPress={() => {
+              hapticSelection();
+              setPreviewId(variant.id);
+            }}
+          />
+        ))}
+      </View>
+
+      {/* Preview strip */}
+      <View style={[lcStyles.previewStrip, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+        <LogoMark variant={previewVariant} size="md" />
+        <View style={{ flex: 1, marginLeft: 14 }}>
+          <Text style={[lcStyles.previewName, { color: theme.primaryText }]}>{previewVariant.name}</Text>
+          <Text style={[lcStyles.previewTagline, { color: theme.secondaryText }]}>{previewVariant.tagline}</Text>
+        </View>
+        {previewVariant.isPro && !isPro && (
+          <View style={[lcStyles.lockedBadge, { backgroundColor: accentColor + "14", borderColor: accentColor + "33" }]}>
+            <Lock size={11} color={accentColor} />
+            <Text style={[lcStyles.lockedBadgeText, { color: accentColor }]}>PRO</Text>
+          </View>
+        )}
+        {previewVariant.id === selectedLogoId && (
+          <View style={[lcStyles.activeBadge, { backgroundColor: accentColor + "18", borderColor: accentColor + "40" }]}>
+            <Text style={[lcStyles.activeBadgeText, { color: accentColor }]}>Active</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Apply button */}
+      {saveSuccess ? (
+        <View style={[lcStyles.successRow, { backgroundColor: "#34C75918", borderColor: "#34C75940" }]}>
+          <Check size={15} color="#34C759" />
+          <Text style={[lcStyles.successText, { color: "#34C759" }]}>Logo applied!</Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          testID="apply-logo-btn"
+          accessibilityRole="button"
+          accessibilityLabel="Apply Logo Variant"
+          onPress={handleApply}
+          activeOpacity={0.85}
+          style={[lcStyles.applyBtn, {
+            backgroundColor: (isApplyDisabled && !(previewVariant.isPro && !isPro))
+              ? accentColor + "55" : accentColor,
+          }]}
+        >
+          {previewVariant.isPro && !isPro ? (
+            <><Award size={15} color="#fff" /><Text style={lcStyles.applyBtnText}>View Milestone to Unlock</Text></>
+          ) : (
+            <Text style={lcStyles.applyBtnText}>
+              {isApplyDisabled ? "Already Applied" : `Apply ${previewVariant.name}`}
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      <Text style={[lcStyles.hint, { color: theme.tertiaryText }]}>
+        Saved locally on this device only.
+      </Text>
+    </View>
+  );
+}
+
+// ─── Logo Variant Card ────────────────────────────────────────────────────────
+
+// A single logo option in the gallery grid — shows the logo preview, name, PRO tag, and selection state
+function LogoVariantCard({ variant, isSelected, isApplied, isPro, accentColor, theme, onPress }: {
+  variant: LogoVariant; isSelected: boolean; isApplied: boolean;
+  isPro: boolean; accentColor: string; theme: any; onPress: () => void;
+}) {
+  const isLocked = variant.isPro && !isPro;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.93, duration: 70, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 180, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <Animated.View style={[lcStyles.variantCardWrap, { transform: [{ scale: scaleAnim }] }]}>
+      <Pressable
+        testID={`logo-variant-${variant.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Logo variant ${variant.name}`}
+        onPress={handlePress}
+        style={[
+          lcStyles.variantCard,
+          {
+            backgroundColor: theme.card,
+            borderColor: isSelected ? accentColor : theme.cardBorder,
+            borderWidth: isSelected ? 2 : 1,
+          },
+        ]}
+      >
+        {/* Logo preview area */}
+        <View style={lcStyles.variantLogoArea}>
+          <LogoMark variant={variant} size="sm" />
+        </View>
+
+        {/* Footer */}
+        <View style={[lcStyles.variantFooter, { borderTopColor: theme.cardBorder }]}>
+          <Text style={[lcStyles.variantName, { color: theme.primaryText }]} numberOfLines={1}>
+            {variant.name.replace("Groundwork ", "")}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+            {isLocked && <Crown size={9} color={accentColor} />}
+            {isLocked && <Text style={[lcStyles.variantTag, { color: accentColor }]}>PRO</Text>}
+          </View>
+        </View>
+
+        {/* Selection check */}
+        {isSelected && (
+          <View style={[lcStyles.checkBadge, { backgroundColor: accentColor }]}>
+            <Check size={10} color="#fff" strokeWidth={3} />
+          </View>
+        )}
+
+        {/* Applied dot */}
+        {isApplied && !isSelected && (
+          <View style={[lcStyles.appliedDot, { backgroundColor: accentColor }]} />
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// ─── Logo Center Styles ───────────────────────────────────────────────────────
+
+const lcStyles = StyleSheet.create({
+  proHint: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12,
+  },
+  proHintText: { fontSize: 12, fontFamily: "Inter_600SemiBold", flex: 1, lineHeight: 17 },
+
+  grid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 14,
+  },
+  variantCardWrap: { width: "47%", flexGrow: 1 },
+  variantCard: {
+    borderRadius: 16, overflow: "hidden", borderWidth: 1, position: "relative",
+  },
+  variantLogoArea: {
+    alignItems: "center", justifyContent: "center", paddingVertical: 20,
+  },
+  variantFooter: {
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  variantName: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  variantTag: { fontSize: 9, fontFamily: "Inter_800ExtraBold", letterSpacing: 0.5 },
+  checkBadge: {
+    position: "absolute", top: 8, right: 8,
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
+  appliedDot: {
+    position: "absolute", top: 10, right: 10,
+    width: 8, height: 8, borderRadius: 4,
+  },
+
+  previewStrip: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 18, borderWidth: 1, padding: 14, marginBottom: 14,
+  },
+  previewName: { fontSize: 15, fontFamily: "Inter_700Bold", marginBottom: 3 },
+  previewTagline: { fontSize: 12, fontFamily: "Inter_500Medium", lineHeight: 17 },
+  lockedBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1,
+  },
+  lockedBadgeText: { fontSize: 10, fontFamily: "Inter_800ExtraBold", letterSpacing: 0.5 },
+  activeBadge: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1,
+  },
+  activeBadgeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+
+  applyBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 14, borderRadius: 16, marginBottom: 10,
+  },
+  applyBtnText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff" },
+  successRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 14, borderRadius: 16, borderWidth: 1, marginBottom: 10,
+  },
+  successText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  hint: { fontSize: 11, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 4 },
+});
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
+// Main appearance settings screen — theme mode, accent color, premium themes, font size, and logo picker
 export default function AppearanceSettingsScreen() {
   const { theme, isDark, showAlert, previewTheme, clearPreview } = useTheme();
   const insets = useSafeAreaInsets();
@@ -334,9 +648,15 @@ export default function AppearanceSettingsScreen() {
     setPremiumThemeId,
   } = useSettingsStore();
   const { profile, session } = useAuthStore();
+  const [, setRewardsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const userId = session?.user?.id || 'guest';
+    initializeAccountRewards(userId).then(() => setRewardsReady(true));
+  }, [session?.user?.id]);
 
   const isPro =
-    profile?.pro_status || session?.user?.user_metadata?.is_pro || false;
+    profile?.pro_status || session?.user?.user_metadata?.is_pro || isRewardUnlocked('premium_themes') || false;
 
   const [paywallVisible, setPaywallVisible] = React.useState(false);
 
@@ -387,7 +707,7 @@ export default function AppearanceSettingsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 40 },
+          { paddingBottom: insets.bottom + 90 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -469,12 +789,12 @@ export default function AppearanceSettingsScreen() {
           </View>
           {!isPro && (
             <TouchableOpacity
-              onPress={() => router.push("/subscription-settings" as any)}
+              onPress={() => router.push("/rewards" as any)}
               activeOpacity={0.75}
               style={[styles.unlockProBtn, { backgroundColor: accentColor }]}
             >
-              <Crown size={11} color="#FFF" />
-              <Text style={styles.unlockProBtnText}>Upgrade</Text>
+              <Award size={11} color="#FFF" />
+              <Text style={styles.unlockProBtnText}>Milestones</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -499,12 +819,12 @@ export default function AppearanceSettingsScreen() {
               onPreviewPress={() => {
                 previewTheme(themeItem.id);
                 showAlert({
-                  title: "Previewing True Black",
+                  title: `Previewing ${themeItem.name}`,
                   message:
-                    "You are previewing True Black temporarily. To permanently unlock True Black, upgrade to Groundwork Pro.",
+                    `You are previewing ${themeItem.name} temporarily. Unlock all premium themes through Milestone Rewards.`,
                   primaryButton: {
-                    text: "Upgrade to Pro",
-                    onPress: () => router.push("/subscription-settings" as any),
+                    text: "View Rewards",
+                    onPress: () => router.push("/rewards" as any),
                   },
                   secondaryButton: {
                     text: "Close Preview",
@@ -580,20 +900,8 @@ export default function AppearanceSettingsScreen() {
         </Card>
 
         {/* ── APP ICON ──────────────────────────── */}
-        <SectionLabel label="APP ICON" theme={theme} />
-        <Card theme={theme}>
-          <View style={{ padding: 20, alignItems: "center" }}>
-            <Text
-              style={{
-                fontSize: 15,
-                fontFamily: "Inter_600SemiBold",
-                color: theme.secondaryText,
-              }}
-            >
-              Coming real soon...
-            </Text>
-          </View>
-        </Card>
+        <SectionLabel label="APP ICON & BRANDING" theme={theme} />
+        <LogoCenterInline theme={theme} isDark={isDark} accentColor={accentColor} isPro={isPro} router={router} />
       </ScrollView>
 
       <ProPaywall

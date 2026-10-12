@@ -1,6 +1,7 @@
 import { CustomAlert } from "@/components/ui/CustomAlert";
 import { useTheme } from "@/lib/ThemeContext";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
+import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
@@ -49,7 +50,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import ViewShot, { ViewShotRef } from "react-native-view-shot";
+import ViewShot from "react-native-view-shot";
+type ViewShotRef = any;
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -261,9 +263,9 @@ export function GlobalShareSheet({
   const [templates, setTemplates] = useState<SavedTemplate[]>([]);
   const [newTemplateName, setNewTemplateName] = useState("");
 
-  // Pro paywall / Dialog UI
+  // Milestone rewards / Dialog UI
+  const router = useRouter();
   const [showProAlert, setShowProAlert] = useState(false);
-  const [showProUnavailableAlert, setShowProUnavailableAlert] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -2697,66 +2699,22 @@ export function GlobalShareSheet({
         </View>
       </Modal>
 
-      {/* Pro paywall */}
+      {/* Milestone Rewards alert */}
       <CustomAlert
         visible={showProAlert}
         type="info"
-        title="Groundwork Pro"
-        message="Removing the branding logo is a premium feature. Upgrade to Groundwork Pro to customize cards fully!"
-        confirmText="Upgrade Now"
+        title="Milestone Reward"
+        message="Watermark-free exports unlock through Groundwork Milestone Rewards. Complete your focus and habit goals to unlock custom studio cards!"
+        confirmText="View Milestones"
         cancelText="Maybe Later"
         showCancel
         onConfirm={() => {
           hapticLight();
           setShowProAlert(false);
-          setTimeout(() => setShowProUnavailableAlert(true), 400);
+          router.push('/rewards' as any);
         }}
         onCancel={() => setShowProAlert(false)}
       />
-
-      {/* Pro unavailable banner */}
-      <Modal transparent visible={showProUnavailableAlert} animationType="fade">
-        <View style={styles.paywallOverlay}>
-          <View
-            style={[
-              styles.paywallBox,
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.cardBorder,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.paywallIconContainer,
-                { backgroundColor: theme.accentLight },
-              ]}
-            >
-              <Lock size={32} color={theme.accent} />
-            </View>
-            <Text style={[styles.paywallTitle, { color: theme.primaryText }]}>
-              Groundwork Pro
-            </Text>
-            <Text style={[styles.paywallSubtitle, { color: theme.accent }]}>
-              Pro Access Offline
-            </Text>
-            <Text style={[styles.paywallText, { color: theme.secondaryText }]}>
-              Our premium membership tier is currently undergoing seasonal
-              updates. Check back soon for exclusive access to custom templates
-              and logo removal!
-            </Text>
-            <Pressable
-              style={[styles.paywallBtn, { backgroundColor: theme.accent }]}
-              onPress={() => {
-                hapticLight();
-                setShowProUnavailableAlert(false);
-              }}
-            >
-              <Text style={styles.paywallBtnText}>Got it</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </>
   );
 }

@@ -72,6 +72,9 @@ export function CustomAlert({
           <View style={styles.buttonRow}>
             {showCancel && (
               <Pressable 
+                testID={`alert-btn-${String(cancelText || 'cancel').toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                accessibilityRole="button"
+                accessibilityLabel={cancelText}
                 style={[styles.button, styles.cancelBtn, { borderColor: theme.cardBorder }]} 
                 onPress={onCancel}
               >
@@ -79,6 +82,9 @@ export function CustomAlert({
               </Pressable>
             )}
             <Pressable 
+              testID={`alert-btn-${String(confirmText || 'confirm').toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+              accessibilityRole="button"
+              accessibilityLabel={confirmText}
               style={[styles.button, { backgroundColor: accentColor }]} 
               onPress={onConfirm}
             >

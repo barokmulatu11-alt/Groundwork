@@ -1,7 +1,7 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import React from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, Pressable } from 'react-native';
-import { Edit2, CheckCircle2 } from 'lucide-react-native';
+import { Edit2, CheckCircle2, Sparkles } from 'lucide-react-native';
 import { useTheme } from '@/lib/ThemeContext';
 import { AnimatedCard } from './AnimatedCard';
 
@@ -10,6 +10,7 @@ interface ProfileHeaderProps {
   username: string;
   email: string;
   avatarUri?: string;
+  isGuest?: boolean;
   isPro?: boolean;
   isOwner?: boolean;
   isAdmin?: boolean;
@@ -22,6 +23,7 @@ export function ProfileHeader({
   username, 
   email, 
   avatarUri,
+  isGuest = false,
   isPro = false,
   isOwner = false,
   isAdmin = false,
@@ -30,11 +32,14 @@ export function ProfileHeader({
 }: ProfileHeaderProps) {
   const { theme, isDark, showAlert } = useTheme();
   
-  const handleTagPress = (type: 'owner' | 'admin' | 'moderator' | 'pro' | 'member') => {
+  const handleTagPress = (type: 'owner' | 'admin' | 'moderator' | 'pro' | 'member' | 'guest') => {
     let title = "";
     let message = "";
     
-    if (type === 'owner') {
+    if (type === 'guest') {
+      title = "Guest Mode";
+      message = "You are using Groundwork locally without an account. All your habits, tasks, and notes stay safely on this device. Sign in anytime to sync across devices!";
+    } else if (type === 'owner') {
       title = "Platform Owner";
       message = "You are the creator and owner of groundwork. You have full access to the system, dashboard, and settings.";
     } else if (type === 'admin') {
@@ -136,15 +141,27 @@ export function ProfileHeader({
           </TouchableOpacity>
         )}
 
-        {!isOwner && !isAdmin && !isModerator && !isPro && (
+        {isGuest ? (
+          <TouchableOpacity 
+            onPress={() => handleTagPress('guest')}
+            style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(245,158,11,0.15)' : 'rgba(245,158,11,0.1)' }]}
+            accessibilityRole="button"
+            accessibilityLabel="Guest Mode (Local Only)"
+          >
+            <Sparkles size={12} color="#F59E0B" />
+            <Text style={[styles.statText, { color: '#F59E0B' }]}>Guest (Local)</Text>
+          </TouchableOpacity>
+        ) : !isOwner && !isAdmin && !isModerator && !isPro ? (
           <TouchableOpacity 
             onPress={() => handleTagPress('member')}
             style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(0,122,255,0.15)' : 'rgba(0,122,255,0.1)' }]}
+            accessibilityRole="button"
+            accessibilityLabel="Member Account"
           >
             <CheckCircle2 size={12} color={theme.accent} />
             <Text style={[styles.statText, { color: theme.accent }]}>Member</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
     </AnimatedCard>
   );

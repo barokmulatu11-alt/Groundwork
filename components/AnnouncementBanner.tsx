@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Pressable, LayoutAnimation } from 'react-native';
 import { AppText as Text } from './ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
-import { supabase } from '@/lib/supabase';
+import { neonData as supabase } from '@/lib/neon';
 import { Info, AlertTriangle, X, Megaphone } from 'lucide-react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 

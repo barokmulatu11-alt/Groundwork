@@ -1,6 +1,6 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import React from 'react';
-import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { View, StyleSheet, Dimensions, Pressable, Platform } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { 
   useSharedValue, 
@@ -25,6 +25,7 @@ interface Props {
   onUpdate: (updates: Partial<Task>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onEdit?: () => void;
 }
 
 export const SwipeableTaskCard = (props: Props) => {
@@ -72,7 +73,7 @@ export const SwipeableTaskCard = (props: Props) => {
     opacity: interpolate(translateX.value, [0, -ACTION_WIDTH], [0, 1], Extrapolate.CLAMP)
   }));
 
-  if (props.task.completed) {
+  if (props.task.completed || Platform.OS === 'web') {
     return <TaskCard {...props} onToggleComplete={props.onComplete} />;
   }
 

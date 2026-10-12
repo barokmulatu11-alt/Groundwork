@@ -17,7 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Bold, Camera, ChevronLeft, Image as ImageIcon, Italic, Link, List, ListOrdered,
   Lock, Mic, MoreHorizontal, PenTool, Pin, Redo, Square, Strikethrough, Trash2,
-  Underline, Undo, Unlock, X, Plus, Calculator,
+  Underline, Undo, Unlock, X, Plus, Calculator, Download,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -91,6 +91,8 @@ export default function NoteEditorScreen() {
   const lastDraftSigRef = useRef<string>('');
   const startTimeRef = useRef(Date.now());
   const autoStartRecorded = useRef(false);
+  const webRecorderRef = useRef<any>(null);
+  const webChunksRef = useRef<any[]>([]);
 
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -122,6 +124,10 @@ export default function NoteEditorScreen() {
   }, []);
 
   const authenticateToUnlock = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      setIsAuthenticated(true);
+      return;
+    }
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
     if (hasHardware && isEnrolled) {
@@ -232,6 +238,43 @@ export default function NoteEditorScreen() {
       setAlertVisible(true);
       return;
     }
+
+    if (Platform.OS === 'web') {
+      try {
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia && typeof (window as any).MediaRecorder !== 'undefined') {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mediaRecorder = new (window as any).MediaRecorder(stream);
+          webChunksRef.current = [];
+          mediaRecorder.ondataavailable = (e: any) => {
+            if (e.data && e.data.size > 0) {
+              webChunksRef.current.push(e.data);
+            }
+          };
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(webChunksRef.current, { type: 'audio/webm' });
+            stream.getTracks().forEach(track => track.stop());
+            try {
+              const { saveAudioRecording } = await import('@/lib/audioStorage');
+              const { permanentId } = await saveAudioRecording(blob);
+              setAudioUris(prev => [...prev, permanentId]);
+            } catch (saveErr) {
+              console.warn('[NoteEditor] Failed to save audio to durable storage, using fallback:', saveErr);
+              const fallbackUrl = URL.createObjectURL(blob);
+              setAudioUris(prev => [...prev, fallbackUrl]);
+            }
+          };
+          mediaRecorder.start();
+          webRecorderRef.current = mediaRecorder;
+          setIsRecording(true);
+          return;
+        }
+      } catch (err) {
+        setAlertConfig({ title: 'Recording error', message: 'Could not access browser microphone.', type: 'error' });
+        setAlertVisible(true);
+        return;
+      }
+    }
+
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -252,6 +295,15 @@ export default function NoteEditorScreen() {
   };
 
   const stopRecording = async () => {
+    if (Platform.OS === 'web') {
+      if (webRecorderRef.current && webRecorderRef.current.state !== 'inactive') {
+        webRecorderRef.current.stop();
+        webRecorderRef.current = null;
+      }
+      setIsRecording(false);
+      return;
+    }
+
     if (!recording) return;
     try {
       setIsRecording(false);
@@ -287,6 +339,33 @@ export default function NoteEditorScreen() {
       return;
     }
     const hoursSpent = (Date.now() - startTimeRef.current) / 3600000;
+
+    // Preserve local audio while safely attempting cloud sync for authenticated users
+    let finalAudioUris = [...audioUris];
+    try {
+      const { useAuthStore } = await import('@/store/useAuthStore');
+      const sessionUser = useAuthStore.getState().session?.user;
+      if (sessionUser?.id && sessionUser.id !== 'guest') {
+        const { syncAudioToCloud } = await import('@/lib/audioStorage');
+        finalAudioUris = await Promise.all(
+          audioUris.map(async (uri) => {
+            if (uri.startsWith('gw_audio_') || uri.startsWith('file://')) {
+              try {
+                const cloudRef = await syncAudioToCloud(uri, sessionUser.id);
+                return cloudRef || uri; // Preserve local URI if upload failed
+              } catch (e) {
+                console.warn('[NoteEditor] Audio cloud upload deferred to sync manager:', e);
+                return uri;
+              }
+            }
+            return uri;
+          })
+        );
+      }
+    } catch (err) {
+      console.warn('[NoteEditor] Cloud sync error during note save:', err);
+    }
+
     const noteData = {
       title: title.trim(),
       content: cleanedContent,
@@ -294,7 +373,7 @@ export default function NoteEditorScreen() {
       is_pinned: isPinned,
       tags,
       image_uris: imageUris,
-      audio_uris: audioUris,
+      audio_uris: finalAudioUris,
       drawing_uris: drawingUris,
       priority,
       folder,
@@ -303,8 +382,8 @@ export default function NoteEditorScreen() {
       study_hours: (existingNote?.study_hours || 0) + hoursSpent,
       revision_score: existingNote?.revision_score || 0,
       last_reviewed_at: existingNote?.last_reviewed_at || null,
-      media_uri: imageUris[0] || audioUris[0] || null,
-      media_type: imageUris.length > 0 ? 'image' : (audioUris.length > 0 ? 'audio' : null) as 'image' | 'audio' | null,
+      media_uri: imageUris[0] || finalAudioUris[0] || null,
+      media_type: imageUris.length > 0 ? 'image' : (finalAudioUris.length > 0 ? 'audio' : null) as 'image' | 'audio' | null,
     };
     if (isNew) {
       await addNote(noteData);
@@ -314,6 +393,52 @@ export default function NoteEditorScreen() {
       await updateNote(id as string, noteData);
     }
     router.back();
+  };
+
+  const handleExportMarkdown = async () => {
+    const { ensureRewardsInitialized, isRewardUnlocked } = await import('@/lib/rewardsService');
+    await ensureRewardsInitialized();
+    if (!isRewardUnlocked('note_export')) {
+      setAlertConfig({
+        title: 'Milestone Locked',
+        message: 'Complete 25 tasks to unlock Note Export. Check your progress in Milestone Rewards!',
+        type: 'info',
+        confirmText: 'View Rewards',
+        showCancel: true,
+        cancelText: 'OK',
+        onConfirm: () => {
+          setAlertVisible(false);
+          router.push('/rewards' as any);
+        },
+        onCancel: () => setAlertVisible(false),
+      });
+      setAlertVisible(true);
+      return;
+    }
+
+    const noteMd = `# ${title || 'Untitled Note'}\n\n${content}\n\n---\n*Exported from groundwork.*`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const blob = new Blob([noteMd], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(title || 'note').replace(/[^a-zA-Z0-9_-]/g, '_')}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    try {
+      const { Share } = await import('react-native');
+      await Share.share({
+        title: title || 'Note Export',
+        message: noteMd,
+      });
+    } catch (e) {
+      console.warn('Share error:', e);
+    }
   };
 
   const handleDelete = () => {
@@ -349,16 +474,34 @@ export default function NoteEditorScreen() {
     <BackgroundGradient>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Pressable 
+            testID="note-back-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Back to notes"
+            onPress={() => router.back()} 
+            style={styles.backBtn}
+          >
             <ChevronLeft size={22} color={theme.accent} />
           </Pressable>
           <Text style={[styles.topTitle, { color: theme.primaryText }]} numberOfLines={1}>
             {isNew ? 'New note' : title || 'Edit note'}
           </Text>
-          <Pressable onPress={() => setMenuOpen(true)} style={[styles.iconBtn, { backgroundColor: theme.card }]}>
+          <Pressable 
+            testID="note-more-menu-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Note options"
+            onPress={() => setMenuOpen(true)} 
+            style={[styles.iconBtn, { backgroundColor: theme.card }]}
+          >
             <MoreHorizontal size={20} color={theme.primaryText} />
           </Pressable>
-          <Pressable onPress={handleSave} style={[styles.saveBtn, { backgroundColor: theme.accent }]}>
+          <Pressable 
+            testID="note-save-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Save note"
+            onPress={handleSave} 
+            style={[styles.saveBtn, { backgroundColor: theme.accent }]}
+          >
             <Text style={styles.saveBtnText}>Save</Text>
           </Pressable>
         </View>
@@ -366,6 +509,8 @@ export default function NoteEditorScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }} keyboardShouldPersistTaps="handled">
           <View style={{ paddingHorizontal: 20 }}>
             <TextInput
+              testID="note-title-input"
+              accessibilityLabel="Note title"
               style={[styles.titleInput, { color: theme.primaryText }]}
               placeholder="Title"
               placeholderTextColor={theme.tertiaryText}
@@ -443,7 +588,11 @@ export default function NoteEditorScreen() {
                   textSecondary: theme.secondaryText,
                 }}
                 isDark={isDark}
-                onDelete={() => setAudioUris(audioUris.filter((_, i) => i !== idx))}
+                onDelete={() => {
+                  const targetUri = uri;
+                  import('@/lib/audioStorage').then(m => m.deleteAudioRecording(targetUri)).catch(() => {});
+                  setAudioUris(audioUris.filter((_, i) => i !== idx));
+                }}
               />
             ))}
 
@@ -499,6 +648,8 @@ export default function NoteEditorScreen() {
             )}
 
             <TextInput
+              testID="note-body-input"
+              accessibilityLabel="Note body content"
               style={{
                 fontSize: 16,
                 fontFamily: 'Inter_500Medium',
@@ -537,11 +688,46 @@ export default function NoteEditorScreen() {
           <View style={[styles.menuSheet, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder, marginTop: insets.top + 56 }]}>
             {[
               { label: isPinned ? 'Unpin' : 'Pin', icon: Pin, onPress: () => setIsPinned(!isPinned) },
-              { label: isLocked ? 'Unlock' : 'Lock', icon: isLocked ? Lock : Unlock, onPress: () => setIsLocked(!isLocked) },
+              {
+                label: isLocked ? 'Unlock' : 'Lock',
+                icon: isLocked ? Lock : Unlock,
+                onPress: async () => {
+                  if (!isLocked) {
+                    const { ensureRewardsInitialized, isRewardUnlocked } = await import('@/lib/rewardsService');
+                    await ensureRewardsInitialized();
+                    if (!isRewardUnlocked('note_security')) {
+                      setAlertConfig({
+                        title: 'Milestone Locked',
+                        message: 'Complete 10 tasks to unlock Note Security. Check your progress in Milestone Rewards!',
+                        type: 'info',
+                        confirmText: 'View Rewards',
+                        showCancel: true,
+                        cancelText: 'OK',
+                        onConfirm: () => {
+                          setAlertVisible(false);
+                          router.push('/rewards' as any);
+                        },
+                        onCancel: () => setAlertVisible(false),
+                      });
+                      setAlertVisible(true);
+                      return;
+                    }
+                  }
+                  setIsLocked(!isLocked);
+                },
+              },
+              { label: 'Export (Markdown)', icon: Download, onPress: handleExportMarkdown },
               { label: 'Details', icon: Plus, onPress: () => { setMenuOpen(false); setDetailsOpen(true); } },
               ...(!isNew ? [{ label: 'Delete', icon: Trash2, onPress: handleDelete, danger: true }] : []),
             ].map(item => (
-              <Pressable key={item.label} onPress={() => { item.onPress(); setMenuOpen(false); }} style={styles.menuRow}>
+              <Pressable 
+                key={item.label} 
+                testID={`note-menu-${item.label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                onPress={() => { item.onPress(); setMenuOpen(false); }} 
+                style={styles.menuRow}
+              >
                 <item.icon size={18} color={'danger' in item && item.danger ? theme.danger : theme.primaryText} />
                 <Text style={{ marginLeft: 12, fontFamily: 'Inter_600SemiBold', color: 'danger' in item && item.danger ? theme.danger : theme.primaryText }}>{item.label}</Text>
               </Pressable>

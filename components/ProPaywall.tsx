@@ -1,70 +1,52 @@
 import { AppText as Text } from '@/components/ui/AppText';
-import { trackProEvent } from '@/lib/subscriptionService';
+import {
+  getMilestoneProgress,
+  getMilestoneProgressPercent,
+  REWARD_DEFINITIONS,
+  RewardDefinition,
+} from '@/lib/rewardsService';
 import { useTheme } from '@/lib/ThemeContext';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
-    BarChart3,
-    Bell,
-    BookOpen,
-    CheckCircle2,
-    Crown,
-    Flame,
-    Lock,
-    Moon,
-    Sparkles,
-    X,
+  Award,
+  CheckCircle2,
+  Clock,
+  Flame,
+  Sparkles,
+  Trophy,
+  X,
 } from 'lucide-react-native';
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Animated, {
-    FadeIn,
-    FadeInDown,
-    FadeOut,
-    SlideInDown,
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  SlideInDown,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// ─── Quick highlight bullets shown in every paywall ─────────────────────────
-
-const HIGHLIGHTS = [
-  { icon: CheckCircle2, label: 'Unlimited Tasks & Habits' },
-  { icon: BarChart3, label: 'Deep Analytics & Insights' },
-  { icon: Moon, label: 'Premium Themes' },
-  { icon: Flame, label: 'Habit Heatmaps & Trends' },
-  { icon: BookOpen, label: 'Unlimited Study Spaces' },
-  { icon: Bell, label: 'Advanced Reminders' },
-  { icon: Lock, label: 'Note & Folder Security' },
-  { icon: Sparkles, label: 'Pro XP Boost & Profile Flair' },
-];
-
-// ─── Props ───────────────────────────────────────────────────────────────────
 
 export interface ProPaywallProps {
   visible: boolean;
   onClose: () => void;
-  /** Name of the locked feature — shown in the headline */
   featureName?: string;
-  /** One-line description of the benefit */
   featureDescription?: string;
-  /** Which screen / feature triggered the paywall — used for analytics */
   source?: string;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
-
-export function ProPaywall({
+export function MilestoneUnlockModal({
   visible,
   onClose,
-  featureName,
+  featureName = 'Milestone Feature',
   featureDescription,
   source,
 }: ProPaywallProps) {
@@ -73,17 +55,35 @@ export function ProPaywall({
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Track paywall impression once on open
-  useEffect(() => {
-    if (visible) {
-      trackProEvent('paywall_view', { feature: featureName, source });
-    }
-  }, [visible]);
+  const progress = useMemo(() => getMilestoneProgress(), [visible]);
 
-  const handleUpgrade = () => {
-    trackProEvent('upgrade_tap', { feature: featureName, source });
+  // Find matching milestone definition if available
+  const matchedReward: RewardDefinition | undefined = useMemo(() => {
+    const query = featureName.toLowerCase();
+    return REWARD_DEFINITIONS.find((r) => {
+      const title = r.title.toLowerCase();
+      return (
+        title.includes(query) ||
+        query.includes(title) ||
+        (query.includes('theme') && r.id === 'premium_themes') ||
+        (query.includes('analytic') && r.id === 'deep_analytics') ||
+        (query.includes('revision') && r.id === 'deep_analytics') ||
+        (query.includes('report') && r.id === 'deep_analytics') ||
+        (query.includes('preset') && r.id === 'focus_presets') ||
+        (query.includes('export') && r.id === 'note_export') ||
+        (query.includes('security') && r.id === 'note_security') ||
+        (query.includes('lock') && r.id === 'note_security') ||
+        (query.includes('heatmap') && r.id === 'habit_heatmaps')
+      );
+    });
+  }, [featureName]);
+
+  const req = matchedReward?.requirement || { completedTasks: 10 };
+  const percent = getMilestoneProgressPercent(req, progress);
+
+  const handleViewRewards = () => {
     onClose();
-    router.push('/upgrade' as any);
+    router.push('/rewards' as any);
   };
 
   return (
@@ -102,12 +102,13 @@ export function ProPaywall({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <Animated.View
-          entering={SlideInDown.springify().damping(18).stiffness(180)}
+          entering={SlideInDown.springify().damping(20).stiffness(200)}
           style={[
             styles.sheet,
             {
-              backgroundColor: isDark ? '#0F1117' : '#FFFFFF',
-              paddingBottom: insets.bottom + 24,
+              backgroundColor: isDark ? '#111318' : '#FFFFFF',
+              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+              paddingBottom: insets.bottom + 20,
             },
           ]}
         >
@@ -117,7 +118,7 @@ export function ProPaywall({
           {/* Close button */}
           <TouchableOpacity
             onPress={onClose}
-            style={[styles.closeBtn, { backgroundColor: theme.card }]}
+            style={[styles.closeBtn, { backgroundColor: isDark ? '#1C1F26' : '#F2F2F7' }]}
             activeOpacity={0.7}
           >
             <X size={16} color={theme.secondaryText} />
@@ -127,91 +128,131 @@ export function ProPaywall({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.content}
           >
-            {/* Hero gradient icon */}
-            <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.heroWrap}>
-              <LinearGradient
-                colors={[accentColor, accentColor + 'AA']}
-                style={styles.heroIcon}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+            {/* Minimal Icon Badge */}
+            <Animated.View entering={FadeInDown.delay(60).duration(350)} style={styles.heroWrap}>
+              <View
+                style={[
+                  styles.heroIcon,
+                  { backgroundColor: accentColor + '18', borderColor: accentColor + '30' },
+                ]}
               >
-                <Crown size={36} color="#FFF" />
-              </LinearGradient>
+                <Trophy size={32} color={accentColor} strokeWidth={2} />
+              </View>
             </Animated.View>
 
             {/* Headline */}
-            <Animated.View entering={FadeInDown.delay(120).duration(400)}>
-              <Text style={[styles.proLabel, { color: accentColor }]}>
-                GROUNDWORK PRO
+            <Animated.View entering={FadeInDown.delay(100).duration(350)}>
+              <Text style={[styles.kicker, { color: accentColor }]}>
+                MILESTONE REWARD
               </Text>
               <Text style={[styles.headline, { color: theme.primaryText }]}>
-                {featureName
-                  ? `${featureName} is a Pro feature`
-                  : 'Unlock your full potential'}
+                {matchedReward ? matchedReward.title : featureName}
               </Text>
-              {featureDescription && (
-                <Text style={[styles.featureDesc, { color: theme.secondaryText }]}>
-                  {featureDescription}
-                </Text>
-              )}
+              <Text style={[styles.desc, { color: theme.secondaryText }]}>
+                {featureDescription ||
+                  matchedReward?.description ||
+                  'Earn this capability simply by using Groundwork and building your daily focus.'}
+              </Text>
             </Animated.View>
 
-            {/* Free vs Pro comparison strip */}
+            {/* Progress Card */}
             <Animated.View
-              entering={FadeInDown.delay(160).duration(400)}
-              style={[styles.comparisonRow, { borderColor: theme.cardBorder }]}
+              entering={FadeInDown.delay(140).duration(350)}
+              style={[
+                styles.progressCard,
+                {
+                  backgroundColor: isDark ? '#171A21' : '#F7F8FA',
+                  borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                },
+              ]}
             >
+              <View style={styles.progressHeader}>
+                <Text style={[styles.progressTitle, { color: theme.primaryText }]}>
+                  Milestone Progress
+                </Text>
+                <Text style={[styles.progressPercent, { color: accentColor }]}>
+                  {percent}%
+                </Text>
+              </View>
+
+              {/* Progress track */}
               <View
                 style={[
-                  styles.comparisonCol,
-                  { borderRightWidth: 1, borderRightColor: theme.cardBorder },
+                  styles.progressBarTrack,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' },
                 ]}
               >
-                <Text style={[styles.compLabel, { color: theme.secondaryText }]}>FREE</Text>
-                <Text style={[styles.compValue, { color: theme.primaryText }]}>100 tasks</Text>
-                <Text style={[styles.compValue, { color: theme.primaryText }]}>5 habits</Text>
-                <Text style={[styles.compValue, { color: theme.primaryText }]}>5 study spaces</Text>
-                <Text style={[styles.compValue, { color: theme.primaryText }]}>Basic themes</Text>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: `${Math.min(100, Math.max(4, percent))}%`,
+                      backgroundColor: accentColor,
+                    },
+                  ]}
+                />
               </View>
-              <View style={styles.comparisonCol}>
-                <Text style={[styles.compLabel, { color: accentColor }]}>PRO ✦</Text>
-                <Text style={[styles.compValuePro, { color: accentColor }]}>Unlimited tasks</Text>
-                <Text style={[styles.compValuePro, { color: accentColor }]}>Unlimited habits</Text>
-                <Text style={[styles.compValuePro, { color: accentColor }]}>Unlimited spaces</Text>
-                <Text style={[styles.compValuePro, { color: accentColor }]}>7 premium themes</Text>
-              </View>
-            </Animated.View>
 
-            {/* Feature highlights */}
-            <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.highlights}>
-              {HIGHLIGHTS.map(({ icon: Icon, label }, i) => (
-                <View key={i} style={styles.highlightRow}>
-                  <View style={[styles.highlightIcon, { backgroundColor: accentColor + '18' }]}>
-                    <Icon size={14} color={accentColor} />
+              {/* Requirement Items */}
+              <View style={styles.reqList}>
+                {req.completedTasks !== undefined && (
+                  <View style={styles.reqItem}>
+                    <CheckCircle2
+                      size={14}
+                      color={progress.completedTasks >= req.completedTasks ? '#34C759' : theme.tertiaryText}
+                    />
+                    <Text style={[styles.reqLabel, { color: theme.secondaryText }]}>
+                      Completed Tasks:
+                    </Text>
+                    <Text style={[styles.reqValue, { color: theme.primaryText }]}>
+                      {progress.completedTasks} / {req.completedTasks}
+                    </Text>
                   </View>
-                  <Text style={[styles.highlightLabel, { color: theme.primaryText }]}>
-                    {label}
-                  </Text>
-                </View>
-              ))}
+                )}
+
+                {req.focusSessions !== undefined && (
+                  <View style={styles.reqItem}>
+                    <Clock
+                      size={14}
+                      color={progress.focusSessions >= req.focusSessions ? '#34C759' : theme.tertiaryText}
+                    />
+                    <Text style={[styles.reqLabel, { color: theme.secondaryText }]}>
+                      Focus Sessions:
+                    </Text>
+                    <Text style={[styles.reqValue, { color: theme.primaryText }]}>
+                      {progress.focusSessions} / {req.focusSessions}
+                    </Text>
+                  </View>
+                )}
+
+                {req.habitDays !== undefined && (
+                  <View style={styles.reqItem}>
+                    <Flame
+                      size={14}
+                      color={progress.habitDays >= req.habitDays ? '#34C759' : theme.tertiaryText}
+                    />
+                    <Text style={[styles.reqLabel, { color: theme.secondaryText }]}>
+                      Habit Check-in Days:
+                    </Text>
+                    <Text style={[styles.reqValue, { color: theme.primaryText }]}>
+                      {progress.habitDays} / {req.habitDays}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </Animated.View>
 
-            {/* CTA */}
-            <Animated.View entering={FadeInDown.delay(240).duration(400)}>
+            {/* CTA Button */}
+            <Animated.View entering={FadeInDown.delay(180).duration(350)}>
               <TouchableOpacity
-                onPress={handleUpgrade}
+                onPress={handleViewRewards}
                 activeOpacity={0.85}
                 style={styles.ctaWrap}
               >
-                <LinearGradient
-                  colors={[accentColor, accentColor + 'CC']}
-                  style={styles.cta}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Crown size={18} color="#FFF" />
-                  <Text style={styles.ctaText}>View Pro Plans</Text>
-                </LinearGradient>
+                <View style={[styles.cta, { backgroundColor: accentColor }]}>
+                  <Award size={18} color="#FFFFFF" strokeWidth={2.2} />
+                  <Text style={styles.ctaText}>View All Milestone Rewards</Text>
+                </View>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -220,7 +261,7 @@ export function ProPaywall({
                 style={styles.dismissBtn}
               >
                 <Text style={[styles.dismissText, { color: theme.secondaryText }]}>
-                  Maybe later
+                  Keep Working
                 </Text>
               </TouchableOpacity>
             </Animated.View>
@@ -231,7 +272,8 @@ export function ProPaywall({
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// Retain ProPaywall as drop-in backwards compatible export
+export const ProPaywall = MilestoneUnlockModal;
 
 const styles = StyleSheet.create({
   overlay: {
@@ -240,9 +282,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    maxHeight: '92%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    maxHeight: '88%',
   },
   handle: {
     width: 36,
@@ -260,134 +304,119 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 10,
   },
   content: {
     paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 8,
-    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   heroWrap: {
-    marginBottom: 20,
-    marginTop: 8,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 26,
-    alignItems: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    alignItems: 'center',
+    borderWidth: 1,
   },
-  proLabel: {
+  kicker: {
     fontSize: 11,
-    fontFamily: 'Inter_800ExtraBold',
-    letterSpacing: 2,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1.2,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   headline: {
     fontSize: 22,
-    fontFamily: 'Inter_800ExtraBold',
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.4,
     textAlign: 'center',
-    lineHeight: 28,
     marginBottom: 8,
   },
-  featureDesc: {
+  desc: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
-    textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 4,
-    opacity: 0.8,
+    textAlign: 'center',
+    marginBottom: 20,
   },
-  comparisonRow: {
-    flexDirection: 'row',
-    width: '100%',
-    borderWidth: 1,
+  progressCard: {
     borderRadius: 18,
-    marginVertical: 20,
-    overflow: 'hidden',
-  },
-  comparisonCol: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  compLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_800ExtraBold',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  compValue: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    opacity: 0.7,
-  },
-  compValuePro: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  highlights: {
-    width: '100%',
-    gap: 10,
+    borderWidth: 1,
+    padding: 16,
     marginBottom: 24,
   },
-  highlightRow: {
+  progressHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 10,
   },
-  highlightIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  highlightLabel: {
+  progressTitle: {
     fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
   },
-  ctaWrap: {
-    width: '100%',
-    marginBottom: 12,
-    borderRadius: 18,
+  progressPercent: {
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+  },
+  progressBarTrack: {
+    height: 8,
+    borderRadius: 4,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    marginBottom: 16,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  reqList: {
+    gap: 8,
+  },
+  reqItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reqLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    flex: 1,
+  },
+  reqValue: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  ctaWrap: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
   cta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
+    gap: 8,
+    borderRadius: 14,
   },
   ctaText: {
-    fontSize: 16,
-    fontFamily: 'Inter_800ExtraBold',
-    color: '#FFF',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
   },
   dismissBtn: {
-    alignItems: 'center',
     paddingVertical: 12,
+    alignItems: 'center',
   },
   dismissText: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_600SemiBold',
   },
 });

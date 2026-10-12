@@ -18,17 +18,18 @@ import {
     getTrendAnalysis,
 } from "@/lib/analytics/AnalyticsEngine";
 import { isPro } from "@/lib/subscriptionService";
+import { isRewardUnlocked } from "@/lib/rewardsService";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import {
     Activity,
+    Award,
     BarChart2,
     Brain,
     ChevronRight,
     Clock,
-    Crown,
     Flame,
     Minus,
     Target,
@@ -120,15 +121,15 @@ const ProGate = ({
           { backgroundColor: theme.accent + "15", borderColor: theme.accent + "44" },
         ]}
       >
-        <Crown size={28} color={theme.accent} />
+        <Award size={28} color={theme.accent} />
         <Text style={[styles.proGateTitle, { color: theme.primaryText }]}>
-          Pro Feature
+          Milestone Reward
         </Text>
         <Text style={[styles.proGateText, { color: theme.secondaryText }]}>
-          Upgrade to unlock deep analytics: trends, heatmaps, focus scores, and weekly reports.
+          Unlock deep analytics, heatmaps, focus scores, and weekly reports by completing 10 focus sessions and 10 habit check-in days.
         </Text>
         <View style={[styles.proGateBtn, { backgroundColor: theme.accent }]}>
-          <Text style={styles.proGateBtnText}>Upgrade to Pro</Text>
+          <Text style={styles.proGateBtnText}>View Milestone Progress</Text>
         </View>
       </View>
     </Pressable>
@@ -163,7 +164,7 @@ export default function AnalyticsScreen() {
   const router = useRouter();
   const { session } = useAuthStore();
   const userId = session?.user?.id || "guest";
-  const userIsPro = isPro();
+  const userIsPro = isPro() || isRewardUnlocked('deep_analytics');
 
   const [refreshing, setRefreshing] = useState(false);
   const [paywallVisible, setPaywallVisible] = useState(false);
@@ -486,9 +487,9 @@ export default function AnalyticsScreen() {
           </>
         )}
 
-        {/* ─── Free: Pro Gate ─── */}
+        {/* ─── Milestone Reward Gate ─── */}
         {!userIsPro && (
-          <ProGate theme={theme} onUpgrade={() => setPaywallVisible(true)} />
+          <ProGate theme={theme} onUpgrade={() => router.push('/rewards' as any)} />
         )}
 
         {/* ─── Pro: Navigation Cards ─── */}

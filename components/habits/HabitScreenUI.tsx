@@ -4,9 +4,9 @@ import type { Habit } from '@/lib/db';
 import { buildCurrentWeekDays, toLocalDateStr, WEEKDAY_LABELS_MON } from '@/lib/calendarGrid';
 import { habitCompletedOnDate } from '@/lib/habitUtils';
 import { format } from 'date-fns';
-import { Check, Flame, Sparkles, Star, Trophy } from 'lucide-react-native';
+import { Check, Flame, MoreHorizontal, Sparkles, Star, Trophy } from 'lucide-react-native';
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -202,6 +202,7 @@ interface HabitRowCardProps {
   onPress: () => void;
   onLongPress: () => void;
   onToggle: () => void;
+  onMenuPress?: () => void;
 }
 
 function ConfettiPiece({ index, colors }: { index: number; colors: string[] }) {
@@ -235,6 +236,7 @@ export function HabitRowCard({
   onPress,
   onLongPress,
   onToggle,
+  onMenuPress,
 }: HabitRowCardProps) {
   const { theme, isDark } = useTheme();
   const done = habitCompletedOnDate(habit, todayDateStr);
@@ -243,6 +245,9 @@ export function HabitRowCard({
 
   return (
     <Pressable
+      testID={`habit-card-${habit.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Open details for habit ${habit.title}`}
       onPress={onPress}
       onLongPress={onLongPress}
       style={({ pressed }) => [
@@ -256,6 +261,9 @@ export function HabitRowCard({
     >
       <View style={styles.cardRow}>
         <Pressable
+          testID={`habit-check-${habit.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Check in ${habit.title}`}
           onPress={(e) => {
             e.stopPropagation();
             onToggle();
@@ -295,6 +303,19 @@ export function HabitRowCard({
           <Flame size={14} color={theme.accent} />
           <Text style={[styles.streakNum, { color: theme.accent }]}>{habit.streak}</Text>
         </View>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`More options for ${habit.title}`}
+          onPress={(e) => {
+            e.stopPropagation();
+            if (onMenuPress) onMenuPress();
+            else onLongPress();
+          }}
+          style={{ padding: 6, marginLeft: 4 }}
+        >
+          <MoreHorizontal size={18} color={theme.tertiaryText} />
+        </TouchableOpacity>
       </View>
 
       <HabitWeekStrip habit={habit} todayDateStr={todayDateStr} />

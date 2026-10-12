@@ -1,5 +1,4 @@
 import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { ProPaywall } from '@/components/ProPaywall';
 import { AddTaskSheet, AddTaskSheetRef } from '@/components/tasks/AddTaskSheet';
 import { EditTaskSheet, EditTaskSheetRef } from '@/components/tasks/EditTaskSheet';
 import { EmptyTaskState } from '@/components/tasks/EmptyTaskState';
@@ -137,6 +136,7 @@ export default function TasksScreen() {
           onUpdate={(u) => updateTask(t.id, u)}
           onDelete={() => handleDeleteTask(t.id)}
           onDuplicate={() => duplicateTask(t.id)}
+          onEdit={() => editTaskRef.current?.open(t as any)}
         />
       );
     }
@@ -211,6 +211,7 @@ export default function TasksScreen() {
                   onUpdate={(u) => updateTask(item.id, u)}
                   onDelete={() => handleDeleteTask(item.id)}
                   onDuplicate={() => duplicateTask(item.id)}
+                  onEdit={() => editTaskRef.current?.open(item as any)}
                 />
               </Pressable>
             </ScaleDecorator>
@@ -385,7 +386,14 @@ export default function TasksScreen() {
         <View style={[styles.viewToggle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
           <Animated.View style={[styles.viewIndicator, indicatorStyle, { width: tabWidth, backgroundColor: theme.accent, }]} />
           {(['Today', 'Upcoming', 'All'] as ViewType[]).map(v => (
-            <Pressable key={v} style={styles.viewBtn} onPress={() => setActiveView(v)}>
+            <Pressable 
+              key={v} 
+              testID={`tasks-view-tab-${v.toLowerCase()}`}
+              accessibilityRole="tab"
+              accessibilityLabel={`${v} tasks tab`}
+              style={styles.viewBtn} 
+              onPress={() => setActiveView(v)}
+            >
               <Text style={[styles.viewText, activeView === v ? { color: 'white', fontFamily: 'Inter_700Bold' } : { color: theme.secondaryText }]}>{v}</Text>
             </Pressable>
           ))}
@@ -402,6 +410,9 @@ export default function TasksScreen() {
         {activeView === 'All' && renderAll()}
       </View>
       <Pressable 
+        testID="tasks-fab-button"
+        accessibilityRole="button"
+        accessibilityLabel="Create new task"
         style={[styles.fab, { backgroundColor: theme.accent }]} 
         onPress={() => {
           const defaultD = activeView === 'Upcoming' ? tomorrowDateStr : todayDate;
@@ -417,13 +428,6 @@ export default function TasksScreen() {
       <EditTaskSheet
         ref={editTaskRef}
         onUpdate={(id, updates) => updateTask(id, updates as any)}
-      />
-      <ProPaywall
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        featureName="Unlimited Tasks"
-        featureDescription="Free users can create up to 100 tasks total. Upgrade to Pro for unlimited task creation."
-        source="tasks_screen"
       />
       {showConfetti && (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>

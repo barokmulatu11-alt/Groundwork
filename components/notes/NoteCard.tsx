@@ -49,7 +49,7 @@ export function NoteCard({ note, variant = 'list', onPress, onLongPress }: Props
   const preview = plainPreview(note.content);
 
   return (
-    <AnimatedCard
+    <AnimatedCard testID={`note-card-${note.id}`}
       style={variant === 'grid' ? styles.gridCard : styles.listCard}
       onPress={onPress}
       onLongPress={onLongPress}

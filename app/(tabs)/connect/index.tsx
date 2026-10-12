@@ -100,6 +100,9 @@ export default function ConnectRootScreen() {
             return (
               <TouchableOpacity
                 key={tabItem.name}
+                testID={`connect-tab-${tabItem.name.toLowerCase()}`}
+                accessibilityRole="tab"
+                accessibilityLabel={`${tabItem.name} tab`}
                 style={styles.tabBtn}
                 activeOpacity={0.7}
                 onPress={() => handleTabPress(i)}

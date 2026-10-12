@@ -1,10 +1,9 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import React, { useState, forwardRef, useImperativeHandle, useRef } from 'react';
-import { View, StyleSheet, TextInput, Pressable, ScrollView, Switch } from 'react-native';
-import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
+import { View, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
+import { CenterModal } from '../ui/CenterModal';
 import { useTheme } from '@/lib/ThemeContext';
-import { Task, SubTask } from '@/lib/taskDatabase';
-import { Plus, Trash2 } from 'lucide-react-native';
+import { Task } from '@/lib/taskDatabase';
 
 export interface EditTaskSheetRef {
   open: (task: Task) => void;
@@ -17,9 +16,9 @@ interface Props {
 
 export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, ref) => {
   const { theme, isDark } = useTheme();
-  const bottomSheetRef = useRef<BottomSheetModal>(null);
   const inputRef = useRef<TextInput>(null);
 
+  const [visible, setVisible] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
@@ -29,12 +28,12 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
     open: (task: Task) => {
       setActiveTask(task);
       setTitle(task.title);
-      setNote(task.note);
-      setPriority(task.priority);
-      bottomSheetRef.current?.present();
+      setNote(task.note || '');
+      setPriority(task.priority || 'medium');
+      setVisible(true);
       setTimeout(() => inputRef.current?.focus(), 300);
     },
-    close: () => bottomSheetRef.current?.dismiss()
+    close: () => setVisible(false)
   }));
 
   const handleUpdate = () => {
@@ -44,24 +43,17 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
       note: note.trim(),
       priority,
     });
-    bottomSheetRef.current?.dismiss();
+    setVisible(false);
   };
 
-  if (!activeTask) return null;
-
   return (
-    <BottomSheetModal
-      ref={bottomSheetRef}
-      index={1}
-      snapPoints={['75%', '95%']}
-      enablePanDownToClose
-      backgroundStyle={{ backgroundColor: theme.card }}
-      handleIndicatorStyle={{ backgroundColor: theme.secondaryText }}
-    >
-      <BottomSheetView style={styles.content}>
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <CenterModal visible={visible} onClose={() => setVisible(false)} maxWidth={380}>
+      <View style={styles.content}>
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 480 }}>
           <TextInput
             ref={inputRef}
+            testID="edit-task-title-input"
+            accessibilityLabel="Edit task title input"
             style={[styles.titleInput, { color: theme.primaryText }]}
             placeholder="What needs to get done?"
             placeholderTextColor={theme.secondaryText}
@@ -76,10 +68,13 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
             {(['high', 'medium', 'low'] as const).map(p => (
               <Pressable 
                 key={p} 
+                testID={`edit-task-priority-${p}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Set priority ${p}`}
                 onPress={() => setPriority(p)}
                 style={[
                   styles.priorityPill, 
-                  priority === p && { backgroundColor: p === 'high' ? '#FF3B30' : p === 'medium' ? '#FF9500' : '#34C759' }
+                  priority === p ? { backgroundColor: p === 'high' ? '#FF3B30' : p === 'medium' ? '#FF9500' : '#34C759' } : { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }
                 ]}
               >
                 <Text style={[styles.priorityText, priority === p ? { color: 'white' } : { color: theme.secondaryText }]}>
@@ -91,6 +86,8 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
 
           <Text style={[styles.label, { color: theme.secondaryText }]}>NOTE</Text>
           <TextInput
+            testID="edit-task-note-input"
+            accessibilityLabel="Edit task note input"
             style={[styles.noteInput, { color: theme.primaryText, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }]}
             placeholder="Add a note (optional)"
             placeholderTextColor={theme.secondaryText}
@@ -99,35 +96,35 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
             onChangeText={setNote}
           />
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
+          <View style={{ height: 24 }} />
 
-        <View style={[styles.footer, { backgroundColor: theme.card }]}>
           <Pressable 
+            testID="edit-task-save-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Save Changes"
             style={[styles.submitBtn, { backgroundColor: theme.accent }, !title.trim() && { backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }]} 
             onPress={handleUpdate}
             disabled={!title.trim()}
           >
             <Text style={[styles.submitText, !title.trim() && { color: theme.secondaryText }]}>Save Changes</Text>
           </Pressable>
-        </View>
-      </BottomSheetView>
-    </BottomSheetModal>
+        </ScrollView>
+      </View>
+    </CenterModal>
   );
 });
 
 const styles = StyleSheet.create({
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 12 },
+  content: { paddingVertical: 8 },
   titleInput: { fontSize: 20, fontFamily: 'Inter_700Bold', paddingVertical: 8 },
-  borderBottom: { height: 1, opacity: 0.5, marginBottom: 24 },
-  label: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 12, marginTop: 16 },
+  borderBottom: { height: 1, opacity: 0.5, marginBottom: 16 },
+  label: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 10, marginTop: 12 },
   priorityRow: { flexDirection: 'row', gap: 8 },
-  priorityPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.05)' },
-  priorityText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  noteInput: { padding: 16, borderRadius: 12, minHeight: 80, textAlignVertical: 'top', fontFamily: 'Inter_500Medium' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
-  submitBtn: { padding: 16, borderRadius: 100, alignItems: 'center' },
-  submitText: { color: 'white', fontSize: 16, fontFamily: 'Inter_600SemiBold' }
+  priorityPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  priorityText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  noteInput: { padding: 14, borderRadius: 12, minHeight: 80, textAlignVertical: 'top', fontFamily: 'Inter_500Medium' },
+  submitBtn: { padding: 14, borderRadius: 100, alignItems: 'center', marginTop: 12 },
+  submitText: { color: 'white', fontSize: 15, fontFamily: 'Inter_600SemiBold' }
 });
 
 

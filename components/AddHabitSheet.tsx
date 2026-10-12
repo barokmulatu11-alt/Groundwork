@@ -94,6 +94,8 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
         <View style={{ marginBottom: 20 }}>
           <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: labelColor, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>Habit Name</Text>
           <TextInput
+            testID="add-habit-title-input"
+            accessibilityLabel="Habit Name"
             value={title}
             onChangeText={setTitle}
             placeholder="e.g. Drink 2L of water"
@@ -109,6 +111,9 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
             {CATEGORIES.map(c => (
               <Pressable
                 key={c}
+                testID={`add-habit-category-${c.toLowerCase()}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Category ${c}`}
                 onPress={() => setCategory(c)}
                 style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: category === c ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), borderWidth: 1, borderColor: category === c ? theme.accent : theme.cardBorder }}
               >
@@ -164,7 +169,7 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
           )}
         </View>
 
-        <AnimatedButton title="Create Habit" onPress={handleSave} />
+        <AnimatedButton testID="add-habit-submit-button" title="Create Habit" onPress={handleSave} />
       </ScrollView>
     </CenterModal>
   );

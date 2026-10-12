@@ -12,6 +12,7 @@ import { TabHeader } from "@/components/ui/TabHeader";
 import { getRevisionInsights, type RevisionInsight } from "@/lib/analytics/AnalyticsEngine";
 import { trackNote } from "@/lib/analytics/AnalyticsTracker";
 import { isPro } from "@/lib/subscriptionService";
+import { isRewardUnlocked } from "@/lib/rewardsService";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useFocusEffect } from "@react-navigation/native";
@@ -19,12 +20,12 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import { useRouter } from "expo-router";
 import {
     AlertCircle,
+    Award,
     BookOpen,
     Brain,
     CheckCircle2,
     ChevronRight,
     Clock,
-    Crown,
     Star,
     Tag,
 } from "lucide-react-native";
@@ -200,7 +201,7 @@ export default function RevisionInsightsScreen() {
   const router = useRouter();
   const { session } = useAuthStore();
   const userId = session?.user?.id || "guest";
-  const userIsPro = isPro();
+  const userIsPro = isPro() || isRewardUnlocked('deep_analytics');
 
   const [insights, setInsights] = useState<RevisionInsight[]>([]);
   const [filter, setFilter] = useState<"all" | "overdue">("overdue");
@@ -252,8 +253,8 @@ export default function RevisionInsightsScreen() {
             paddingTop: insets.top + 16,
           }}
         >
-          <TabHeader title="Revision Insights" subtitle="Pro Feature" showBack />
-          <Pressable onPress={() => setPaywallVisible(true)}>
+          <TabHeader title="Revision Insights" subtitle="Milestone Feature" showBack />
+          <Pressable onPress={() => router.push('/rewards' as any)}>
             <View
               style={[
                 styles.proGate,
@@ -263,15 +264,15 @@ export default function RevisionInsightsScreen() {
                 },
               ]}
             >
-              <Crown size={32} color={theme.accent} />
+              <Award size={32} color={theme.accent} />
               <Text style={[styles.proGateTitle, { color: theme.primaryText }]}>
-                Revision Insights
+                Milestone Reward: Revision Insights
               </Text>
               <Text style={[styles.proGateText, { color: theme.secondaryText }]}>
-                Detect weak topics, track overdue revisions, and get a personalized spaced repetition schedule powered by your note history.
+                Detect weak topics, track overdue revisions, and get a personalized spaced repetition schedule by completing 10 focus sessions and 10 habit check-in days.
               </Text>
               <View style={[styles.proGateBtn, { backgroundColor: theme.accent }]}>
-                <Text style={styles.proGateBtnText}>Upgrade to Pro</Text>
+                <Text style={styles.proGateBtnText}>View Milestone Progress</Text>
               </View>
             </View>
           </Pressable>

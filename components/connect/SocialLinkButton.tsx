@@ -19,12 +19,18 @@ export const SocialLinkButton: React.FC<Props> = ({ link, onDelete }) => {
   );
 
   const openLink = async () => {
-    const { Linking } = await import('react-native');
+    let u = link.url.trim();
+    if (!u.startsWith('http://') && !u.startsWith('https://')) {
+      u = 'https://' + u;
+    }
+
+    const { Platform, Linking } = await import('react-native');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(u, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     try {
-      let u = link.url.trim();
-      if (!u.startsWith('http://') && !u.startsWith('https://')) {
-        u = 'https://' + u;
-      }
       const canOpen = await Linking.canOpenURL(u);
       if (canOpen) {
         await Linking.openURL(u);

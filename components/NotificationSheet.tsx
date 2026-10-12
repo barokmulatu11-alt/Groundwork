@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { AppText as Text } from './ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
-import { supabase } from '@/lib/supabase';
+import { neonData as supabase } from '@/lib/neon';
 import { X, BellRing as Bell, CheckCircle2, Info, AlertTriangle, Inbox } from 'lucide-react-native';
 import { useAuthStore } from '@/store/useAuthStore';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';

@@ -19,36 +19,45 @@ export function TabHeader({ title, subtitle, onMorePress, showBack = true, onLay
   const { theme } = useTheme();
 
   return (
-    <View style={{ marginBottom: 24 }}>
+    <View style={{ marginBottom: 20 }}>
       {showBack && (
-        <Pressable onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginLeft: -8 }}>
-          <ChevronLeft size={24} color={theme.accent} />
-          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: theme.accent, marginLeft: 4 }}>Back</Text>
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginLeft: -8, paddingVertical: 4, paddingHorizontal: 8 }}
+        >
+          <ChevronLeft size={22} color={theme.accent} />
+          <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: theme.accent, marginLeft: 2 }}>Back</Text>
         </Pressable>
       )}
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 32, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 4 }}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text
+            style={{ fontSize: 26, lineHeight: 32, fontFamily: 'Inter_800ExtraBold', letterSpacing: -0.5, color: theme.primaryText, marginBottom: 4 }}
+          >
             {title}
           </Text>
           {subtitle && (
-            <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText, marginBottom: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText, marginBottom: 4 }}>
               {subtitle}
             </Text>
           )}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
           {onLayoutToggle && (
             <Pressable 
               onPress={onLayoutToggle}
-              style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: theme.accentLight, alignItems: 'center', justifyContent: 'center' }}
+              accessibilityRole="button"
+              accessibilityLabel={isGrid ? "Switch to list view" : "Switch to grid view"}
+              style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: theme.accentLight, alignItems: 'center', justifyContent: 'center' }}
             >
               {isGrid ? (
-                <ListIcon size={20} color={theme.accent} />
+                <ListIcon size={18} color={theme.accent} />
               ) : (
-                <LayoutGrid size={20} color={theme.accent} />
+                <LayoutGrid size={18} color={theme.accent} />
               )}
             </Pressable>
           )}
@@ -56,9 +65,11 @@ export function TabHeader({ title, subtitle, onMorePress, showBack = true, onLay
           {onMorePress && (
             <Pressable 
               onPress={onMorePress}
-              style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: theme.accentLight, alignItems: 'center', justifyContent: 'center' }}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+              style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: theme.accentLight, alignItems: 'center', justifyContent: 'center' }}
             >
-              <MoreHorizontal size={20} color={theme.accent} />
+              <MoreHorizontal size={18} color={theme.accent} />
             </Pressable>
           )}
         </View>

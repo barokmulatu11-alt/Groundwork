@@ -224,7 +224,7 @@ export default function ProfileScreen({
         <SocialLinksSection
           links={socialLinks}
           editable
-          onAdd={addSocialLink}
+          onAdd={async (platform, url) => { await addSocialLink(platform, url); }}
           onDelete={deleteSocialLink}
           cardBg={cardBg}
           cardBorder={cardBorder}

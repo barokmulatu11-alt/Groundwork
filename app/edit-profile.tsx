@@ -31,8 +31,12 @@ const isOnline = async (): Promise<boolean> => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const isSupabase = process.env.EXPO_PUBLIC_USE_SUPABASE === 'true';
+    const apiUrl = isSupabase 
+      ? (process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || "https://yevrsmlwmegovfwdxpjw.supabase.co/rest/v1") 
+      : (process.env.EXPO_PUBLIC_NEON_API_URL || "https://ep-gentle-night-b4oacb89.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1");
     const response = await fetch(
-      "https://yevrsmlwmegovfwdxpjw.supabase.co/rest/v1/",
+      apiUrl,
       {
         method: "HEAD",
         signal: controller.signal,
@@ -191,22 +195,33 @@ export default function EditProfileScreen() {
       gif: "image/gif",
     };
     const contentType = mimeTypes[ext] || "image/jpeg";
-    const path = `${userId}/avatar.${ext}`;
 
-    const response = await fetch(localUri);
-    const blob = await response.blob();
-    const arrayBuffer = await new Response(blob).arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
+    let fileData;
+    if (Platform.OS === 'web') {
+      const response = await fetch(localUri);
+      fileData = await response.blob();
+    } else {
+      fileData = {
+        uri: localUri,
+        type: contentType,
+        name: `avatar.${ext}`,
+      } as any;
+    }
 
-    const { error } = await supabase.storage
-      .from("avatars")
-      .upload(path, uint8Array, { contentType, upsert: true });
+    const timestamp = new Date().getTime();
+    const filePath = `${userId}/${timestamp}.${ext}`;
 
-    if (error) throw error;
+    const { data, error } = await supabase.storage.from("avatars").upload(filePath, fileData, {
+      contentType,
+      upsert: true,
+    });
 
-    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    // Bust cache by appending timestamp
-    return `${data.publicUrl}?t=${Date.now()}`;
+    if (error) {
+      throw error;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+    return publicUrl;
   };
 
   const handlePickImage = async () => {

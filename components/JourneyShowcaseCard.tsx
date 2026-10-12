@@ -348,7 +348,7 @@ export function JourneyShowcaseCard({
             {
               icon: Target,
               label: "Goals Completed",
-              value: stats.totalTasksCompleted,
+              value: (stats as any).totalTasksCompleted || 0,
             },
             {
               icon: Zap,
@@ -411,7 +411,7 @@ export function JourneyShowcaseCard({
             },
             {
               title: "Most Productive",
-              value: stats.recentEarlyBirdSession
+              value: (stats as any).recentEarlyBirdSession
                 ? "Early Bird 🌅"
                 : "Night Owl 🌙",
               icon: Sparkles,
@@ -839,30 +839,6 @@ const styles = StyleSheet.create({
   xpFooterValue: {
     fontSize: 15,
     fontFamily: "Inter_800ExtraBold",
-  },
-  achievementGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  achievementItem: {
-    width: (CARD_WIDTH - 70) / 2,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    gap: 6,
-  },
-  achievementIcon: {
-    fontSize: 24,
-  },
-  achievementLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-  },
-  achievementValue: {
-    fontSize: 12,
-    fontFamily: "Inter_700Bold",
   },
   achievementGrid: {
     flexDirection: "row",

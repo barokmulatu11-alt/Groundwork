@@ -16,15 +16,17 @@ import {
     type WeeklyReport,
 } from "@/lib/analytics/AnalyticsEngine";
 import { isPro } from "@/lib/subscriptionService";
+import { isRewardUnlocked } from "@/lib/rewardsService";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useRouter } from 'expo-router';
 import { useFocusEffect } from "@react-navigation/native";
 import { format, parseISO } from "date-fns";
 import {
+    Award,
     Brain,
     ChevronLeft,
     ChevronRight,
-    Crown,
     Flame,
     Star,
     Target,
@@ -32,7 +34,7 @@ import {
     TrendingUp,
     Zap
 } from "lucide-react-native";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
     Pressable,
     RefreshControl,
@@ -80,7 +82,13 @@ const WeeklyReportCard = ({
   <Animated.View entering={FadeInDown.duration(400)}>
     {/* Week Navigation */}
     <View style={styles.weekNav}>
-      <TouchableOpacity onPress={onPrev} style={styles.weekNavBtn}>
+      <TouchableOpacity 
+        testID="reports-prev-week-btn"
+        accessibilityRole="button"
+        accessibilityLabel="Previous week"
+        onPress={onPrev} 
+        style={styles.weekNavBtn}
+      >
         <ChevronLeft size={20} color={theme.accent} />
       </TouchableOpacity>
       <Text style={[styles.weekNavLabel, { color: theme.primaryText }]}>
@@ -90,6 +98,9 @@ const WeeklyReportCard = ({
         )}
       </Text>
       <TouchableOpacity
+        testID="reports-next-week-btn"
+        accessibilityRole="button"
+        accessibilityLabel="Next week"
         onPress={onNext}
         style={styles.weekNavBtn}
         disabled={offset >= 0}
@@ -352,9 +363,10 @@ type Tab = "weekly" | "monthly";
 export default function ReportsScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { session } = useAuthStore();
   const userId = session?.user?.id || "guest";
-  const userIsPro = isPro();
+  const userIsPro = isPro() || isRewardUnlocked('deep_analytics');
 
   const [activeTab, setActiveTab] = useState<Tab>("weekly");
   const [weekOffset, setWeekOffset] = useState(0);
@@ -375,6 +387,7 @@ export default function ReportsScreen() {
   }, [userId, userIsPro, weekOffset, monthOffset]);
 
   useFocusEffect(useCallback(() => { loadReports(); }, [loadReports]));
+  useEffect(() => { loadReports(); }, [loadReports]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -403,22 +416,22 @@ export default function ReportsScreen() {
         <TabHeader title="Reports" subtitle="Generated from your activity" showBack />
 
         {!userIsPro ? (
-          <Pressable onPress={() => setPaywallVisible(true)}>
+          <Pressable onPress={() => router.push('/rewards' as any)}>
             <View
               style={[
                 styles.proGate,
                 { backgroundColor: theme.accent + "15", borderColor: theme.accent + "44" },
               ]}
             >
-              <Crown size={32} color={theme.accent} />
+              <Award size={32} color={theme.accent} />
               <Text style={[styles.proGateTitle, { color: theme.primaryText }]}>
-                Reports — Pro Feature
+                Milestone Reward: Reports
               </Text>
               <Text style={[styles.proGateText, { color: theme.secondaryText }]}>
-                Get auto-generated weekly and monthly summaries with AI-driven insights, best days, XP earned, and focus analytics.
+                Unlock auto-generated weekly and monthly summaries with productivity insights, best days, and focus analytics by completing 10 focus sessions & 10 habit check-in days.
               </Text>
               <View style={[styles.proGateBtn, { backgroundColor: theme.accent }]}>
-                <Text style={styles.proGateBtnText}>Upgrade to Pro</Text>
+                <Text style={styles.proGateBtnText}>View Milestone Progress</Text>
               </View>
             </View>
           </Pressable>
@@ -429,6 +442,9 @@ export default function ReportsScreen() {
               {(["weekly", "monthly"] as Tab[]).map((tab) => (
                 <TouchableOpacity
                   key={tab}
+                  testID={`reports-tab-${tab}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${tab} reports tab`}
                   onPress={() => setActiveTab(tab)}
                   style={[
                     styles.tabBtn,

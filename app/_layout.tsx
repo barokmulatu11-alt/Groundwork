@@ -15,13 +15,12 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
 
-import { AnimatedSplashScreen } from '@/components/AnimatedSplashScreen';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { XPToastProvider } from '@/components/XPToastProvider';
 import { SecurityProvider } from '@/components/security/SecurityProvider';
@@ -32,7 +31,11 @@ import { initConnectDb } from '@/lib/connect/connectDatabase';
 import { initDb } from '@/lib/db';
 import { handleNotificationResponse } from '@/lib/notifications';
 import { useAuthStore } from '@/store/useAuthStore';
-import { startSyncManager } from '@/store/useStore';
+import { startSyncManager, useStore } from '@/store/useStore';
+import * as rewardsService from '@/lib/rewardsService';
+import * as audioStorage from '@/lib/audioStorage';
+import { useSettingsStore } from '@/store/useSettingsStore';
+import * as profileSettingsService from '@/lib/profileSettingsService';
 
 export {
   ErrorBoundary
@@ -44,18 +47,39 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync();
 
+// Restrict test hooks exposure: never expose in standard production builds
+const isTestOrDev =
+  Boolean(__DEV__) ||
+  process.env.NODE_ENV === 'test' ||
+  process.env.EXPO_PUBLIC_ENABLE_TEST_HOOKS === 'true' ||
+  (typeof window !== 'undefined' && (window as any).__GROUNDWORK_ENABLE_TEST_HOOKS__ === true);
+
+if (Platform.OS === 'web' && typeof window !== 'undefined' && isTestOrDev) {
+  (window as any).__groundwork = {
+    useStore,
+    useAuthStore,
+    useSettingsStore,
+    profileSettingsService,
+    rewardsService,
+    audioStorage,
+    supabase,
+  };
+}
+
+// Handle notification presses while the app is killed (background event)
 notifee.onBackgroundEvent(async ({ type, detail }) => {
-  // Background events are handled here. If the user presses a notification
-  // while the app is killed, getInitialNotification in RootLayoutNav will handle it.
+  // If the user presses a notification while the app is killed,
+  // getInitialNotification in RootLayoutNav will handle it.
 });
 
+// Renders the correct status bar style (light/dark) based on the current theme
 function ThemeAwareStatusBar() {
   const { isDark } = useTheme();
   return <StatusBar style={isDark ? 'light' : 'dark'} translucent backgroundColor="transparent" />;
 }
 
+// Root layout — manages splash screen, fonts, database init, auth init, and sync
 export default function RootLayout() {
-  const [splashComplete, setSplashComplete] = useState(false);
   const [loaded, error] = useFonts({
     Inter_500Medium,
     Inter_600SemiBold,
@@ -65,8 +89,11 @@ export default function RootLayout() {
   });
 
   const { initialize } = useAuthStore();
+  const [isReady, setIsReady] = useState(false);
 
+  // Boot sequence: init DBs, auth, and sync manager
   useEffect(() => {
+    let isMounted = true;
     const boot = async () => {
       try {
         console.log('[RootLayout] Starting boot sequence...');
@@ -75,10 +102,18 @@ export default function RootLayout() {
         console.log('[RootLayout] Database initialized');
         await initialize();
         console.log('[RootLayout] Auth initialized');
+        const userId = useAuthStore.getState().session?.user?.id || 'guest';
+        const { initializeAccountRewards } = await import('@/lib/rewardsService');
+        await initializeAccountRewards(userId);
+        console.log('[RootLayout] Account rewards initialized');
         startSyncManager();
         console.log('[RootLayout] Sync manager started');
       } catch (e) {
         console.error('[RootLayout] Boot sequence failed:', e);
+      } finally {
+        if (isMounted) {
+          setIsReady(true);
+        }
       }
     };
     boot();
@@ -86,52 +121,47 @@ export default function RootLayout() {
     // Safety timeout: Ensure splash screen hides even if fonts or auth hang
     const timer = setTimeout(() => {
       console.log('[RootLayout] Safety timeout reached, forcing splash screen hide');
+      if (isMounted) setIsReady(true);
       SplashScreen.hideAsync().catch(() => {});
-    }, 5000);
+    }, 4000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, [initialize]);
 
+  // Clean transition: Once fonts and boot sequence are ready, hide native splash once
   useEffect(() => {
-    if (error) {
-      console.error('[RootLayout] Font loading error:', error);
+    if ((loaded || error) && isReady) {
+      console.log('[RootLayout] Ready, hiding native splash screen');
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [error]);
+  }, [loaded, error, isReady]);
 
-  useEffect(() => {
-    if (loaded) {
-      console.log('[RootLayout] Fonts loaded, hiding splash screen');
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [loaded]);
-
-  if (!loaded && !error) {
+  // Don't render until fonts and boot sequence are ready (prevents flash of unstyled content)
+  if ((!loaded && !error) || !isReady) {
     return null;
   }
 
   return (
     <ThemeProvider>
       <View style={{ flex: 1 }}>
-        {!splashComplete ? (
-          <AnimatedSplashScreen onFinish={() => setSplashComplete(true)} />
-        ) : (
-          <>
-            <WebAuthHeader />
-            <AuthMiddleware />
-            <SecurityProvider>
-              <RootLayoutNav />
-            </SecurityProvider>
-          </>
-        )}
+        <WebAuthHeader />
+        <AuthMiddleware />
+        <SecurityProvider>
+          <RootLayoutNav />
+        </SecurityProvider>
       </View>
     </ThemeProvider>
   );
 }
 
+// Watches auth state and redirects users to the right screen (welcome, login, onboarding, home).
+// Renders nothing — it's a side-effect-only component.
 function AuthMiddleware() {
   const router = useRouter();
-  const { session, isGuest, isLoading, onboardingDone, welcomeShown, setIsGuest } = useAuthStore();
+  const { session, isGuest, isLoading, isOAuthPending, onboardingDone, welcomeShown } = useAuthStore();
   const segments = useSegments();
 
   useEffect(() => {
@@ -140,19 +170,34 @@ function AuthMiddleware() {
     // initialize() has finished — competing with any in-flight OAuth login.
     if (isLoading) return;
 
+    // Also bail out while Google/OAuth sign-in is in progress.
+    // This prevents the flash where the middleware sees session=null mid-OAuth
+    // and wrongly flips the user to guest mode — causing the open/close/reopen glitch.
+    if (isOAuthPending) return;
+
     const inAuthGroup =
       segments[0] === 'login' ||
       segments[0] === 'signup' ||
       segments[0] === 'welcome' ||
-      segments[0] === 'forgot-password';
+      segments[0] === 'forgot-password' ||
+      segments[0] === 'reset-password';
     const inOnboarding = segments[0] === 'permissions_onboarding';
+
+    // Password recovery screen guard: NEVER redirect away from reset-password!
+    if (segments[0] === 'reset-password') {
+      return;
+    }
 
     if (!session && !isGuest) {
       if (welcomeShown) {
-        // User already onboarded once, default to guest state rather than kicking them to welcome screen
-        setIsGuest(true);
+        // User has been here before — send to login, not welcome.
+        // Do NOT call setIsGuest here — that causes a state change loop.
+        // Just navigate to login if they're not already in an auth screen.
+        if (!inAuthGroup) {
+          router.replace('/login' as any);
+        }
       } else {
-        // Not logged in and welcome not shown yet — send to welcome
+        // First time — send to welcome
         if (!inAuthGroup) {
           router.replace('/welcome' as any);
         }
@@ -170,11 +215,12 @@ function AuthMiddleware() {
       }
     }
     // Guest users: allow anywhere
-  }, [session, isGuest, isLoading, onboardingDone, welcomeShown, segments]);
+  }, [session, isGuest, isLoading, isOAuthPending, onboardingDone, welcomeShown, segments]);
 
   return null;
 }
 
+// Main navigation container — sets up notification handlers, deep link handling, and screen stack
 function RootLayoutNav() {
   const router = useRouter();
 
@@ -194,15 +240,13 @@ function RootLayoutNav() {
     });
   }, [router]);
 
-  // Global Deep Link Handler — handles cold-start OAuth redirects only.
-  // Navigation is handled solely by AuthMiddleware watching session state.
+  // Global Deep Link Handler — handles cold-start OAuth and password recovery redirects.
+  // Full URLs are NOT logged to prevent exposing authentication tokens in logs.
   useEffect(() => {
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
       if (!url) return;
-      
-      console.log('[Global DeepLink] Received URL:', url);
-      
+
       const getParam = (name: string) => {
         const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
         return match ? decodeURIComponent(match[1]) : null;
@@ -211,24 +255,56 @@ function RootLayoutNav() {
       const code = getParam('code');
       const access_token = getParam('access_token');
       const refresh_token = getParam('refresh_token');
+      const type = getParam('type');
+      const token = getParam('token');
+      const isRecovery = type === 'recovery' || url.includes('reset-password');
 
-      // Only process if this is actually an auth redirect
+      // 1. Neon Auth token link (direct token query param or path)
+      if (url.includes('reset-password') && !access_token && !code) {
+        let extractedToken = token;
+        if (!extractedToken && url.includes('reset-password/')) {
+          const parts = url.split('reset-password/')[1]?.split(/[?&#]/)[0];
+          if (parts && parts.length > 5) {
+            extractedToken = parts;
+          }
+        }
+        console.log('[Global DeepLink] Navigating to reset-password screen');
+        router.push({ pathname: '/reset-password', params: extractedToken ? { token: extractedToken } : {} });
+        return;
+      }
+
+      // 2. Supabase Password Recovery link (older build / rollback support)
+      if (isRecovery && (access_token || code)) {
+        console.log('[Global DeepLink] Handling password recovery link');
+        try {
+          if (code) {
+            await supabase.auth.exchangeCodeForSession(code);
+          } else if (access_token && refresh_token) {
+            await supabase.auth.setSession({ access_token, refresh_token });
+          }
+          router.replace({ pathname: '/reset-password', params: { mode: 'supabase' } });
+          return;
+        } catch (e: any) {
+          console.error('[Global DeepLink] Failed to process recovery session');
+          router.replace('/forgot-password' as any);
+          return;
+        }
+      }
+
+      // 3. Regular OAuth redirects
       if (!code && !access_token) return;
 
+      console.log('[Global DeepLink] Processing OAuth redirect');
       try {
         if (code) {
-          console.log('[Global DeepLink] Exchanging PKCE code for session...');
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) throw error;
-          // onAuthStateChange in useAuthStore fires automatically → AuthMiddleware navigates
         } else if (access_token && refresh_token) {
-          console.log('[Global DeepLink] Setting session from implicit flow...');
           const { error } = await supabase.auth.setSession({ access_token, refresh_token });
           if (error) throw error;
-          // onAuthStateChange fires automatically → AuthMiddleware navigates
         }
       } catch (e: any) {
-        console.error('[Global DeepLink] Failed to handle authentication redirect:', e);
+        console.error('[Global DeepLink] Failed to handle authentication redirect');
       }
     };
 
@@ -256,6 +332,8 @@ function RootLayoutNav() {
                 <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
                 <Stack.Screen name="login" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
                 <Stack.Screen name="signup" options={{ headerShown: false, animation: 'slide_from_right' }} />
+                <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
+                <Stack.Screen name="reset-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
                 <Stack.Screen name="tasks/index" options={{ headerShown: false }} />
                 <Stack.Screen name="tasks/task-detail" options={{ headerShown: false }} />
                 <Stack.Screen name="habits" options={{ headerShown: false }} />
@@ -275,6 +353,7 @@ function RootLayoutNav() {
                 <Stack.Screen name="permissions_settings" options={{ headerShown: false }} />
                 <Stack.Screen name="account-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="logo-center" options={{ headerShown: false }} />
                 <Stack.Screen name="productivity-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="data-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="privacy-settings" options={{ headerShown: false }} />

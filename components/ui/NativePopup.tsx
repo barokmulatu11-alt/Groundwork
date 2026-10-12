@@ -25,9 +25,13 @@ interface NativePopupProps {
 
 const { width } = Dimensions.get('window');
 
-function PopupButton({ title, onPress, variant, theme, destructive, flex }: any) {
+function PopupButton({ title, onPress, variant, theme, destructive, flex, testID }: any) {
+  const defaultTestId = `popup-btn-${String(title || '').toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
   return (
     <TouchableOpacity
+      testID={testID || defaultTestId}
+      accessibilityRole="button"
+      accessibilityLabel={title}
       onPress={onPress}
       activeOpacity={0.8}
       style={[

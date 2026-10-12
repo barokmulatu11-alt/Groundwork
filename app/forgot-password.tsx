@@ -37,15 +37,27 @@ export default function ForgotPasswordScreen() {
     if (!validateEmail()) return;
     
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess(true);
-      setError('');
+    try {
+      const origin = (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin)
+        ? window.location.origin
+        : null;
+      const redirectTo = origin ? `${origin}/reset-password` : 'groundwork://reset-password';
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo,
+      });
+      
+      if (error) {
+        setError(error.message || 'Failed to send reset instructions');
+      } else {
+        setSuccess(true);
+        setError('');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset instructions');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   if (success) {

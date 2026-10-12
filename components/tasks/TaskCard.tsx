@@ -50,12 +50,6 @@ export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplica
     transform: [{ rotate: `${expandProgress.value * 90}deg` }]
   }));
 
-  const contentStyle = useAnimatedStyle(() => ({
-    height: expanded ? 'auto' : 0,
-    opacity: expandProgress.value,
-    marginTop: expandProgress.value * 12
-  }));
-
   return (
     <View style={[
       styles.container, 
@@ -64,7 +58,14 @@ export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplica
         borderColor: theme.cardBorder }
     ]}>
       <View style={styles.mainRow}>
-        <Pressable onPress={onToggleComplete} style={styles.checkboxContainer}>
+        <Pressable 
+          testID={`task-checkbox-${task.id}`}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: task.completed }}
+          accessibilityLabel={`Toggle task ${task.title}`}
+          onPress={onToggleComplete} 
+          style={styles.checkboxContainer}
+        >
           <Animated.View style={[styles.checkbox, circleStyle, { borderRadius: 8 }]}>
             <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <AnimatedPath
@@ -80,7 +81,7 @@ export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplica
           </Animated.View>
         </Pressable>
 
-        <View style={styles.infoContainer}>
+        <Pressable onPress={() => setExpanded(!expanded)} style={styles.infoContainer}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={[styles.priorityDot, { backgroundColor: theme.accent }]} />
             <Text style={[styles.title, { color: theme.primaryText }, task.completed && styles.titleDone]}>
@@ -113,77 +114,107 @@ export const TaskCard = ({ task, onToggleComplete, onUpdate, onDelete, onDuplica
             
             {task.note && <Edit3 size={12} color={theme.secondaryText} />}
           </View>
-        </View>
+        </Pressable>
 
-        <Pressable onPress={() => setExpanded(!expanded)} style={styles.expandBtn}>
+        <Pressable 
+          testID={`task-expand-btn-${task.id}`}
+          accessibilityRole="button"
+          accessibilityLabel="Expand task details"
+          onPress={() => setExpanded(!expanded)} 
+          style={styles.expandBtn}
+        >
           <Animated.View style={chevronStyle}>
             <ChevronRight size={20} color={theme.secondaryText} />
           </Animated.View>
         </Pressable>
       </View>
 
-      <Animated.View style={[styles.expandedContent, contentStyle]}>
-        <View style={[styles.divider, { backgroundColor: theme.cardBorder }]} />
-        <TextInput
-          style={[styles.noteInput, { color: theme.primaryText, backgroundColor: 'transparent' }]}
-          placeholder="Add a note..."
-          placeholderTextColor={theme.secondaryText}
-          multiline
-          value={note}
-          onChangeText={setNote}
-          onBlur={() => onUpdate({ note })}
-        />
+      {expanded && (
+        <View style={[styles.expandedContent, { marginTop: 12 }]}>
+          <View style={[styles.divider, { backgroundColor: theme.cardBorder }]} />
+          <TextInput
+            testID={`task-note-input-${task.id}`}
+            style={[styles.noteInput, { color: theme.primaryText, backgroundColor: 'transparent' }]}
+            placeholder="Add a note..."
+            placeholderTextColor={theme.secondaryText}
+            multiline
+            value={note}
+            onChangeText={setNote}
+            onBlur={() => onUpdate({ note })}
+          />
 
-        {task.sub_tasks && task.sub_tasks.length > 0 && (
-          <View style={styles.subTasksContainer}>
-            <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>SUB-TASKS</Text>
-            {task.sub_tasks.map((st) => (
-              <SubTaskItem 
-                key={st.id} 
-                subTask={st} 
-                onToggle={() => {
-                  const newSubTasks = task.sub_tasks?.map(s => 
-                    s.id === st.id ? { ...s, completed: !s.completed } : s
-                  );
-                  onUpdate({ sub_tasks: newSubTasks });
-                }} 
-              />
+          {task.sub_tasks && task.sub_tasks.length > 0 && (
+            <View style={styles.subTasksContainer}>
+              <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>SUB-TASKS</Text>
+              {task.sub_tasks.map((st) => (
+                <SubTaskItem 
+                  key={st.id} 
+                  subTask={st} 
+                  onToggle={() => {
+                    const newSubTasks = task.sub_tasks?.map(s => 
+                      s.id === st.id ? { ...s, completed: !s.completed } : s
+                    );
+                    onUpdate({ sub_tasks: newSubTasks });
+                  }} 
+                />
+              ))}
+            </View>
+          )}
+          
+          <View style={styles.priorityRow}>
+            {(['high', 'medium', 'low'] as const).map(p => (
+              <Pressable 
+                key={p} 
+                testID={`task-priority-${p}-${task.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Set priority ${p}`}
+                onPress={() => onUpdate({ priority: p })}
+                style={[
+                  styles.priorityPill, 
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' },
+                  task.priority === p && { backgroundColor: theme.accent }
+                ]}
+              >
+                <Text style={[styles.priorityText, task.priority === p ? { color: 'white' } : { color: theme.secondaryText }]}>
+                  {p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low'}
+                </Text>
+              </Pressable>
             ))}
           </View>
-        )}
-        
-        <View style={styles.priorityRow}>
-          {(['high', 'medium', 'low'] as const).map(p => (
-            <Pressable 
-              key={p} 
-              onPress={() => onUpdate({ priority: p })}
-              style={[
-                styles.priorityPill, 
-                { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' },
-                task.priority === p && { backgroundColor: theme.accent }
-              ]}
-            >
-              <Text style={[styles.priorityText, task.priority === p ? { color: 'white' } : { color: theme.secondaryText }]}>
-                {p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
 
-        <View style={styles.actionRow}>
-          {onEdit && (
-            <Pressable style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} onPress={onEdit}>
-              <Text style={[styles.actionText, { color: theme.primaryText }]}>✏️ Edit</Text>
+          <View style={styles.actionRow}>
+            {onEdit && (
+              <Pressable 
+                testID={`task-edit-btn-${task.id}`}
+                accessibilityRole="button"
+                accessibilityLabel="Edit task"
+                style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} 
+                onPress={onEdit}
+              >
+                <Text style={[styles.actionText, { color: theme.primaryText }]}>✏️ Edit</Text>
+              </Pressable>
+            )}
+            <Pressable 
+              testID={`task-duplicate-btn-${task.id}`}
+              accessibilityRole="button"
+              accessibilityLabel="Duplicate task"
+              style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} 
+              onPress={onDuplicate}
+            >
+              <Text style={[styles.actionText, { color: theme.primaryText }]}>📋 Duplicate</Text>
             </Pressable>
-          )}
-          <Pressable style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} onPress={onDuplicate}>
-            <Text style={[styles.actionText, { color: theme.primaryText }]}>📋 Duplicate</Text>
-          </Pressable>
-          <Pressable style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} onPress={onDelete}>
-            <Text style={[styles.actionText, { color: theme.accent }]}>🗑 Delete</Text>
-          </Pressable>
+            <Pressable 
+              testID={`task-delete-btn-${task.id}`}
+              accessibilityRole="button"
+              accessibilityLabel="Delete task"
+              style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]} 
+              onPress={onDelete}
+            >
+              <Text style={[styles.actionText, { color: theme.accent }]}>🗑 Delete</Text>
+            </Pressable>
+          </View>
         </View>
-      </Animated.View>
+      )}
     </View>
   );
 };
@@ -196,8 +227,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
   },
-  mainRow: { flexDirection: 'row', alignItems: 'center' },
-  checkboxContainer: { padding: 4, marginRight: 12 },
+  mainRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
+  checkboxContainer: { padding: 4, marginRight: 12, flexShrink: 0 },
   checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   infoContainer: { flex: 1, justifyContent: 'center' },
   priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
@@ -208,7 +239,7 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   doneBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   doneText: { fontSize: 10, fontFamily: 'Inter_800ExtraBold' },
-  expandBtn: { padding: 8 },
+  expandBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   expandedContent: { overflow: 'hidden' },
   divider: { height: 1, width: '100%', marginVertical: 12 },
   noteInput: { padding: 12, borderRadius: 12, minHeight: 60, textAlignVertical: 'top', fontSize: 14, fontFamily: 'Inter_500Medium', marginBottom: 12 },

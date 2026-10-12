@@ -4,6 +4,7 @@ import { AppText as Text } from "@/components/ui/AppText";
 import { useTheme } from "@/lib/ThemeContext";
 import { migrateGuestData } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
+import { neonAuth } from "@/lib/neon";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FontAwesome } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -12,22 +13,23 @@ import * as WebBrowser from "expo-web-browser";
 import { ChevronLeft, Eye, EyeOff, Lock, Mail } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
+    useWindowDimensions,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Login screen — email/password and Google OAuth sign-in with MFA support
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,6 +56,7 @@ export default function LoginScreen() {
     }
   }, []);
 
+  // Validates email and password fields, returns true if both are filled
   const validateForm = () => {
     const newErrors: any = {};
 
@@ -73,12 +76,12 @@ export default function LoginScreen() {
     null,
   );
 
+  // Signs in with email/password, checks for MFA, migrates guest data, and triggers sync
   async function signInWithEmail() {
     if (!validateForm()) return;
 
     setLoading(true);
 
-    // Check if user was previously a guest and migrate data
     const { isGuest } = await import("@/store/useAuthStore").then((m) => ({
       isGuest: m.useAuthStore.getState().isGuest,
     }));
@@ -89,117 +92,81 @@ export default function LoginScreen() {
     });
 
     if (error) {
-      Alert.alert("Sign In Failed", error.message);
-      setErrors({ email: error.message });
+      Alert.alert("Sign In Failed", error.message || "Unknown error");
+      setErrors({ email: error.message || "Unknown error" });
       setLoading(false);
-    } else if (data.user) {
-      // Check for MFA
-      const { data: mfaData, error: mfaError } =
-        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-
-      if (mfaData && mfaData.nextLevel === "aal2") {
-        // MFA Required
-        const { data: factors } = await supabase.auth.mfa.listFactors();
-        const totpFactor = factors?.all.find(
-          (f) => f.factor_type === "totp" && f.status === "verified",
-        );
-
-        if (totpFactor) {
-          setMfaChallenge({ factorId: totpFactor.id });
-          setLoading(false);
-          return;
-        }
-      }
-
+    } else if (data?.user) {
       // Always migrate local guest data to the authenticated user ID to prevent data loss
       migrateGuestData("guest", data.user.id);
-      await import("@/store/useAuthStore").then((m) =>
-        m.useAuthStore.getState().setIsGuest(false),
-      );
+      
+      const { useAuthStore } = await import("@/store/useAuthStore");
+      useAuthStore.getState().setIsGuest(false);
+      
+      // Manually trigger the Auth Store hydrate since we removed the global listener
+      await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: data.user });
 
       // Trigger sync from cloud immediately
       import("@/store/useStore").then((m) =>
         m.useStore.getState().syncFromCloud(),
       );
 
-      router.replace("/" as any);
       setLoading(false);
+      router.replace("/");
     }
   }
 
+  // Google OAuth sign-in — opens a browser, exchanges the code for a session, migrates guest data, triggers sync.
+  // Does NOT manually navigate; AuthMiddleware handles redirects on session change.
   async function signInWithGoogle() {
     try {
       setGoogleLoading(true);
+      // Block AuthMiddleware from reacting to the session=null window during OAuth
+      useAuthStore.getState().setIsOAuthPending(true);
 
-      // Use consistent redirect URL across dev and production
-      // This ensures the OAuth flow properly redirects back to the app via deep linking
-      const redirectUrl = "groundwork://auth/callback";
+      // Use consistent redirect URL across dev, production, and web
+      // This ensures the OAuth flow properly redirects back to the app via deep linking or browser origin
+      const isWeb = Platform.OS === 'web';
+      const redirectUrl = isWeb
+        ? (typeof window !== 'undefined' ? `${window.location.origin}/` : 'http://localhost:8081/')
+        : "groundwork://auth/callback";
       console.log("[Auth] Starting Google OAuth with redirect:", redirectUrl);
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await (neonAuth.signIn as any).social({
         provider: "google",
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
+        callbackURL: redirectUrl,
       });
 
       if (error) throw error;
 
       if (data?.url) {
+        if (isWeb && typeof window !== 'undefined') {
+          window.location.href = data.url;
+          return;
+        }
         // WebBrowser.openAuthSessionAsync second parameter is the URL scheme to listen for
         const res = await WebBrowser.openAuthSessionAsync(
           data.url,
           "groundwork://",
         );
 
-        if (res.type === "success" && res.url) {
-          // Parse and exchange the code directly here — no Linking.openURL, no router.replace.
-          // AuthMiddleware will handle navigation once the session is set in the store.
-          const url = res.url;
-          const getParam = (name: string) => {
-            const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
-            return match ? decodeURIComponent(match[1]) : null;
-          };
-          const code = getParam("code");
-          const access_token = getParam("access_token");
-          const refresh_token = getParam("refresh_token");
+        if (res.type === "success") {
+          const { data: authData } = await neonAuth.getSession();
+          const userId = authData?.user?.id || null;
 
-          let userId: string | null = null;
-
-          if (code) {
-            const { data: sessionData, error: exchError } =
-              await supabase.auth.exchangeCodeForSession(code);
-            if (exchError) throw exchError;
-            userId = sessionData.session?.user.id || null;
-          } else if (access_token && refresh_token) {
-            const { data: sessionData, error: sessError } =
-              await supabase.auth.setSession({
-                access_token,
-                refresh_token,
-              });
-            if (sessError) throw sessError;
-            userId = sessionData.session?.user.id || null;
-          }
-
-          if (userId) {
+          if (userId && authData?.user && authData?.session) {
             // Always migrate local guest data and sync profile/settings (themes, etc.)
             await migrateGuestData("guest", userId);
             useAuthStore.getState().setIsGuest(false);
+            await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: authData.user, session: authData.session });
 
             const { useStore } = await import("@/store/useStore");
             await useStore.getState().syncFromCloud();
             console.log("[Auth] Google login sync complete");
-          } else {
-            const errParam = getParam("error_description") || getParam("error");
-            if (errParam)
-              Alert.alert("Login Failed", errParam.replace(/\+/g, " "));
+            router.replace("/");
           }
-        } else if (res.type === "cancel" || res.type === "dismiss") {
-          // User closed the browser — do nothing
         }
       } else {
-        throw new Error("No authentication URL returned from Supabase.");
+        throw new Error("No authentication URL returned from auth provider.");
       }
     } catch (e: any) {
       console.error("[Auth] Google sign in error:", e);
@@ -208,10 +175,12 @@ export default function LoginScreen() {
         e.message || "Could not start Google authentication.",
       );
     } finally {
+      useAuthStore.getState().setIsOAuthPending(false);
       setGoogleLoading(false);
     }
   }
 
+  // Desktop layout: side-by-side brand panel and auth card
   if (isDesktop) {
     return (
       <BackgroundGradient>

@@ -32,6 +32,7 @@ import {
     Alert,
     AppState,
     AppStateStatus,
+    Pressable,
     ScrollView,
     StyleSheet,
     TouchableOpacity,
@@ -50,8 +51,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const ModePill = ({ label, active, onPress, theme }: any) => (
+// A pill-shaped button for selecting focus timer mode (Study, Deep Work, Sprint, Custom)
+const ModePill = ({ label, active, onPress, theme, testID }: any) => (
   <TouchableOpacity
+    testID={testID}
+    accessibilityRole="button"
+    accessibilityLabel={`Mode: ${label}`}
     onPress={onPress}
     activeOpacity={0.8}
     style={[
@@ -68,6 +73,7 @@ const ModePill = ({ label, active, onPress, theme }: any) => (
   </TouchableOpacity>
 );
 
+// An audio-visualizer-style bar animation that pulses when the timer is active
 const AnimatedVisualizer = ({ active, theme }: { active: boolean; theme: any }) => {
   const bars = Array.from({ length: 15 });
   return (
@@ -79,6 +85,7 @@ const AnimatedVisualizer = ({ active, theme }: { active: boolean; theme: any }) 
   );
 };
 
+// A single animated bar in the visualizer — height pulses randomly when active
 const VisualizerBar = ({ index, active, theme }: any) => {
   const height = useSharedValue(10);
 
@@ -105,6 +112,7 @@ const VisualizerBar = ({ index, active, theme }: any) => {
 
 // ─── Pro Analytics Card ───────────────────────────────────────────────────────
 
+// Converts minutes to a human-readable string like "1h 30m" or "45m"
 const formatMinutes = (mins: number) => {
   if (!mins || mins === 0) return '0m';
   const h = Math.floor(mins / 60);
@@ -113,6 +121,7 @@ const formatMinutes = (mins: number) => {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
+// Pro-only analytics card — shows focus score, weekly stats, average session length, and peak focus hours
 const FocusAnalyticsCard = ({ metrics, theme }: { metrics: any; theme: any }) => {
   if (!metrics) return null;
   return (
@@ -175,6 +184,7 @@ const FocusAnalyticsCard = ({ metrics, theme }: { metrics: any; theme: any }) =>
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
+// Main focus timer screen — mode selector, countdown, controls, history, and Pro analytics
 export default function FocusScreen() {
   const { tasks, loadAllTasks, focusSessions, addFocusSession, loadFocusSessions } = useStore();
   const { theme, isDark } = useTheme();
@@ -210,7 +220,7 @@ export default function FocusScreen() {
   const [tempHours, setTempHours] = useState('0');
   const [tempMinutes, setTempMinutes] = useState('25');
 
-  // Restore elapsed time when app comes back to foreground
+  // Recalculate remaining time when app comes back to foreground (timer was ticking in background)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active' && focusTimerActive && focusTimerStartTime) {
@@ -229,7 +239,7 @@ export default function FocusScreen() {
     return () => subscription.remove();
   }, [focusTimerActive, focusTimerStartTime, focusTimerTimeLeft]);
 
-  // Main countdown interval
+  // Main countdown interval — ticks every second when the timer is active
   useEffect(() => {
     let interval: any;
     if (isActive && timeLeft > 0) {
@@ -244,7 +254,7 @@ export default function FocusScreen() {
     return () => clearInterval(interval);
   }, [isActive]);
 
-  // Sync local → store
+  // Sync local timer state back to the global settings store
   useEffect(() => {
     if (timeLeft === 0 && isActive) handleTimerCompletion();
     if (focusTimerTimeLeft !== timeLeft) setFocusTimerTimeLeft(timeLeft);
@@ -270,6 +280,7 @@ export default function FocusScreen() {
     }
   }, [isEditSheetVisible]);
 
+  // Called when the timer hits zero — logs the session, vibrates, and shows a success alert
   const handleTimerCompletion = async () => {
     setIsActive(false);
     setFocusTimerActive(false);
@@ -279,6 +290,7 @@ export default function FocusScreen() {
       duration_minutes: defaultDurationMinutes,
       task_id: selectedTaskId || undefined,
       date: new Date().toISOString().split('T')[0],
+      completed_at: new Date().toISOString(),
       mode,
     });
     Vibration.vibrate([0, 500, 200, 500]);
@@ -286,6 +298,7 @@ export default function FocusScreen() {
     setCompletionAlertVisible(true);
   };
 
+  // Toggles the timer between active and paused states, also schedules/cancels a completion notification
   const handleStartPause = async () => {
     if (isActive) {
       setIsActive(false);
@@ -301,6 +314,7 @@ export default function FocusScreen() {
     }
   };
 
+  // Resets the timer to its original duration and logs partial focus time if any was accumulated
   const handleReset = async () => {
     const secondsSpent = defaultDurationMinutes * 60 - timeLeft;
     const minutesSpent = Math.floor(secondsSpent / 60);
@@ -333,6 +347,7 @@ export default function FocusScreen() {
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySessions = focusSessions.filter((s) => s.date === todayStr);
 
+  // Parses the custom hour/minute pickers, validates, and applies the duration to the timer
   const applyCustomDuration = () => {
     const h = parseInt(tempHours) || 0;
     const m = parseInt(tempMinutes) || 0;
@@ -359,20 +374,21 @@ export default function FocusScreen() {
 
         {/* Mode selector */}
         <View style={styles.modeSelector}>
-          <ModePill label="Study" active={mode === 'Study'} onPress={() => { setMode('Study'); setDefaultDurationMinutes(25); setTimeLeft(25 * 60); }} theme={theme} />
-          <ModePill label="Deep Work" active={mode === 'Deep Work'} onPress={() => { setMode('Deep Work'); setDefaultDurationMinutes(45); setTimeLeft(45 * 60); }} theme={theme} />
-          <ModePill label="Sprint" active={mode === 'Quick Sprint'} onPress={() => { setMode('Quick Sprint'); setDefaultDurationMinutes(15); setTimeLeft(15 * 60); }} theme={theme} />
-          <ModePill label="Custom" active={mode === 'Custom'} onPress={() => setEditSheetVisible(true)} theme={theme} />
+          <ModePill testID="mode-pill-study" label="Study" active={mode === 'Study'} onPress={() => { setMode('Study'); setDefaultDurationMinutes(25); setTimeLeft(25 * 60); }} theme={theme} />
+          <ModePill testID="mode-pill-deep-work" label="Deep Work" active={mode === 'Deep Work'} onPress={() => { setMode('Deep Work'); setDefaultDurationMinutes(45); setTimeLeft(45 * 60); }} theme={theme} />
+          <ModePill testID="mode-pill-sprint" label="Sprint" active={mode === 'Quick Sprint'} onPress={() => { setMode('Quick Sprint'); setDefaultDurationMinutes(15); setTimeLeft(15 * 60); }} theme={theme} />
+          <ModePill testID="mode-pill-custom" label="Custom" active={mode === 'Custom'} onPress={() => setEditSheetVisible(true)} theme={theme} />
         </View>
 
         {/* Timer circle */}
         <View style={styles.timerContainer}>
           <TouchableOpacity
+            testID="focus-timer-circle"
             activeOpacity={0.9}
             onPress={() => !isActive && setEditSheetVisible(true)}
             style={[styles.timerCircle, { borderColor: isActive ? theme.accent : theme.card, borderWidth: isActive ? 4 : 2 }]}
           >
-            <Text style={[styles.timerText, { color: theme.primaryText, fontSize: timeLeft >= 3600 ? 40 : 48, fontFamily: 'Inter_800ExtraBold' }]}>
+            <Text testID="focus-timer-display" style={[styles.timerText, { color: theme.primaryText, fontSize: timeLeft >= 3600 ? 40 : 48, fontFamily: 'Inter_800ExtraBold' }]}>
               {timeLeft >= 3600
                 ? `${Math.floor(timeLeft / 3600)}:${String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`
                 : `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`}
@@ -384,12 +400,21 @@ export default function FocusScreen() {
 
           <View style={styles.controlsRow}>
             <TouchableOpacity
+              testID="focus-reset-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Reset Timer"
               onPress={handleReset}
               style={[styles.controlBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.card }]}
             >
               <Text style={{ color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }}>Reset</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleStartPause} style={[styles.playBtn, { backgroundColor: theme.accent }]}>
+            <TouchableOpacity
+              testID="focus-start-pause-btn"
+              accessibilityRole="button"
+              accessibilityLabel={isActive ? 'Pause Timer' : 'Start Focus Timer'}
+              onPress={handleStartPause}
+              style={[styles.playBtn, { backgroundColor: theme.accent }]}
+            >
               <Text style={styles.playBtnText}>{isActive ? 'Pause' : 'Start Focus'}</Text>
             </TouchableOpacity>
           </View>
@@ -489,7 +514,13 @@ export default function FocusScreen() {
               <Text style={[styles.pickerLabel, { color: theme.primaryText }]}>mins</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={applyCustomDuration} style={[styles.applyBtn, { backgroundColor: theme.accent }]}>
+          <TouchableOpacity 
+            testID="focus-apply-duration-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Apply Custom Duration"
+            onPress={applyCustomDuration} 
+            style={[styles.applyBtn, { backgroundColor: theme.accent }]}
+          >
             <Text style={styles.applyBtnText}>Apply Duration</Text>
           </TouchableOpacity>
         </View>

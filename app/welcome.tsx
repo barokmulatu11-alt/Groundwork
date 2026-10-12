@@ -2,7 +2,7 @@ import { BackgroundGradient } from "@/components/BackgroundGradient";
 import { AppText as Text } from "@/components/ui/AppText";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { migrateGuestData } from "@/lib/db";
-import { supabase } from "@/lib/supabase";
+import { neonAuth } from "@/lib/neon";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FontAwesome } from "@expo/vector-icons";
@@ -39,54 +39,34 @@ export default function WelcomeScreen() {
   const handleSignInWithGoogle = async () => {
     try {
       setGoogleLoading(true);
-      const redirectUrl = "groundwork://auth/callback";
+      const isWeb = Platform.OS === "web";
+      const redirectUrl = isWeb
+        ? (typeof window !== "undefined" ? `${window.location.origin}/` : "http://localhost:8081/")
+        : "groundwork://auth/callback";
       console.log(
         "[Auth] Starting Google OAuth (Welcome) with redirect:",
         redirectUrl,
       );
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await (neonAuth.signIn as any).social({
         provider: "google",
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-          queryParams: {
-            prompt: "select_account consent",
-            access_type: "offline",
-          },
-        },
+        callbackURL: redirectUrl,
       });
 
       if (error) throw error;
 
       if (data?.url) {
+        if (isWeb && typeof window !== "undefined") {
+          window.location.href = data.url;
+          return;
+        }
         const res = await WebBrowser.openAuthSessionAsync(
           data.url,
           "groundwork://",
         );
-        if (res.type === "success" && res.url) {
-          const url = res.url;
-          const getParam = (name: string) => {
-            const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
-            return match ? decodeURIComponent(match[1]) : null;
-          };
-          const code = getParam("code");
-          const access_token = getParam("access_token");
-          const refresh_token = getParam("refresh_token");
-
-          let userId: string | null = null;
-
-          if (code) {
-            const { data: sessionData, error: exchError } =
-              await supabase.auth.exchangeCodeForSession(code);
-            if (exchError) throw exchError;
-            userId = sessionData.session?.user.id || null;
-          } else if (access_token && refresh_token) {
-            const { data: sessionData, error: sessError } =
-              await supabase.auth.setSession({ access_token, refresh_token });
-            if (sessError) throw sessError;
-            userId = sessionData.session?.user.id || null;
-          }
+        if (res.type === "success") {
+          const { data: authData } = await neonAuth.getSession();
+          const userId = (authData as any)?.user?.id || (authData as any)?.session?.userId;
 
           if (userId) {
             await migrateGuestData("guest", userId);
@@ -98,7 +78,7 @@ export default function WelcomeScreen() {
           }
         }
       } else {
-        throw new Error("No authentication URL returned from Supabase.");
+        throw new Error("No authentication URL returned from Neon Auth.");
       }
     } catch (e: any) {
       console.error("[Auth] Google sign in error:", e);
@@ -130,41 +110,6 @@ export default function WelcomeScreen() {
             : { flex: 1, justifyContent: "center", padding: 24 }
         }
       >
-        {Platform.OS === "web" && !isDesktop ? (
-          <View
-            style={{
-              position: "absolute",
-              top: 16,
-              right: 16,
-              flexDirection: "row",
-              gap: 10,
-              zIndex: 10,
-            }}
-          >
-            <Pressable
-              onPress={handleSignIn}
-              style={[
-                styles.webTopSecondary,
-                { borderColor: theme.cardBorder, backgroundColor: theme.card },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.webTopSecondaryText,
-                  { color: theme.primaryText },
-                ]}
-              >
-                Log in
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleCreateAccount}
-              style={[styles.webTopPrimary, { backgroundColor: theme.accent }]}
-            >
-              <Text style={styles.webTopPrimaryText}>Sign up</Text>
-            </Pressable>
-          </View>
-        ) : null}
         <View
           style={
             isDesktop
@@ -180,9 +125,9 @@ export default function WelcomeScreen() {
         >
           <Animated.View
             entering={FadeInUp.delay(0).duration(300)}
-            style={{ alignItems: "center", marginBottom: 40 }}
+            style={{ alignItems: "center", marginBottom: 32 }}
           >
-            <BrandLogo fontSize={42} />
+            <BrandLogo fontSize={38} />
           </Animated.View>
 
           <Animated.Text
@@ -196,12 +141,12 @@ export default function WelcomeScreen() {
             entering={FadeInUp.delay(200).duration(300)}
             style={[styles.subtitle, { color: theme.secondaryText }]}
           >
-            Plan. Focus. Build habits. Learn.
+            Tasks, habits, notes, and timers built for deep work.
           </Animated.Text>
 
           <Animated.View
             entering={FadeInUp.delay(300).duration(300)}
-            style={{ width: "100%", marginTop: 48 }}
+            style={{ width: "100%", marginTop: 36 }}
           >
             <Pressable
               onPress={handleCreateAccount}
@@ -276,16 +221,27 @@ export default function WelcomeScreen() {
 
           <Animated.View
             entering={FadeInUp.delay(400).duration(300)}
-            style={{ marginTop: 24 }}
+            style={{ marginTop: 20, alignItems: "center" }}
           >
             <Pressable
               onPress={handleContinueWithoutAccount}
-              style={{ backgroundColor: "transparent" }}
+              style={{ backgroundColor: "transparent", paddingVertical: 6 }}
             >
               <Text style={[styles.skipText, { color: theme.primaryText }]}>
                 {"Continue without account"}
               </Text>
             </Pressable>
+            <Text
+              style={{
+                fontSize: 12,
+                color: theme.tertiaryText,
+                fontFamily: "Inter_400Regular",
+                marginTop: 4,
+                textAlign: "center",
+              }}
+            >
+              Your tasks and notes stay on this device unless connected.
+            </Text>
           </Animated.View>
         </View>
       </KeyboardAvoidingView>

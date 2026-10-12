@@ -9,6 +9,7 @@ import { useTheme } from '@/lib/ThemeContext';
 import type { Habit } from '@/lib/db';
 import { habitCompletedOnDate } from '@/lib/habitUtils';
 import { hapticLight } from '@/lib/haptics';
+import { isRewardUnlocked } from '@/lib/rewardsService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Flame, Share2, Star, Trash2, Trophy, X } from 'lucide-react-native';
 import React, { useState } from 'react';
@@ -34,10 +35,8 @@ export function HabitDetailSheet({
 }: HabitDetailSheetProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  // Derive Pro status directly from the auth profile — avoids importing subscriptionService
-  // at module load time which can crash when analytics tables aren't ready yet.
   const { profile } = useAuthStore();
-  const userIsPro: boolean = profile?.pro_status === true;
+  const userIsPro: boolean = profile?.pro_status === true || isRewardUnlocked('habit_heatmaps');
 
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -88,6 +87,9 @@ export function HabitDetailSheet({
 
             {/* Delete row */}
             <Pressable
+              testID="habit-detail-delete-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Delete habit"
               onPress={() => onRequestDelete(habit)}
               style={[styles.deleteRow, { borderColor: theme.cardBorder }]}
             >
@@ -136,6 +138,7 @@ export function HabitDetailSheet({
             ]}
           >
             <AnimatedButton
+              testID="habit-detail-toggle-btn"
               title={doneToday ? 'Completed Today' : 'Mark Done Today'}
               onPress={onToggleToday}
               style={{ alignSelf: 'stretch', width: '100%' }}

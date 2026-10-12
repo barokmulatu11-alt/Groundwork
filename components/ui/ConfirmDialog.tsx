@@ -40,6 +40,9 @@ export function ConfirmDialog({
           <View style={styles.buttonRow}>
             {!hideCancel && (
               <Pressable 
+                testID={`popup-btn-${String(cancelText || 'cancel').toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                accessibilityRole="button"
+                accessibilityLabel={cancelText}
                 style={[styles.button, styles.cancelButton, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7', borderColor: theme.cardBorder }]} 
                 onPress={onCancel}
               >
@@ -47,6 +50,9 @@ export function ConfirmDialog({
               </Pressable>
             )}
             <Pressable 
+              testID={`popup-btn-${String(confirmText || 'delete').toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+              accessibilityRole="button"
+              accessibilityLabel={confirmText}
               style={[styles.button, styles.confirmButton, { backgroundColor: confirmButtonColor }]} 
               onPress={async () => {
                 await onConfirm();

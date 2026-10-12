@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Modal, Pressable, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from 'react-native';
 import { AppText as Text } from './ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
-import { supabase } from '@/lib/supabase';
+import { neonData as supabase } from '@/lib/neon';
 import { X, ChevronDown, CheckCircle2, AlertCircle, MessageSquare, Bug, Lightbulb } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { useAuthStore } from '@/store/useAuthStore';

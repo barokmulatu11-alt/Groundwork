@@ -27,6 +27,7 @@ interface RecapMessageData {
   bgDark: string;
 }
 
+// Returns a motivational message tailored to the user's completion percentage for the day
 function getRecapMessage(completionPercentage: number, completedTasks: number, totalTasks: number, theme: any): RecapMessageData {
   if (totalTasks === 0) {
     return {
@@ -78,6 +79,7 @@ function getRecapMessage(completionPercentage: number, completedTasks: number, t
   };
 }
 
+// Renders the daily recap message card — headline, subline, detail, and accent color based on completion
 const RecapMessageCard = ({
   completionPercentage,
   completedTasks,
@@ -165,6 +167,7 @@ const RecapMessageCard = ({
   );
 };
 
+// A pressable stat card showing a value and label — with a spring scale animation on press
 const StatBox = ({ title, value, label, onPress, theme, isDark }: { title: string, value: string | number, label: string, onPress: () => void, theme: any, isDark: boolean }) => {
   const scale = useSharedValue(1);
 
@@ -197,6 +200,7 @@ const StatBox = ({ title, value, label, onPress, theme, isDark }: { title: strin
   );
 };
 
+// Daily Recap screen — shows completion percentage, stats, weekly chart, progress ring, and completed tasks
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -245,9 +249,9 @@ export default function RecapScreen() {
 
   const focusDisplay = formatTime(todayFocusMinutes);
 
-  // Generate weekly data
+  // Builds an array of the last 7 days with day labels and completed task counts for the bar chart
   const weeklyData = useMemo(() => {
-    const data = [];
+    const data: { day: string; value: number }[] = [];
     const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -299,7 +303,7 @@ export default function RecapScreen() {
         contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <TabHeader title="Daily Recap" subtitle="How did today go? • v1.2.2" />
+        <TabHeader title="Daily Recap" subtitle="How did today go? • v1.3.0" />
 
         <RecapMessageCard
           completionPercentage={completionPercentage}

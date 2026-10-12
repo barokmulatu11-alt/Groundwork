@@ -15,6 +15,7 @@ import {
     Sparkles,
     Square as SquareIcon,
     Trophy,
+    Lock,
     X
 } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -801,13 +802,13 @@ export default function JourneyScreen() {
                     if (locked) {
                       hapticLight();
                       showAlert({
-                        title: "Groundwork Pro",
+                        title: "Milestone Reward",
                         message:
-                          "Premium themes are exclusively available to Groundwork Pro members.",
+                          "This premium theme is unlocked through Milestone Rewards by hitting focus and habit goals.",
                         primaryButton: {
-                          text: "View Pro Plans",
+                          text: "View Milestones",
                           onPress: () =>
-                            router.push("/subscription-settings" as any),
+                            router.push("/rewards" as any),
                         },
                         secondaryButton: { text: "Not Now", onPress: () => {} },
                       });
@@ -1764,5 +1765,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     textAlign: "center",
+  },
+  themeSkinSubtitle: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    marginBottom: 12,
+  },
+  themePillLockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+  },
+  themePillCheck: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

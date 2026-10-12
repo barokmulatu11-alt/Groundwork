@@ -7,7 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { Camera, ChevronLeft, Folder, Image as ImageIcon, Mic } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 const PermissionRow = ({ icon: Icon, name, subtitle, isAllowed, onPress, theme }: any) => (
   <AnimatedCard>
@@ -99,7 +99,9 @@ export default function PermissionsSettings() {
           </View>
 
           <Text style={[styles.footer, { color: theme.secondaryText }]}>
-            Tapping a row will open your device settings where you can toggle these permissions.
+            {Platform.OS === 'web'
+              ? 'On web browsers, permissions are managed directly in your browser. Click the lock/settings icon next to your address bar to adjust camera, microphone, and notifications.'
+              : 'Tapping a row will open your device settings where you can toggle these permissions.'}
           </Text>
         </ScrollView>
       </View>

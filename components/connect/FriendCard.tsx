@@ -39,7 +39,8 @@ export const FriendCard: React.FC<Props> = ({
     return null;
   };
 
-  const statusColor = showStatus ? getActivityStatusColor(user.xp > 0 ? new Date().toISOString() : null) : null; // Dynamic indicator placeholder
+  const actualLastActive = (user as any).last_active || (user as any).updated_at || null;
+  const statusColor = showStatus && actualLastActive ? getActivityStatusColor(actualLastActive) : null;
 
   const handleAction = (e: any) => {
     e.stopPropagation();

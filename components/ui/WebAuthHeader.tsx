@@ -4,6 +4,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useTheme } from '@/lib/ThemeContext';
 import { AppText as Text } from '@/components/ui/AppText';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 
 /**
  * Web-only, desktop-friendly auth header.
@@ -30,18 +31,37 @@ export function WebAuthHeader() {
   if (isAuthed) return null;
 
   return (
-    <View style={[styles.container, { borderBottomColor: theme.cardBorder }]}>
+    <View
+      accessibilityRole="header"
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        },
+      ]}
+    >
       <View style={styles.inner}>
-        <Text style={[styles.brand, { color: theme.primaryText }]}>Groundwork</Text>
+        <Pressable
+          onPress={() => router.push('/' as any)}
+          accessibilityRole="link"
+          accessibilityLabel="Groundwork Home"
+        >
+          <BrandLogo fontSize={20} />
+        </Pressable>
         <View style={styles.actions}>
           <Pressable
             onPress={() => router.push('/login' as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Log in"
             style={[styles.secondaryBtn, { borderColor: theme.cardBorder, backgroundColor: theme.card }]}
           >
             <Text style={[styles.secondaryText, { color: theme.primaryText }]}>Log in</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/signup' as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Sign up"
             style={[styles.primaryBtn, { backgroundColor: theme.accent }]}
           >
             <Text style={styles.primaryText}>Sign up</Text>

@@ -1,6 +1,7 @@
 import { CustomAlert } from "@/components/ui/CustomAlert";
 import { useTheme } from "@/lib/ThemeContext";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
+import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -168,6 +169,7 @@ export function QuoteShareModal({
   quote,
 }: QuoteShareModalProps) {
   const { theme } = useTheme();
+  const router = useRouter();
 
   // States
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>("9:16");
@@ -181,7 +183,6 @@ export function QuoteShareModal({
 
   // Popups & Alerts
   const [showProAlert, setShowProAlert] = useState(false);
-  const [showProUnavailableAlert, setShowProUnavailableAlert] = useState(false);
 
   // Sharing simulation
   const [simulatingShare, setSimulatingShare] = useState(false);
@@ -726,71 +727,22 @@ export function QuoteShareModal({
         </View>
       </Modal>
 
-      {/* Groundwork Pro paywall dialog */}
+      {/* Milestone Rewards dialog */}
       <CustomAlert
         visible={showProAlert}
         type="info"
-        title="Groundwork Pro"
-        message="Removing the branding logo is a premium feature. Upgrade to Groundwork Pro to customize quote cards fully and unlock all features!"
-        confirmText="Upgrade Now"
+        title="Milestone Reward"
+        message="Watermark-free studio exports unlock through Groundwork Milestone Rewards. Complete your focus and habit milestones to unlock full studio card customization!"
+        confirmText="View Milestones"
         cancelText="Maybe Later"
         showCancel
         onConfirm={() => {
           hapticLight();
           setShowProAlert(false);
-          // Launch custom Groundwork Pro premium unavailable overlay
-          setTimeout(() => {
-            setShowProUnavailableAlert(true);
-          }, 400);
+          router.push('/rewards' as any);
         }}
         onCancel={() => setShowProAlert(false)}
       />
-
-      {/* Pro Upgrades Unavailable Custom Modal */}
-      <Modal transparent visible={showProUnavailableAlert} animationType="fade">
-        <View style={styles.paywallOverlay}>
-          <View
-            style={[
-              styles.paywallBox,
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.cardBorder,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.paywallIconContainer,
-                { backgroundColor: theme.accentLight },
-              ]}
-            >
-              <Lock size={32} color={theme.accent} />
-            </View>
-
-            <Text style={[styles.paywallTitle, { color: theme.primaryText }]}>
-              Groundwork Pro
-            </Text>
-            <Text style={[styles.paywallSubtitle, { color: theme.accent }]}>
-              Pro Access Currently Offline
-            </Text>
-            <Text style={[styles.paywallText, { color: theme.secondaryText }]}>
-              Our premium membership tier is currently undergoing seasonal
-              updates. Check back soon for exclusive access to custom themes,
-              advanced stats, and watermark-free exports!
-            </Text>
-
-            <Pressable
-              style={[styles.paywallBtn, { backgroundColor: theme.accent }]}
-              onPress={() => {
-                hapticLight();
-                setShowProUnavailableAlert(false);
-              }}
-            >
-              <Text style={styles.paywallBtnText}>Got it</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       {/* Ultra-HD Rendering & Simulated Posting Pipeline Modal */}
       <Modal transparent visible={simulatingShare} animationType="fade">

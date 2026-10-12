@@ -20,9 +20,23 @@ interface ActionRowProps {
   showChevron?: boolean;
   accentColor?: string;
   rightElement?: React.ReactNode;
+  testID?: string;
+  accessibilityRole?: any;
+  accessibilityLabel?: string;
 }
 
-export function ActionRow({ Icon, title, subtitle, onPress, showChevron = true, accentColor, rightElement }: ActionRowProps) {
+export function ActionRow({ 
+  Icon, 
+  title, 
+  subtitle, 
+  onPress, 
+  showChevron = true, 
+  accentColor, 
+  rightElement,
+  testID,
+  accessibilityRole,
+  accessibilityLabel 
+}: ActionRowProps) {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
 
@@ -48,12 +62,15 @@ export function ActionRow({ Icon, title, subtitle, onPress, showChevron = true, 
 
   return (
     <AnimatedPressable 
+      testID={testID}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={[
         styles.card, 
-        { backgroundColor: theme.card, borderColor: theme.cardBorder },
+        { backgroundColor: theme.card, borderColor: theme.cardBorder, width: '100%', alignSelf: 'stretch' },
         animatedStyle
       ]}
     >
@@ -75,6 +92,8 @@ export function ActionRow({ Icon, title, subtitle, onPress, showChevron = true, 
 
 const styles = StyleSheet.create({
   card: {
+    width: '100%',
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,

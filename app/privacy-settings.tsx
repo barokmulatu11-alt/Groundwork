@@ -35,7 +35,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LockScreen } from '@/components/security/LockScreen';
 import { MFAEnrollment } from '@/components/security/MFAEnrollment';
 import { SecurityUtils } from '@/lib/security';
-import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -101,23 +100,36 @@ function SettingRow({ icon: Icon, title, subtitle, theme, children, onPress, des
 }
 
 function PermissionBadge({ status, onPress }: { status: string; onPress: () => void }) {
-  const isGranted = status === 'granted' || status === 'limited';
+  let label = 'Not Requested';
+  let badgeColor = '#8E8E93';
+  let bg = 'rgba(142,142,147,0.12)';
+
+  if (status === 'granted') {
+    label = 'Granted';
+    badgeColor = '#34C759';
+    bg = 'rgba(52,199,89,0.12)';
+  } else if (status === 'limited') {
+    label = 'Limited';
+    badgeColor = '#FF9500';
+    bg = 'rgba(255,149,0,0.12)';
+  } else if (status === 'denied') {
+    label = 'Denied';
+    badgeColor = '#FF3B30';
+    bg = 'rgba(255,59,48,0.12)';
+  } else if (status === 'on_demand') {
+    label = 'On Demand';
+    badgeColor = '#007AFF';
+    bg = 'rgba(0,122,255,0.12)';
+  }
+
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.permBadge, { backgroundColor: isGranted ? 'rgba(52,199,89,0.1)' : 'rgba(255,59,48,0.1)' }]}>
-      <Text style={[styles.permBadgeText, { color: isGranted ? '#34C759' : '#FF3B30' }]}>
-        {isGranted ? (status === 'limited' ? 'Limited' : 'Granted') : 'Denied'}
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.permBadge, { backgroundColor: bg }]}>
+      <Text style={[styles.permBadgeText, { color: badgeColor }]}>
+        {label}
       </Text>
     </TouchableOpacity>
   );
 }
-
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-
-const MOCK_HISTORY = [
-  { id: '1', event: 'Password Changed', date: 'Oct 10, 2023', time: '14:32', type: 'security' },
-  { id: '2', event: 'Successful Login', date: 'Oct 08, 2023', time: '09:15', type: 'login' },
-  { id: '3', event: 'New Device Linked', date: 'Oct 05, 2023', time: '11:20', type: 'security' },
-];
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
@@ -131,18 +143,19 @@ export default function PrivacySettingsScreen() {
   const { session } = useAuthStore();
   const { activeSessions, deviceId, revokeSession, revokeAllOtherSessions } = useSessionStore();
 
-  const [biometricType, setBiometricType] = useState<string>('Face ID');
+  const [biometricType, setBiometricType] = useState<string>('Fingerprint/Face ID');
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [pinMode, setPinMode] = useState<'setup' | 'verify' | 'change_step1' | 'change_step2' | 'change_step3'>('setup');
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false);
   const [isMFAActive, setIsMFAActive] = useState(false);
+  const [isMFASupported, setIsMFASupported] = useState(false);
 
   const [permissions, setPermissions] = useState({
     camera: 'undetermined',
     microphone: 'undetermined',
     media: 'undetermined',
-    files: 'granted',
+    files: Platform.OS === 'web' ? 'on_demand' : 'undetermined',
   });
 
   const loadPermissions = async () => {
@@ -172,11 +185,14 @@ export default function PrivacySettingsScreen() {
 
   useEffect(() => {
     (async () => {
-      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-      setBiometricType('Fingerprint/Face ID');
-      
-      const mfaStatus = await SecurityUtils.getMFAStatus();
-      setIsMFAActive(mfaStatus.verified);
+      try {
+        const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+        setBiometricType('Fingerprint/Face ID');
+        
+        const mfaStatus = await SecurityUtils.getMFAStatus();
+        setIsMFASupported(mfaStatus.supported);
+        setIsMFAActive(mfaStatus.verified);
+      } catch (_) {}
     })();
   }, []);
 
@@ -275,6 +291,14 @@ export default function PrivacySettingsScreen() {
   };
 
   const handle2FASetup = async () => {
+    if (!isMFASupported) {
+      showAlert({
+        title: '2FA Not Available',
+        message: 'Two-factor authentication (TOTP) is currently not supported by the active authentication provider.',
+        primaryButton: { text: 'OK', onPress: () => { } }
+      });
+      return;
+    }
     if (isMFAActive) {
       showAlert({
         title: 'Disable 2FA',
@@ -293,7 +317,7 @@ export default function PrivacySettingsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.delay(50).duration(500)}>
@@ -439,7 +463,7 @@ export default function PrivacySettingsScreen() {
               <SettingRow
                 icon={ShieldCheck}
                 title="Two-Factor Authentication"
-                subtitle={isMFAActive ? '2FA is active' : 'Secure your account with 2FA'}
+                subtitle={isMFAActive ? '2FA is active' : (isMFASupported ? 'Secure your account with 2FA' : 'Unavailable on this auth provider')}
                 theme={theme}
                 onPress={handle2FASetup}
               />
@@ -504,23 +528,18 @@ export default function PrivacySettingsScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(300).duration(500)}>
-          {/* ── LOGIN HISTORY ────────────────────────── */}
+          {/* ── SECURITY HISTORY ────────────────────────── */}
           <SectionLabel label="SECURITY HISTORY" theme={theme} />
           <Card theme={theme}>
-            {MOCK_HISTORY.map((item, index) => (
-              <React.Fragment key={item.id}>
-                <View style={styles.historyRow}>
-                  <View style={styles.timeline}>
-                    <View style={[styles.dot, { backgroundColor: item.type === 'security' ? '#FF9500' : accentColor }]} />
-                    {index < MOCK_HISTORY.length - 1 && <View style={[styles.line, { backgroundColor: theme.separator }]} />}
-                  </View>
-                  <View style={styles.historyInfo}>
-                    <Text style={[styles.historyEvent, { color: theme.primaryText }]}>{item.event}</Text>
-                    <Text style={[styles.historyMeta, { color: theme.secondaryText }]}>{item.date} at {item.time}</Text>
-                  </View>
-                </View>
-              </React.Fragment>
-            ))}
+            <View style={{ paddingVertical: 18, alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldCheck size={28} color={theme.tertiaryText} style={{ marginBottom: 8, opacity: 0.6 }} />
+              <Text style={{ color: theme.primaryText, fontFamily: 'Inter_600SemiBold', fontSize: 14, marginBottom: 4 }}>
+                Security History Unavailable
+              </Text>
+              <Text style={{ color: theme.secondaryText, fontFamily: 'Inter_400Regular', fontSize: 12, textAlign: 'center', paddingHorizontal: 16, lineHeight: 18 }}>
+                Remote security audit logging is not supported by the active authentication provider. Active sessions and local security controls can be managed directly on this screen.
+              </Text>
+            </View>
           </Card>
         </Animated.View>
 
@@ -548,11 +567,11 @@ export default function PrivacySettingsScreen() {
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: theme.tertiaryText }]}>
-            groundwork. uses industry-standard encryption to protect your data.
+            Network requests use secure HTTPS connections and local data is isolated to your device storage.
           </Text>
-          <View style={styles.encryptionBadge}>
-            <Lock size={12} color={theme.success} />
-            <Text style={[styles.encryptionText, { color: theme.success }]}>AES-256 Bit Encryption Active</Text>
+          <View style={[styles.encryptionBadge, { backgroundColor: theme.cardBorder + '30' }]}>
+            <Lock size={12} color={theme.accent} />
+            <Text style={[styles.encryptionText, { color: theme.accent }]}>Secure HTTPS Connection</Text>
           </View>
         </View>
 

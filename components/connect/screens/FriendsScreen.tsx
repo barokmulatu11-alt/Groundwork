@@ -144,6 +144,9 @@ export default function FriendsScreen() {
       {/* Segment Selector */}
       <View style={[styles.segmentContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}>
         <TouchableOpacity 
+          testID="connect-friends-segment-btn"
+          accessibilityRole="button"
+          accessibilityLabel="All Friends"
           style={[styles.segmentBtn, activeSegment === 'friends' && (isDark ? styles.segmentBtnActiveDark : styles.segmentBtnActiveLight)]}
           onPress={() => setActiveSegment('friends')}
           activeOpacity={0.8}
@@ -154,6 +157,9 @@ export default function FriendsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity 
+          testID="connect-requests-segment-btn"
+          accessibilityRole="button"
+          accessibilityLabel="Requests"
           style={[styles.segmentBtn, activeSegment === 'requests' && (isDark ? styles.segmentBtnActiveDark : styles.segmentBtnActiveLight)]}
           onPress={() => setActiveSegment('requests')}
           activeOpacity={0.8}
@@ -177,6 +183,8 @@ export default function FriendsScreen() {
             <View style={[styles.searchBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
               <Search size={18} color={theme.secondaryText} style={styles.searchIcon} />
               <TextInput
+                testID="connect-friends-search-input"
+                accessibilityLabel="Search users by username"
                 style={[styles.input, { color: theme.primaryText }]}
                 placeholder="Search users by username..."
                 placeholderTextColor={theme.secondaryText}

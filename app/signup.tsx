@@ -3,34 +3,36 @@ import { AppText as Text } from "@/components/ui/AppText";
 import { useTheme } from "@/lib/ThemeContext";
 import { migrateGuestData } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
+import { neonAuth } from "@/lib/neon";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FontAwesome } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import {
-  ChevronLeft,
-  Eye,
-  EyeOff,
-  Lock,
-  Mail,
-  User,
+    ChevronLeft,
+    Eye,
+    EyeOff,
+    Lock,
+    Mail,
+    User,
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+// Sign up screen — email/password registration with name, confirm password, and Google OAuth
 export default function SignUpScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -48,6 +50,17 @@ export default function SignUpScreen() {
 
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
+  // Pre-warm Chrome Custom Tabs on Android to reduce Google sign-in cold-start delay
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') {
+      WebBrowser.warmUpAsync();
+      return () => {
+        WebBrowser.coolDownAsync();
+      };
+    }
+  }, []);
+
+  // Validates all form fields — name, email format, password length, and confirm match
   const validateForm = () => {
     const newErrors: any = {};
     
@@ -77,95 +90,90 @@ export default function SignUpScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Creates an account via Supabase auth with email, password, and full name metadata
   async function signUpWithEmail() {
     if (!validateForm()) return;
     
     setLoading(true);
 
-    const {
-      data: { session },
-      error } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-      options: {
-        data: {
-          full_name: name }
-      }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name } }
     });
 
     if (error) {
-      Alert.alert('Sign Up Failed', error.message);
-      setErrors({ email: error.message });
-    } else if (!session) {
-      Alert.alert('Success', 'Please check your email to verify your account.');
-      router.replace('/login' as any);
+      Alert.alert('Sign Up Failed', error.message || 'Unknown error');
+      setErrors({ email: error.message || 'Unknown error' });
+    } else if (data) {
+      const user = (data as any).user;
+      if (user) {
+        migrateGuestData("guest", user.id);
+        const { useAuthStore } = await import("@/store/useAuthStore");
+        useAuthStore.getState().setIsGuest(false);
+        await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user, session: (data as any).session || { user } });
+        import("@/store/useStore").then(m => m.useStore.getState().syncFromCloud());
+        router.replace('/');
+      } else {
+        Alert.alert('Success', 'Please check your email to verify your account.');
+        router.replace('/login' as any);
+      }
     }
     setLoading(false);
   }
 
+  // Google OAuth sign-up — opens browser, exchanges code for session, migrates guest data, triggers sync
   async function signInWithGoogle() {
     try {
       setGoogleLoading(true);
-      const redirectUrl = "groundwork://auth/callback";
+      // Block AuthMiddleware from reacting to the session=null window during OAuth
+      useAuthStore.getState().setIsOAuthPending(true);
+
+      const isWeb = Platform.OS === 'web';
+      const redirectUrl = isWeb
+        ? (typeof window !== 'undefined' ? `${window.location.origin}/` : 'http://localhost:8081/')
+        : "groundwork://auth/callback";
       console.log("[Auth] Starting Google OAuth (SignUp) with redirect:", redirectUrl);
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await (neonAuth.signIn as any).social({
         provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-          queryParams: {
-            prompt: 'select_account consent',
-            access_type: 'offline',
-          },
-        },
+        callbackURL: redirectUrl,
       });
 
       if (error) throw error;
 
       if (data?.url) {
+        if (isWeb && typeof window !== 'undefined') {
+          window.location.href = data.url;
+          return;
+        }
         const res = await WebBrowser.openAuthSessionAsync(
           data.url,
           "groundwork://"
         );
-        if (res.type === 'success' && res.url) {
-          const url = res.url;
-          const getParam = (name: string) => {
-            const match = url.match(new RegExp(`[?&#]${name}=([^&#]*)`));
-            return match ? decodeURIComponent(match[1]) : null;
-          };
-          const code = getParam('code');
-          const access_token = getParam('access_token');
-          const refresh_token = getParam('refresh_token');
+        if (res.type === 'success') {
+          const { data: authData } = await neonAuth.getSession();
+          const userId = authData?.user?.id || null;
 
-          let userId: string | null = null;
-
-          if (code) {
-            const { data: sessionData, error: exchError } = await supabase.auth.exchangeCodeForSession(code);
-            if (exchError) throw exchError;
-            userId = sessionData.session?.user.id || null;
-          } else if (access_token && refresh_token) {
-            const { data: sessionData, error: sessError } = await supabase.auth.setSession({ access_token, refresh_token });
-            if (sessError) throw sessError;
-            userId = sessionData.session?.user.id || null;
-          }
-
-          if (userId) {
+          if (userId && authData?.user && authData?.session) {
             await migrateGuestData("guest", userId);
             useAuthStore.getState().setIsGuest(false);
+            await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: authData.user, session: authData.session });
             
             const { useStore } = await import("@/store/useStore");
             await useStore.getState().syncFromCloud();
             console.log("[Auth] Google signup sync complete");
+            router.replace('/');
           }
         }
       } else {
-        throw new Error('No authentication URL returned from Supabase.');
+        throw new Error("No authentication URL returned from auth provider.");
       }
     } catch (e: any) {
       console.error('[Auth] Google sign in error:', e);
       Alert.alert('Google Sign-In Error', e.message || 'Could not start Google authentication.');
     } finally {
+      useAuthStore.getState().setIsOAuthPending(false);
       setGoogleLoading(false);
     }
   }

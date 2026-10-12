@@ -2,7 +2,7 @@ import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
-import { supabase } from '@/lib/supabase';
+import { neonAuth } from '@/lib/neon';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, Eye, EyeOff, Lock, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import React, { useState } from 'react';
@@ -87,25 +87,19 @@ export default function ChangePasswordScreen() {
     setIsLoading(true);
 
     try {
-      // 1. Verify current password by attempting to sign in
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: session.user.email,
-        password: currentPassword,
+      const { error } = await (neonAuth as any).changePassword({
+        newPassword,
+        currentPassword,
+        revokeOtherSessions: true,
       });
 
-      if (signInError) {
-        setErrors({ current: 'Incorrect current password' });
-        setIsLoading(false);
-        return;
-      }
-
-      // 2. Update to new password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (updateError) {
-        throw updateError;
+      if (error) {
+        if (error.message?.toLowerCase().includes('current password') || error.status === 400) {
+          setErrors({ current: 'Incorrect current password' });
+          setIsLoading(false);
+          return;
+        }
+        throw error;
       }
 
       // 3. Send security notification (simulated local notification since Supabase email is handled server-side if configured)

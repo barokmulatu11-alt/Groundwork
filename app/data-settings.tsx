@@ -24,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import { useStore } from '@/store/useStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import Animated, { 
   FadeInDown, 
   useAnimatedStyle, 
@@ -101,39 +102,93 @@ export default function DataSyncSettingsScreen() {
   const router = useRouter();
   const accentColor = theme.accent;
 
-  const { isSyncing, lastSyncedAt, syncError, syncFromCloud, tasks, habits, notes, focusSessions } = useStore();
+  const { syncStatus: storeSyncStatus, lastSyncedAt, syncPartialFailures, syncFromCloud, tasks, habits, notes, focusSessions } = useStore();
   const { offlineMode, setOfflineMode } = useSettingsStore();
+  const { session, isGuest } = useAuthStore();
 
-  const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'failed' | 'offline'>('synced');
+  // Derive the display-level status from the authoritative store field.
+  // 'local_guest' and 'offline' are session/setting overrides; otherwise use storeSyncStatus.
+  const syncStatus = (() => {
+    if (isGuest || !session) return 'local_guest' as const;
+    if (offlineMode) return 'offline' as const;
+    if (storeSyncStatus === 'idle' && !lastSyncedAt) return 'never_synced' as const;
+    if (storeSyncStatus === 'idle') return 'synced' as const; // has prior timestamp, first render before sync fires
+    if (storeSyncStatus === 'syncing') return 'syncing' as const;
+    if (storeSyncStatus === 'failed') return 'failed' as const;
+    if (storeSyncStatus === 'partial') return 'partial' as const;
+    if (storeSyncStatus === 'synced') return 'synced' as const;
+    return !lastSyncedAt ? 'never_synced' as const : 'synced' as const;
+  })();
+
   const [showImportConfirm, setShowImportConfirm] = useState(false);
 
-  useEffect(() => {
-    if (offlineMode) {
-      setSyncStatus('offline');
-    } else if (isSyncing) {
-      setSyncStatus('syncing');
-    } else if (syncError) {
-      setSyncStatus('failed');
-    } else {
-      setSyncStatus('synced');
-    }
-  }, [offlineMode, isSyncing, syncError]);
-
   const handleBackup = async () => {
+    if (isGuest || !session) {
+      showAlert({
+        title: "Account Required",
+        message: "Cloud sync is available for registered accounts. Create a free account or sign in to sync your data across devices.",
+        primaryButton: { text: "Sign In / Register", onPress: () => router.push('/login' as any) },
+        secondaryButton: { text: "Keep Working Offline", onPress: () => {} }
+      });
+      return;
+    }
     if (offlineMode) {
       showAlert({
-        title: "Offline Mode",
-        message: "Please disable offline mode to sync with cloud.",
+        title: "Offline Mode Active",
+        message: "Please disable offline mode below to sync with the cloud.",
         primaryButton: { text: "OK", onPress: () => {} }
       });
       return;
     }
     try {
-      await syncFromCloud();
-      showAlert({ title: "Success", message: "Your data has been backed up to the cloud.", primaryButton: { text: "OK", onPress: () => {} } });
-    } catch (e) {
-      setSyncStatus('failed');
-      showAlert({ title: "Sync Failed", message: "Could not connect to the server. Please check your internet connection.", primaryButton: { text: "OK", onPress: () => {} } });
+      const result = await syncFromCloud();
+      if (result?.skipped) {
+        showAlert({
+          title: "Sync Skipped",
+          message: result.reason || "Please sign in to sync with the cloud.",
+          primaryButton: { text: "OK", onPress: () => {} }
+        });
+        return;
+      }
+
+      if (result?.partial) {
+        // Store's syncStatus is already set to 'partial' by syncFromCloud.
+        const failedItems = result.partialFailures && result.partialFailures.length > 0
+          ? result.partialFailures.join(', ')
+          : 'some items';
+        showAlert({
+          title: "Sync Partially Completed",
+          message: `Some items (${failedItems}) could not be uploaded to the cloud. The previous successful backup timestamp was preserved. Tap Retry Sync to upload remaining items.`,
+          primaryButton: { text: "Retry Sync", onPress: () => handleBackup() },
+          secondaryButton: { text: "Dismiss", onPress: () => {} }
+        });
+        return;
+      }
+
+      if (!result?.success) {
+        // Store's syncStatus is already set to 'failed' by syncFromCloud.
+        showAlert({
+          title: "Sync Failed",
+          message: result?.error || "Could not connect to the server. Please check your network connection.",
+          primaryButton: { text: "Retry", onPress: () => handleBackup() },
+          secondaryButton: { text: "Dismiss", onPress: () => {} }
+        });
+        return;
+      }
+
+      // Store's syncStatus is already set to 'synced' by syncFromCloud.
+      showAlert({
+        title: "Sync Complete",
+        message: "Your data has been successfully backed up to the cloud.",
+        primaryButton: { text: "OK", onPress: () => {} }
+      });
+    } catch (e: any) {
+      // Store's syncStatus is already set to 'failed' by syncFromCloud's catch block.
+      showAlert({
+        title: "Sync Failed",
+        message: e?.message || "Could not connect to the server. Please check your internet connection.",
+        primaryButton: { text: "OK", onPress: () => {} }
+      });
     }
   };
 
@@ -178,6 +233,29 @@ export default function DataSyncSettingsScreen() {
       });
     }
     
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      try {
+        const mimeType = format === 'json' ? 'application/json' : 'text/csv';
+        const blob = new Blob([contentToShare], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `groundwork-backup-${new Date().toISOString().slice(0, 10)}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showAlert({
+          title: "Export Downloaded",
+          message: `Your ${format.toUpperCase()} backup file has been saved to your downloads.`,
+          primaryButton: { text: "OK", onPress: () => {} }
+        });
+        return;
+      } catch (err) {
+        console.warn('[DataExport] Web download failed, falling back:', err);
+      }
+    }
+
     try {
       await Share.share({
         message: contentToShare,
@@ -203,7 +281,6 @@ export default function DataSyncSettingsScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setSyncStatus('syncing');
         const uri = result.assets[0].uri;
         const response = await fetch(uri);
         const text = await response.text();
@@ -216,10 +293,8 @@ export default function DataSyncSettingsScreen() {
           message: "Data has been successfully merged.",
           primaryButton: { text: "OK", onPress: () => {} }
         });
-        setSyncStatus('synced');
       }
     } catch (e) {
-      setSyncStatus('failed');
       showAlert({
         title: "Error",
         message: "Failed to import data. The file might be corrupted or in an invalid format.",
@@ -250,6 +325,13 @@ export default function DataSyncSettingsScreen() {
 
   const renderSyncStatus = () => {
     switch (syncStatus) {
+      case 'local_guest':
+        return (
+          <View style={styles.statusBadge}>
+            <HardDrive size={14} color={accentColor} />
+            <Text style={[styles.statusText, { color: accentColor }]}>Local Only (Guest)</Text>
+          </View>
+        );
       case 'syncing':
         return (
           <View style={styles.statusBadge}>
@@ -264,6 +346,20 @@ export default function DataSyncSettingsScreen() {
           <View style={styles.statusBadge}>
             <CheckCircle2 size={14} color={theme.success} />
             <Text style={[styles.statusText, { color: theme.success }]}>Synced</Text>
+          </View>
+        );
+      case 'partial':
+        return (
+          <View style={styles.statusBadge}>
+            <AlertCircle size={14} color="#F59E0B" />
+            <Text style={[styles.statusText, { color: '#F59E0B' }]}>Partially Synced</Text>
+          </View>
+        );
+      case 'never_synced':
+        return (
+          <View style={styles.statusBadge}>
+            <CloudOff size={14} color={theme.tertiaryText} />
+            <Text style={[styles.statusText, { color: theme.secondaryText }]}>Never Synced</Text>
           </View>
         );
       case 'failed':
@@ -296,7 +392,7 @@ export default function DataSyncSettingsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.delay(100).duration(500)}>
@@ -309,7 +405,7 @@ export default function DataSyncSettingsScreen() {
                 {renderSyncStatus()}
               </View>
               <View style={[styles.cloudIconContainer, { backgroundColor: isDark ? 'rgba(0,122,255,0.15)' : 'rgba(0,122,255,0.05)' }]}>
-                {syncStatus === 'offline' ? (
+                {syncStatus === 'offline' || syncStatus === 'local_guest' ? (
                   <CloudOff size={32} color={theme.secondaryText} />
                 ) : (
                   <Cloud size={32} color={accentColor} />
@@ -321,9 +417,17 @@ export default function DataSyncSettingsScreen() {
             
             <View style={styles.syncMetaRow}>
               <View>
-                <Text style={[styles.metaLabel, { color: theme.secondaryText }]}>Last Sync</Text>
+                <Text style={[styles.metaLabel, { color: theme.secondaryText }]}>
+                  {syncStatus === 'partial' ? 'Last Full Sync' : 'Last Sync'}
+                </Text>
                 <Text style={[styles.metaValue, { color: theme.primaryText }]}>
-                  {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Never'}
+                  {syncStatus === 'local_guest'
+                    ? 'Local Only (No Cloud)'
+                    : lastSyncedAt
+                    ? new Date(lastSyncedAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+                    : syncStatus === 'partial'
+                    ? 'Pending full sync'
+                    : 'Never'}
                 </Text>
               </View>
               <TouchableOpacity 
@@ -336,7 +440,9 @@ export default function DataSyncSettingsScreen() {
                 ) : (
                   <>
                     <RefreshCw size={16} color="white" style={{ marginRight: 8 }} />
-                    <Text style={styles.backupBtnText}>Sync Now</Text>
+                    <Text style={styles.backupBtnText}>
+                      {syncStatus === 'local_guest' ? 'Connect Cloud' : syncStatus === 'partial' ? 'Retry Sync' : 'Sync Now'}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -421,7 +527,7 @@ export default function DataSyncSettingsScreen() {
         <View style={styles.infoBox}>
           <Info size={14} color={theme.secondaryText} />
           <Text style={[styles.infoText, { color: theme.secondaryText }]}>
-            Your data is end-to-end encrypted and never shared with third parties.
+            Your data is transmitted over secure HTTPS connections and stored locally on your device or in your cloud database.
           </Text>
         </View>
 

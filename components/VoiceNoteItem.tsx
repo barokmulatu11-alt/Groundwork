@@ -51,8 +51,12 @@ export function VoiceNoteItem({ uri, onDelete, colors, isDark, index }: VoiceNot
 
   const loadSound = async () => {
     try {
+      const { resolveAudioPlaybackUrl } = await import('@/lib/audioStorage');
+      const playableUri = await resolveAudioPlaybackUrl(uri);
+      if (!playableUri) return;
+
       const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri },
+        { uri: playableUri },
         { shouldPlay: false, progressUpdateIntervalMillis: 100 },
         (status: any) => {
           if (status.isLoaded && !isSeeking.value) {

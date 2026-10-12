@@ -141,6 +141,9 @@ export default function CalendarScreen() {
     return (
       <Pressable 
         key={dateStr}
+        testID={`calendar-day-cell-${dateStr}`}
+        accessibilityRole="button"
+        accessibilityLabel={`View day ${dateStr}`}
         style={{ width: `${100/7}%`, height: 75, alignItems: 'center', paddingVertical: 8, opacity: isFutureDay ? 0.4 : 1 }}
         onPress={() => handleDatePress(day)}
       >
@@ -226,12 +229,18 @@ export default function CalendarScreen() {
           {/* Mode Switcher */}
           <View style={{ flexDirection: 'row', backgroundColor: theme.card, borderRadius: 20, padding: 4, borderWidth: 1, borderColor: theme.cardBorder }}>
             <Pressable 
+              testID="calendar-mode-monthly"
+              accessibilityRole="button"
+              accessibilityLabel="Switch to monthly view"
               onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('monthly'); }}
               style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'monthly' ? theme.accent : 'transparent' }}
             >
               <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'monthly' ? 'white' : theme.secondaryText }}>Monthly</Text>
             </Pressable>
             <Pressable 
+              testID="calendar-mode-weekly"
+              accessibilityRole="button"
+              accessibilityLabel="Switch to weekly view"
               onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('weekly'); }}
               style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'weekly' ? theme.accent : 'transparent' }}
             >
@@ -247,12 +256,18 @@ export default function CalendarScreen() {
           </Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Pressable 
+              testID="calendar-prev-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Previous period"
               onPress={() => setCurrentDate(viewMode === 'monthly' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1))}
               style={[styles.iconBox, { backgroundColor: theme.card }]}
             >
               <ChevronLeft size={20} color={theme.primaryText} />
             </Pressable>
             <Pressable 
+              testID="calendar-next-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Next period"
               onPress={() => setCurrentDate(viewMode === 'monthly' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1))}
               style={[styles.iconBox, { backgroundColor: theme.card }]}
             >
@@ -364,6 +379,8 @@ export default function CalendarScreen() {
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>Day Note</Text>
                   </View>
                   <TextInput
+                    testID="calendar-day-note-input"
+                    accessibilityLabel="Day Note"
                     style={{ 
                       backgroundColor: theme.card, borderRadius: 16, padding: 14,
                       color: theme.primaryText, fontSize: 13, fontFamily: 'Inter_600SemiBold', minHeight: 80, textAlignVertical: 'top'
@@ -407,6 +424,7 @@ export default function CalendarScreen() {
                 )}
 
                 <AnimatedButton 
+                  testID="calendar-plan-task-btn"
                   title="+ Plan Task" 
                   onPress={() => { setDetailVisible(false); router.push({ pathname: '/tasks', params: { date: dateStr } } as any); }} 
                 />

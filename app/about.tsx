@@ -8,6 +8,7 @@ import React from 'react';
 import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// Renders the About screen — shows branding, app description, and legal links (privacy, terms, acknowledgements)
 export default function AboutScreen() {
   const { theme, showAlert } = useTheme();
   const insets = useSafeAreaInsets();
@@ -28,7 +29,7 @@ export default function AboutScreen() {
         <View style={styles.brandingContainer}>
           <BrandLogo fontSize={32} />
           <Text style={[styles.tagline, { color: theme.secondaryText, marginTop: 8 }]}>Your daily focus companion.</Text>
-          <Text style={[styles.version, { color: theme.tertiaryText }]}>v1.2.2</Text>
+          <Text style={[styles.version, { color: theme.tertiaryText }]}>v1.3.0</Text>
         </View>
 
         <Text style={[styles.paragraph, { color: theme.secondaryText }]}>

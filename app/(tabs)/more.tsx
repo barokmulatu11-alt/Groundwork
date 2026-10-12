@@ -1,54 +1,29 @@
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { ReportSheet } from '@/components/ReportSheet';
-import { RoleBadge } from '@/components/RoleBadge';
 import { AppText as Text } from '@/components/ui/AppText';
+import { SettingRow } from '@/components/ui/SettingRow';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import {
-    Award,
-    BarChart2,
-    Camera,
-    ChevronRight,
-    Code,
-    Crown as CrownIcon,
-    Download,
-    Globe,
-    Heart,
-    Info,
-    MessageSquare,
-    ReceiptText,
-    Send,
-    Share2
+  Award,
+  BarChart2,
+  Compass,
+  FileText,
+  Heart,
+  HelpCircle,
+  Info,
+  MessageSquare,
+  ReceiptText,
+  Settings,
+  Shield,
+  Trophy,
+  User,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Image, Linking, Platform, ScrollView, Share, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-
-const Card = ({ children, theme }: { children: React.ReactNode; theme: any }) => (
-  <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-    {children}
-  </View>
-);
-
-function SettingRow({ icon: Icon, title, subtitle, theme, onPress, destructive, rightElement }: any) {
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.rowWrapper}>
-      <View style={styles.rowContent}>
-        <View style={[styles.iconBox, { backgroundColor: 'transparent' }]}>
-          <Icon size={18} color={destructive ? theme.danger : theme.accent} />
-        </View>
-        <View style={styles.infoBox}>
-          <Text style={[styles.rowTitle, { color: destructive ? theme.danger : theme.primaryText }]}>{title}</Text>
-          {subtitle && <Text style={[styles.rowSubtitle, { color: theme.secondaryText }]}>{subtitle}</Text>}
-        </View>
-        {rightElement || <ChevronRight size={18} color={theme.tertiaryText} />}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 
 export default function MoreScreen() {
   const { theme, isDark } = useTheme();
@@ -59,264 +34,178 @@ export default function MoreScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
-  const handleInvite = async () => {
-    try {
-      await Share.share({
-        message: 'Join me on groundwork.! The ultimate daily focus companion. Download it now at https://v0-barok-labs.vercel.app/',
-      });
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const handleFeedback = () => {
-    Linking.openURL('mailto:barok.m.lakew@gmail.com?subject=groundwork. Feedback');
-  };
-
   return (
     <BackgroundGradient>
       <ScrollView
         style={styles.container}
         contentContainerStyle={{
-          paddingTop: insets.top + 24,
-          paddingBottom: insets.bottom + 20,
-          paddingHorizontal: 20,
-          maxWidth: isDesktop ? 800 : undefined,
+          paddingTop: insets.top + 20,
+          paddingBottom: insets.bottom + 120,
+          paddingHorizontal: isDesktop ? 32 : 18,
+          maxWidth: isDesktop ? 760 : undefined,
           alignSelf: isDesktop ? 'center' : undefined,
-          width: isDesktop ? '100%' : undefined,
+          width: '100%',
         }}
         showsVerticalScrollIndicator={false}
       >
-
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.primaryText }]}>More</Text>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Tools and utilities</Text>
+          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+            Directory & Utilities
+          </Text>
         </View>
 
-        {/* PROFILE SECTION */}
-        {profile && (
-          <TouchableOpacity 
-            activeOpacity={0.8} 
+        {/* PROGRESS */}
+        <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>PROGRESS</Text>
+        <View style={[styles.groupCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <SettingRow
+            icon={Compass}
+            title="Journey"
+            subtitle="Milestone path and historical progress"
+            theme={theme}
+            onPress={() => router.push('/journey')}
+          />
+          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+          <SettingRow
+            icon={BarChart2}
+            title="Analytics & Insights"
+            subtitle="Productivity trends, focus, and habits"
+            theme={theme}
+            onPress={() => router.push('/analytics' as any)}
+          />
+          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+          <SettingRow
+            icon={Award}
+            title="Milestone Rewards"
+            subtitle="Earned feature unlocks through usage"
+            theme={theme}
+            onPress={() => router.push('/rewards')}
+          />
+          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+          <SettingRow
+            icon={Trophy}
+            title="Achievements"
+            subtitle="Badge catalog and milestones"
+            theme={theme}
+            onPress={() => router.push('/achievements')}
+          />
+        </View>
+
+        {/* ACCOUNT */}
+        <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>ACCOUNT</Text>
+        <View style={[styles.groupCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <SettingRow
+            icon={User}
+            title="Personal Profile"
+            subtitle={profile?.full_name || profile?.username || 'Guest account'}
+            theme={theme}
             onPress={() => router.push('/profile')}
-            style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-          >
-            <Image 
-              source={{ uri: profile.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Barok' }} 
-              style={styles.profileAvatar} 
-            />
-            <View style={styles.profileInfo}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.profileName, { color: theme.primaryText }]}>{profile.full_name || profile.username || 'Groundwork User'}</Text>
-                <RoleBadge role={profile.role} isPro={profile.pro_status} />
-              </View>
-              <Text style={[styles.profileEmail, { color: theme.tertiaryText }]}>{session?.user?.email}</Text>
-            </View>
-            <ChevronRight size={18} color={theme.tertiaryText} />
-          </TouchableOpacity>
-        )}
-
-        {/* SUBSCRIPTION */}
-        <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>SUBSCRIPTION</Text>
-        <View style={styles.utilitiesStack}>
-          <Card theme={theme}>
-            <SettingRow 
-              icon={CrownIcon} 
-              title="Groundwork Pro" 
-              subtitle="Manage your premium subscription" 
-              theme={theme} 
-              onPress={() => router.push('/subscription-settings' as any)} 
-            />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow
-              icon={ReceiptText}
-              title="Payment History"
-              subtitle="View your payment requests"
-              theme={theme}
-              onPress={() => router.push('/payment-history' as any)}
-            />
-          </Card>
+          />
+          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+          <SettingRow
+            icon={Settings}
+            title="Settings"
+            subtitle="Appearance, notifications, data & privacy"
+            theme={theme}
+            onPress={() => router.push('/settings')}
+          />
+          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+          <SettingRow
+            icon={ReceiptText}
+            title="Payment History"
+            subtitle="Historical transaction and purchase records"
+            theme={theme}
+            onPress={() => router.push('/payment-history' as any)}
+          />
         </View>
 
-        {/* UTILITIES */}
-        <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>UTILITIES</Text>
-        <View style={styles.utilitiesStack}>
-          <Card theme={theme}>
-            <SettingRow icon={BarChart2} title="Analytics & Insights" subtitle="Productivity, focus, habits & reports" theme={theme} onPress={() => router.push('/analytics' as any)} />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow icon={Download} title="Downloads" subtitle="Manage offline content" theme={theme} onPress={() => router.push('/downloads')} />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow icon={Award} title="Achievements" subtitle="View your earned badges" theme={theme} onPress={() => router.push('/achievements')} />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow icon={Share2} title="Invite Friends" subtitle="Earn rewards for referrals" theme={theme} onPress={handleInvite} />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow icon={MessageSquare} title="Report an Issue" subtitle="Bug reports or suggestions" theme={theme} onPress={() => setReportVisible(true)} />
-          </Card>
+        {/* HELP & SUPPORT */}
+        <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>HELP & SUPPORT</Text>
+        <View style={[styles.groupCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <SettingRow
+            icon={HelpCircle}
+            title="Support & FAQ"
+            subtitle="Answers, guides, and contact options"
+            theme={theme}
+            onPress={() => router.push('/support-settings')}
+          />
+          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+          <SettingRow
+            icon={MessageSquare}
+            title="Report an Issue"
+            subtitle="Send feedback or report bugs"
+            theme={theme}
+            onPress={() => setReportVisible(true)}
+          />
+          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
+          <SettingRow
+            icon={Info}
+            title="About groundwork."
+            subtitle={`Version ${Constants.expoConfig?.version || '1.3.0'} · Privacy & Terms`}
+            theme={theme}
+            onPress={() => router.push('/about' as any)}
+          />
+        </View>
+
+        {/* Brand Footer */}
+        <View style={styles.brandingContainer}>
+          <Text style={[styles.logoText, { color: theme.secondaryText }]}>
+            <Text style={{ color: theme.accent, fontFamily: 'Inter_800ExtraBold' }}>g</Text>
+            roundwork.
+          </Text>
+          <Text style={[styles.version, { color: theme.tertiaryText }]}>
+            v{Constants.expoConfig?.version || '1.3.0'}
+          </Text>
         </View>
 
         <ReportSheet visible={reportVisible} onClose={() => setReportVisible(false)} />
-
-        {/* SUPPORT */}
-        <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>SUPPORT & CONTACT</Text>
-        <View style={styles.utilitiesStack}>
-          <Card theme={theme}>
-          <SettingRow icon={Heart} title="Support Developer" subtitle="Support the creator of groundwork." theme={theme} onPress={() => router.push('/support-settings')} />
-          <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-          <SettingRow icon={Info} title="About groundwork." subtitle="Version, terms and information" theme={theme} onPress={() => router.push('/about' as any)} />
-        </Card>
-        </View>
-
-        {/* CONNECT */}
-        <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>CONNECT</Text>
-        <View style={styles.utilitiesStack}>
-          <Card theme={theme}>
-            <SettingRow icon={Send} title="Telegram" subtitle="Need some improvements? DM" theme={theme} onPress={() => Linking.openURL('https://t.me/b_rey123')} />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow icon={Camera} title="Instagram" subtitle="Follow our page" theme={theme} onPress={() => Linking.openURL('https://instagram.com/b_rey123')} />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow icon={Globe} title="LinkedIn" subtitle="Connect on LinkedIn" theme={theme} onPress={() => Linking.openURL('https://linkedin.com/in/barok-labs')} />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SettingRow icon={Code} title="Github" subtitle="Checkout my other stuff too" theme={theme} onPress={() => Linking.openURL('https://github.com/barokmulatu11-alt')} />
-          </Card>
-        </View>
-
-        {/* BRANDING */}
-        <View style={styles.brandingContainer}>
-          <View style={styles.logoFull}>
-            <Text style={[styles.logoGSmall, { color: theme.accent }]}>g</Text>
-            <Text style={[styles.logoText, { color: theme.primaryText }]}>roundwork.</Text>
-          </View>
-          <Text style={[styles.tagline, { color: theme.secondaryText }]}>Your daily focus companion.</Text>
-          <Text style={[styles.version, { color: theme.tertiaryText }]}>v1.2.2</Text>
-        </View>
       </ScrollView>
     </BackgroundGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  container: { flex: 1 },
+  header: { marginBottom: 20 },
+  title: {
+    fontSize: 28,
+    fontFamily: 'Inter_800ExtraBold',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    marginTop: 4,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  groupCard: {
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    marginBottom: 24,
+    marginBottom: 12,
   },
-  rowWrapper: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  rowContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  infoBox: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  rowTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    marginBottom: 2,
-  },
-  rowSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    opacity: 0.7,
-  },
-  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   separator: {
     height: 1,
-    marginLeft: 46,
-    opacity: 0.5,
-  },
-
-  container: {
-    flex: 1,
-  },
-  header: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: '800',
-    letterSpacing: -1,
-  },
-  subtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 32,
-  },
-  profileAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 16,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 4,
-  },
-  profileName: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-  },
-  profileEmail: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    opacity: 0.7,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  utilitiesStack: {
-    marginBottom: 32,
+    marginLeft: 44,
   },
   brandingContainer: {
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 20,
-    gap: 8,
-  },
-  logoG: {
-    fontSize: 40,
-    fontWeight: '800',
-  },
-  logoFull: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  logoGSmall: {
-    fontSize: 18,
-    fontWeight: '700',
+    marginTop: 24,
+    marginBottom: 16,
   },
   logoText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  tagline: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
   },
   version: {
     fontSize: 11,
-    fontWeight: '500',
-    marginTop: 4,
+    fontFamily: 'Inter_500Medium',
+    marginTop: 2,
   },
 });

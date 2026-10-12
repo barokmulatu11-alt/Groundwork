@@ -11,8 +11,9 @@ import {
     RefreshCw, Search,
     XCircle
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
+// ─── Types ─────────────────────────────────────────────────────────────────────
 type PaymentStatus = 'pending' | 'under_review' | 'approved' | 'rejected';
 
 interface PaymentRequest {
@@ -37,6 +38,7 @@ interface PaymentRequest {
   full_name?: string;
 }
 
+// Maps each payment status to its display label, colors, and icon
 const STATUS_CONFIG: Record<PaymentStatus, { label: string; color: string; bg: string; icon: any }> = {
   pending:      { label: 'Pending',      color: 'text-amber-400',  bg: 'bg-amber-400/10',  icon: Clock },
   under_review: { label: 'Under Review', color: 'text-blue-400',   bg: 'bg-blue-400/10',   icon: Eye },
@@ -49,10 +51,14 @@ const PLAN_LABELS: Record<string, string> = {
   pro_1year: 'Yearly',
 };
 
-export default function PaymentsPage() {  const { isDark } = useTheme();
+// ─── Main Component ────────────────────────────────────────────────────────────
+
+export default function PaymentsPage() {
+  const { isDark } = useTheme();
 
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'all'>('pending');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<PaymentRequest | null>(null);
@@ -60,52 +66,117 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
 
-  const loadRequests = async () => {
+  // Keep a ref to the current statusFilter so the realtime callback always
+  // has the latest value even though it runs in a stale closure.
+  const statusFilterRef = useRef(statusFilter);
+  useEffect(() => { statusFilterRef.current = statusFilter; }, [statusFilter]);
+
+  // Fetches payment requests from Supabase with optional status filter.
+  // Returns the list with user profile info merged in.
+  const loadRequests = useCallback(async (filterOverride?: typeof statusFilter) => {
     setLoading(true);
+    setFetchError(null);
+
+    const activeFilter = filterOverride ?? statusFilterRef.current;
+
     let query = supabase
       .from('payment_requests')
-      .select('*, profiles(email, username, full_name)')
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
+    if (activeFilter !== 'all') {
+      query = query.eq('status', activeFilter);
     }
 
     const { data, error } = await query;
-    if (!error && data) {
-      setRequests(data.map((r: any) => ({
-        ...r,
-        email: r.profiles?.email,
-        username: r.profiles?.username,
-        full_name: r.profiles?.full_name,
-      })));
+
+    if (error) {
+      console.error('[PaymentsPage] fetch error:', error);
+      setFetchError(error.message);
+      setLoading(false);
+      return;
     }
+
+    if (!data || data.length === 0) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
+
+    // Manually join profiles since no FK exists in the schema
+    const userIds = [...new Set(data.map((r: any) => r.user_id).filter(Boolean))];
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, email, username, full_name')
+      .in('id', userIds);
+
+    const profileMap: Record<string, any> = {};
+    if (profilesData) {
+      for (const p of profilesData) {
+        profileMap[p.id] = p;
+      }
+    }
+
+    setRequests(data.map((r: any) => {
+      const profile = profileMap[r.user_id] ?? {};
+      return {
+        ...r,
+        email: profile.email ?? null,
+        username: profile.username ?? null,
+        full_name: profile.full_name ?? null,
+      };
+    }));
+
     setLoading(false);
-  };
+  }, []); // stable — reads filter from ref
 
-  useEffect(() => { loadRequests(); }, [statusFilter]);
+  // Re-fetch when filter changes
+  useEffect(() => {
+    loadRequests(statusFilter);
+  }, [statusFilter, loadRequests]);
 
+  // Realtime subscription — live-update when someone submits a new payment
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin_payment_requests_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payment_requests' },
+        (payload) => {
+          console.log('[PaymentsPage] Realtime event:', payload.eventType);
+          loadRequests();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[PaymentsPage] Realtime channel status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadRequests]); // loadRequests is stable via useCallback
+
+  // Moves a request to "under review" status
   const handleMarkUnderReview = async (req: PaymentRequest) => {
     setActionLoading(true);
     await supabase.from('payment_requests').update({
       status: 'under_review',
       updated_at: new Date().toISOString(),
     }).eq('id', req.id);
-    await loadRequests();
+    await loadRequests(statusFilter);
     setSelected(prev => prev ? { ...prev, status: 'under_review' } : null);
     setActionLoading(false);
   };
 
+  // Approves payment, activates Pro for the user, and sets expiry based on plan
   const handleApprove = async (req: PaymentRequest) => {
     setActionLoading(true);
     const now = new Date().toISOString();
-    // 1. Update payment request
     await supabase.from('payment_requests').update({
       status: 'approved',
       reviewed_at: now,
       updated_at: now,
     }).eq('id', req.id);
-    // 2. Activate Pro on user profile
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + (req.plan === 'pro_1year' ? 365 : 30));
     await supabase.from('profiles').update({
@@ -116,11 +187,12 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
       expiration_date: expiry.toISOString(),
       latest_payment_request_id: req.id,
     }).eq('id', req.user_id);
-    await loadRequests();
+    await loadRequests(statusFilter);
     setSelected(prev => prev ? { ...prev, status: 'approved' } : null);
     setActionLoading(false);
   };
 
+  // Rejects a payment request with a required reason
   const handleReject = async (req: PaymentRequest) => {
     if (!rejectionReason.trim()) return;
     setActionLoading(true);
@@ -131,13 +203,14 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
       reviewed_at: now,
       updated_at: now,
     }).eq('id', req.id);
-    await loadRequests();
+    await loadRequests(statusFilter);
     setSelected(prev => prev ? { ...prev, status: 'rejected', rejection_reason: rejectionReason } : null);
     setShowRejectForm(false);
     setRejectionReason('');
     setActionLoading(false);
   };
 
+  // Client-side search across reference code, transaction ID, email, and username
   const filtered = requests.filter(r => {
     if (!search.trim()) return true;
     const s = search.toLowerCase();
@@ -149,6 +222,7 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
     );
   });
 
+  // Theme-dependent class names
   const card = isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-slate-200';
   const text = isDark ? 'text-white' : 'text-slate-900';
   const sub = isDark ? 'text-gray-400' : 'text-slate-500';
@@ -163,7 +237,7 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
           <h1 className={clsx('text-2xl font-bold', text)}>Payment Requests</h1>
           <p className={clsx('text-sm mt-0.5', sub)}>Review and approve Pro upgrade requests</p>
         </div>
-        <button onClick={loadRequests} className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
+        <button onClick={() => loadRequests(statusFilter)} className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
           isDark ? 'border-gray-700 text-gray-300 hover:bg-white/5' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
@@ -196,6 +270,16 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
           <div className="p-12 text-center">
             <RefreshCw size={20} className="animate-spin mx-auto text-[#007AFF]" />
             <p className={clsx('text-sm mt-3', sub)}>Loading requests...</p>
+          </div>
+        ) : fetchError ? (
+          <div className="p-12 text-center">
+            <XCircle size={32} className="mx-auto mb-3 text-red-400" />
+            <p className={clsx('font-medium mb-1', text)}>Failed to load requests</p>
+            <p className="text-xs text-red-400 mb-4 font-mono">{fetchError}</p>
+            <button onClick={() => loadRequests(statusFilter)}
+              className="px-4 py-2 rounded-lg bg-[#007AFF] text-white text-sm font-semibold hover:bg-[#0063CC] transition-colors">
+              Try Again
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
@@ -295,10 +379,32 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
             {/* Screenshot */}
             {selected.screenshot_url && (
               <Section title="Payment Screenshot" isDark={isDark}>
-                <a href={selected.screenshot_url} target="_blank" rel="noreferrer"
+                <button onClick={async () => {
+                  let blobUrl: string | null = null;
+                  try {
+                    if (!selected.screenshot_url) return;
+                    const { data, error } = await supabase.storage.from('payment-screenshots').createSignedUrl(selected.screenshot_url as string, 60);
+                    if (error || !data?.signedUrl) {
+                      alert('Could not load screenshot: ' + (error?.message ?? 'unknown error'));
+                      return;
+                    }
+                    blobUrl = data.signedUrl;
+                    // Open blob URL in new tab; revoke after a short delay to allow
+                    // the browser to load the content before the URL is invalidated.
+                    // blob: URLs are session-scoped and cannot be shared externally.
+                    const w = window.open(blobUrl, '_blank');
+                    setTimeout(() => {
+                      if (blobUrl) URL.revokeObjectURL(blobUrl);
+                      blobUrl = null;
+                    }, 10_000); // 10s: enough time for browser to load image
+                  } catch (e) {
+                    if (blobUrl) URL.revokeObjectURL(blobUrl);
+                    alert('Error loading screenshot.');
+                  }
+                }}
                   className="flex items-center gap-2 text-[#007AFF] text-sm font-medium hover:underline">
                   <ExternalLink size={14} /> View screenshot
-                </a>
+                </button>
               </Section>
             )}
 
@@ -363,6 +469,9 @@ export default function PaymentsPage() {  const { isDark } = useTheme();
   );
 }
 
+// ─── Shared UI Helpers ─────────────────────────────────────────────────────────
+
+// Renders a collapsible section with a title header
 function Section({ title, children, isDark }: { title: string; children: React.ReactNode; isDark: boolean }) {
   return (
     <div>
@@ -374,6 +483,7 @@ function Section({ title, children, isDark }: { title: string; children: React.R
   );
 }
 
+// Renders a single label-value row inside a Section
 function Row({ label, value, mono, bold, isDark }: { label: string; value: string; mono?: boolean; bold?: boolean; isDark: boolean }) {
   return (
     <div className={clsx('flex justify-between items-center px-4 py-2.5 border-b last:border-0 gap-4',

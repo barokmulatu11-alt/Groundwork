@@ -84,6 +84,8 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 500 }}>
           <TextInput
             ref={inputRef}
+            testID="add-task-title-input"
+            accessibilityLabel="Task title input"
             style={[styles.titleInput, { color: theme.primaryText }]}
             placeholder="What needs to get done?"
             placeholderTextColor={theme.secondaryText}
@@ -100,6 +102,9 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
               return (
                 <Pressable
                   key={opt.value}
+                  testID={`add-task-date-${opt.label.toLowerCase()}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select date ${opt.label}`}
                   onPress={() => setDate(opt.value)}
                   style={[
                     styles.datePill,
@@ -127,6 +132,9 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
             {(['High', 'Medium', 'Low'] as const).map(p => (
               <Pressable 
                 key={p} 
+                testID={`add-task-priority-${p.toLowerCase()}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Select priority ${p}`}
                 onPress={() => setPriority(p)}
                 style={[
                   styles.priorityPill, 
@@ -186,6 +194,9 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
 
         <View style={[styles.footer, { backgroundColor: theme.card }]}>
           <Pressable 
+            testID="add-task-submit-button"
+            accessibilityRole="button"
+            accessibilityLabel="Add Task"
             style={[styles.submitBtn, { backgroundColor: theme.accent }, !title.trim() && { backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }]} 
             onPress={handleAdd}
             disabled={!title.trim()}

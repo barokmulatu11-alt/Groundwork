@@ -1,6 +1,5 @@
 import { AddHabitSheet } from '@/components/AddHabitSheet';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { ProPaywall } from '@/components/ProPaywall';
 import { HabitDetailSheet } from '@/components/habits/HabitDetailSheet';
 import {
     HabitCategoryChips,
@@ -29,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function HabitsScreen() {
   const router = useRouter();
   const { habits, toggleHabit, addHabit, updateHabit, deleteHabit, loadHabits } = useStore();
-  const { session } = useAuthStore();
+  const { session, isGuest } = useAuthStore();
   const { theme, showAlert } = useTheme();
   const confettiColors = [theme.accent, theme.accent + 'CC', theme.accent + '99', theme.accentLight, '#FFFFFF'];
   const insets = useSafeAreaInsets();
@@ -49,8 +48,8 @@ export default function HabitsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (session) loadHabits();
-    }, [session, loadHabits])
+      if (session || isGuest) loadHabits();
+    }, [session, isGuest, loadHabits])
   );
 
   const handleAddHabit = async (h: Parameters<typeof addHabit>[0]) => {
@@ -66,12 +65,6 @@ export default function HabitsScreen() {
   };
 
   const handleNewHabitPress = () => {
-    const { canAddHabit } = require('@/lib/subscriptionService');
-    const gate = canAddHabit();
-    if (!gate.allowed) {
-      setPaywallVisible(true);
-      return;
-    }
     setHabitSheetVisible(true);
   };
 
@@ -125,7 +118,7 @@ export default function HabitsScreen() {
     return habitCat === selectedCat || habitCat.includes(selectedCat);
   });
 
-  if (!session) {
+  if (!session && !isGuest) {
     return (
       <BackgroundGradient>
         <View style={styles.loginWrap}>
@@ -175,32 +168,69 @@ export default function HabitsScreen() {
         ) : filteredHabits.length === 0 ? (
           <HabitEmptyPlaceholder variant="filter" />
         ) : (
-          filteredHabits.map(habit => (
-            <HabitRowCard
-              key={habit.id}
-              habit={habit}
-              todayDateStr={todayDateStr}
-              confetti={confettiHabitId === habit.id}
-              confettiColors={confettiColors}
-              onPress={() => {
-                setSelectedHabit(habit);
-                setDetailVisible(true);
-              }}
-              onLongPress={() => {
-                setHabitForAction(habit);
-                setActionSheetVisible(true);
-              }}
-              onToggle={() => handleToggle(habit.id)}
-            />
-          ))
-        )}
+          <>
+            {filteredHabits.filter(h => !h.is_paused).map(habit => (
+              <HabitRowCard
+                key={habit.id}
+                habit={habit}
+                todayDateStr={todayDateStr}
+                confetti={confettiHabitId === habit.id}
+                confettiColors={confettiColors}
+                onPress={() => {
+                  setSelectedHabit(habit);
+                  setDetailVisible(true);
+                }}
+                onLongPress={() => {
+                  setHabitForAction(habit);
+                  setActionSheetVisible(true);
+                }}
+                onMenuPress={() => {
+                  setHabitForAction(habit);
+                  setActionSheetVisible(true);
+                }}
+                onToggle={() => handleToggle(habit.id)}
+              />
+            ))}
 
-        <Text style={[styles.hint, { color: theme.tertiaryText }]}>Long-press a habit for pause or delete</Text>
+            {filteredHabits.filter(h => h.is_paused).length > 0 && (
+              <>
+                <Text style={[styles.sectionLabel, { color: theme.secondaryText, marginTop: 20 }]}>
+                  PAUSED HABITS
+                </Text>
+                {filteredHabits.filter(h => h.is_paused).map(habit => (
+                  <HabitRowCard
+                    key={habit.id}
+                    habit={habit}
+                    todayDateStr={todayDateStr}
+                    confetti={false}
+                    confettiColors={confettiColors}
+                    onPress={() => {
+                      setSelectedHabit(habit);
+                      setDetailVisible(true);
+                    }}
+                    onLongPress={() => {
+                      setHabitForAction(habit);
+                      setActionSheetVisible(true);
+                    }}
+                    onMenuPress={() => {
+                      setHabitForAction(habit);
+                      setActionSheetVisible(true);
+                    }}
+                    onToggle={() => handleToggle(habit.id)}
+                  />
+                ))}
+              </>
+            )}
+          </>
+        )}
       </ScrollView>
 
       </View>
 
       <Pressable
+        testID="habits-fab-button"
+        accessibilityRole="button"
+        accessibilityLabel="Create Habit"
         style={[styles.fab, { backgroundColor: theme.accent, bottom: insets.bottom + 24 }]}
         onPress={handleNewHabitPress}
       >
@@ -256,14 +286,6 @@ export default function HabitsScreen() {
       </NativeSheet>
 
       <AddHabitSheet visible={isHabitSheetVisible} onClose={() => setHabitSheetVisible(false)} onAddHabit={handleAddHabit} />
-
-      <ProPaywall
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        featureName="Unlimited Habits"
-        featureDescription="Free users can track up to 5 habits. Upgrade to Pro for unlimited habit tracking."
-        source="habits_screen"
-      />
 
       <ConfirmDialog
         visible={deleteDialogVisible}

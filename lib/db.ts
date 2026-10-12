@@ -1,4 +1,4 @@
-import * as SQLite from 'expo-sqlite';
+import SQLite, { type SQLiteDatabase } from './sqliteClient';
 import { Platform } from 'react-native';
 
 export const APP_VERSION = '1.1.0';
@@ -576,7 +576,7 @@ if (Platform.OS === 'web') {
   }
 }
 
-export const db = _db as ReturnType<typeof createWebDb> | SQLite.SQLiteDatabase;
+export const db = _db as ReturnType<typeof createWebDb> | SQLiteDatabase;
 
 export function initDb() {
   // Add user_id column to existing tables if they don't have it (migration)

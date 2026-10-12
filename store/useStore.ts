@@ -1,6 +1,10 @@
 import {
-    initAnalyticsTables
-} from "@/lib/analytics/AnalyticsTracker";
+    initAnalyticsTables,
+    trackTask,
+    trackHabit,
+    trackNote,
+    trackFocus
+} from "@/lib/analytics";
 import { addXP, XP_VALUES } from "@/lib/connect/xpSystem";
 import * as db from "@/lib/db";
 import { FocusSession, Habit, Note, Task } from "@/lib/db";
@@ -15,7 +19,7 @@ import {
     canAddTask,
     type GateResult,
 } from "@/lib/subscriptionService";
-import { supabase } from "@/lib/supabase";
+import { neonData, neonAuth } from "@/lib/neon";
 import { AppState as RNAppState } from "react-native";
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
@@ -29,14 +33,28 @@ try {
 export { FocusSession, Habit, Note, Task };
 export type { GateResult };
 
+/** Single-source-of-truth sync status.  All other sync flags must stay consistent with this. */
+export type SyncStatus =
+  | 'idle'          // never ran a sync for this session
+  | 'syncing'       // in-flight
+  | 'synced'        // last run completed fully with no upload failures
+  | 'partial'       // last run completed but ≥1 upload failed; lastSyncedAt preserved
+  | 'failed';       // last run aborted due to required query error or thrown exception
+
 interface AppState {
   tasks: Task[];
   habits: Habit[];
   notes: Note[];
   focusSessions: FocusSession[];
+  // Only updated when every required operation succeeds (no partial failures).
   lastSyncedAt: string | null;
+  // Authoritative status field — drives the badge, manual-sync message, and retry logic.
+  syncStatus: SyncStatus;
+  // Deprecated aliases kept for backward-compat; always agree with syncStatus.
   isSyncing: boolean;
   syncError: boolean;
+  syncPartial: boolean;
+  syncPartialFailures: string[];
 
   loadAllTasks: () => Promise<void>;
   addTask: (task: Partial<Task>) => Promise<GateResult>;
@@ -58,7 +76,7 @@ interface AppState {
   loadFocusSessions: () => Promise<void>;
   addFocusSession: (session: Partial<FocusSession>) => Promise<void>;
 
-  syncFromCloud: (session?: any) => Promise<void>;
+  syncFromCloud: (session?: any) => Promise<SyncResult>;
   importData: (data: any) => Promise<void>;
   loadDayNotes: () => Promise<void>;
   saveDayNote: (date: string, text: string) => Promise<void>;
@@ -67,12 +85,33 @@ interface AppState {
   setDraftNote: (note: Partial<Note> | null) => void;
 }
 
-const pushToCloud = async (table: string, data: any) => {
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session?.user) return;
+export interface SyncResult {
+  success: boolean;
+  partial?: boolean;
+  skipped?: boolean;
+  reason?: string;
+  error?: string;
+  partialFailures?: string[];
+  counts?: {
+    tasks: number;
+    habits: number;
+    notes: number;
+    focus: number;
+  };
+}
 
-    const userId = sessionData.session.user.id;
+const pushToCloud = async (table: string, data: any): Promise<boolean> => {
+  try {
+    let sessionUser: any = useAuthStore.getState().session?.user;
+    if (!sessionUser) {
+      try {
+        const { data: sessionData } = await neonAuth.getSession();
+        sessionUser = sessionData?.user;
+      } catch (_) {}
+    }
+    if (!sessionUser) return false;
+
+    const userId = sessionUser.id;
     let cloudData: any = {};
 
     if (table === "tasks") {
@@ -230,7 +269,7 @@ const pushToCloud = async (table: string, data: any) => {
       });
     }
 
-    let { error } = await supabase.from(table).upsert(cloudData);
+    let { error } = await neonData.from(table).upsert(cloudData);
     if (
       error &&
       table === "notes" &&
@@ -242,16 +281,19 @@ const pushToCloud = async (table: string, data: any) => {
       delete slim.study_hours;
       delete slim.revision_score;
       delete slim.last_reviewed_at;
-      ({ error } = await supabase.from(table).upsert(slim));
+      ({ error } = await neonData.from(table).upsert(slim));
     }
-    if (error) throw error;
+    if (error) {
+      console.warn(`[Cloud] Push to ${table} failed:`, error.message);
+      return false;
+    }
+    return true;
   } catch (e: any) {
     console.warn(
       `[Cloud] Push to ${table} failed (offline or error):`,
       e?.message || e,
     );
-    // Silently swallow — local SQLite write already succeeded.
-    // Data will be re-synced next time the device is online.
+    return false;
   }
 };
 
@@ -270,8 +312,11 @@ export const useStore = create<AppState>((set, get) => ({
   dayNotes: {},
   draftNote: null,
   lastSyncedAt: null,
+  syncStatus: 'idle',
   isSyncing: false,
   syncError: false,
+  syncPartial: false,
+  syncPartialFailures: [],
 
   setDraftNote: (note) => set({ draftNote: note }),
 
@@ -661,10 +706,8 @@ export const useStore = create<AppState>((set, get) => ({
     if (!user) {
       // Last-resort: fetch from Supabase (slower, may fail offline)
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        user = session?.user ?? null;
+        const { data } = await neonAuth.getSession();
+        user = data?.user ?? null;
       } catch (e) {
         console.warn("[Sync] Could not get session:", e);
       }
@@ -672,12 +715,18 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (!user) {
       console.log("[Sync] No authenticated user — skipping sync.");
-      return;
+      return {
+        success: false,
+        skipped: true,
+        reason: "You are currently in guest mode. Sign in to synchronize your data with the cloud.",
+      };
     }
     const userId = user.id;
 
     try {
-      set({ isSyncing: true, syncError: false });
+      // Start sync — do NOT clear syncPartial here; it persists until a full success.
+      // syncStatus drives the badge; keep 'partial' visible if previous run was partial.
+      set({ isSyncing: true, syncStatus: 'syncing', syncError: false });
 
       // --- LOCAL & SUPABASE CLOUD REPAIR ---
       // Repair any items on local SQLite & Supabase that were accidentally soft-deleted
@@ -694,17 +743,17 @@ export const useStore = create<AppState>((set, get) => ({
         );
 
         await Promise.all([
-          supabase
+          neonData
             .from("tasks")
             .update({ deleted_at: null })
             .in("deleted_at", ["[]", "{}", "null", ""])
             .eq("user_id", userId),
-          supabase
+          neonData
             .from("notes")
             .update({ deleted_at: null })
             .in("deleted_at", ["[]", "{}", "null", ""])
             .eq("user_id", userId),
-          supabase
+          neonData
             .from("habits")
             .update({ deleted_at: null })
             .in("deleted_at", ["[]", "{}", "null", ""])
@@ -750,12 +799,12 @@ export const useStore = create<AppState>((set, get) => ({
         dayNotesData,
         settingsData,
       ] = await Promise.all([
-        supabase.from("tasks").select("*").eq("user_id", userId),
-        supabase.from("habits").select("*").eq("user_id", userId),
-        supabase.from("notes").select("*").eq("user_id", userId),
-        supabase.from("focus_sessions").select("*").eq("user_id", userId),
-        supabase.from("day_notes").select("*").eq("user_id", userId),
-        supabase
+        neonData.from("tasks").select("*").eq("user_id", userId),
+        neonData.from("habits").select("*").eq("user_id", userId),
+        neonData.from("notes").select("*").eq("user_id", userId),
+        neonData.from("focus_sessions").select("*").eq("user_id", userId),
+        neonData.from("day_notes").select("*").eq("user_id", userId),
+        neonData
           .from("user_settings")
           .select("*")
           .eq("user_id", userId)
@@ -766,10 +815,27 @@ export const useStore = create<AppState>((set, get) => ({
       console.log(
         `[Sync] Remote habits count: ${habitsData.data?.length ?? 0}`,
       );
-      if (tasksData.error)
-        console.error("[Sync] Tasks query error:", tasksData.error);
-      if (habitsData.error)
-        console.error("[Sync] Habits query error:", habitsData.error);
+
+      const fetchErrors: string[] = [];
+      if (tasksData.error) fetchErrors.push(`tasks: ${tasksData.error.message || 'fetch failed'}`);
+      if (habitsData.error) fetchErrors.push(`habits: ${habitsData.error.message || 'fetch failed'}`);
+      if (notesData.error) fetchErrors.push(`notes: ${notesData.error.message || 'fetch failed'}`);
+      if (focusSessionsData.error) fetchErrors.push(`focus_sessions: ${focusSessionsData.error.message || 'fetch failed'}`);
+      if (dayNotesData.error) fetchErrors.push(`day_notes: ${dayNotesData.error.message || 'fetch failed'}`);
+      if (settingsData?.error) fetchErrors.push(`user_settings: ${settingsData.error.message || 'fetch failed'}`);
+
+      if (fetchErrors.length > 0) {
+        console.error("[Sync] Critical query errors:", fetchErrors);
+        // 'failed' — required cloud queries did not return data; lastSyncedAt preserved.
+        set({ isSyncing: false, syncStatus: 'failed', syncError: true, syncPartial: false });
+        return {
+          success: false,
+          error: `Failed to retrieve cloud data: ${fetchErrors.join('; ')}`,
+        };
+      }
+
+      const partialFailures: string[] = [];
+      const counts = { tasks: 0, habits: 0, notes: 0, focus: 0 };
 
       // --- 1. BIDIRECTIONAL SYNC: PUSH LOCAL TO REMOTE ---
       // Push unsynced or newer local tasks to the cloud
@@ -786,11 +852,14 @@ export const useStore = create<AppState>((set, get) => ({
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
           ) {
-            await pushToCloud("tasks", local);
+            const ok = await pushToCloud("tasks", local);
+            if (!ok) partialFailures.push("tasks");
+            else counts.tasks++;
           }
         }
       } catch (e) {
         console.warn("[Sync] Push local tasks failed:", e);
+        partialFailures.push("tasks");
       }
 
       // Push unsynced or newer local habits to the cloud
@@ -807,29 +876,81 @@ export const useStore = create<AppState>((set, get) => ({
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
           ) {
-            await pushToCloud("habits", local);
+            const ok = await pushToCloud("habits", local);
+            if (!ok) partialFailures.push("habits");
+            else counts.habits++;
           }
         }
       } catch (e) {
         console.warn("[Sync] Push local habits failed:", e);
+        partialFailures.push("habits");
       }
 
       // Push unsynced or newer local notes to the cloud
       try {
         const localNotes = await db.getNotes(userId);
+        const { syncAudioToCloud } = await import('@/lib/audioStorage');
         for (const local of localNotes) {
+          // Check if any audio URIs need cloud sync
+          let noteAudioUris: string[] = [];
+          try {
+            const rawAudioUris = (local as any).audio_uris;
+            if (Array.isArray(rawAudioUris)) {
+              noteAudioUris = rawAudioUris;
+            } else if (typeof rawAudioUris === 'string' && rawAudioUris.startsWith('[')) {
+              noteAudioUris = JSON.parse(rawAudioUris);
+            }
+          } catch (_) {}
+
+          let hasAudioChange = false;
+          if (noteAudioUris.length > 0) {
+            const syncedUris = await Promise.all(
+              noteAudioUris.map(async (uri) => {
+                if (uri && (uri.startsWith('gw_audio_') || uri.startsWith('file://'))) {
+                  try {
+                    const cloudUrl = await syncAudioToCloud(uri, userId);
+                    if (cloudUrl && cloudUrl !== uri) {
+                      hasAudioChange = true;
+                      return cloudUrl;
+                    }
+                  } catch (e) {
+                    console.warn('[Sync] Audio cloud upload deferred:', e);
+                    partialFailures.push('notes_audio');
+                  }
+                }
+                return uri;
+              })
+            );
+
+            if (hasAudioChange) {
+              local.audio_uris = syncedUris;
+              if (local.media_type === 'audio') {
+                local.media_uri = syncedUris[0] || local.media_uri;
+              }
+              // Update local note record safely
+              db.updateNote(local.id, {
+                audio_uris: syncedUris,
+                media_uri: local.media_uri,
+              });
+            }
+          }
+
           const remote = notesData.data?.find((n) => n.id === local.id);
           if (
+            hasAudioChange ||
             !remote ||
             (local.updated_at &&
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
           ) {
-            await pushToCloud("notes", local);
+            const ok = await pushToCloud("notes", local);
+            if (!ok) partialFailures.push("notes");
+            else counts.notes++;
           }
         }
       } catch (e) {
         console.warn("[Sync] Push local notes failed:", e);
+        partialFailures.push("notes");
       }
 
       // Push unsynced local focus sessions to the cloud
@@ -838,11 +959,14 @@ export const useStore = create<AppState>((set, get) => ({
         for (const local of localFocusSessions) {
           const remote = focusSessionsData.data?.find((f) => f.id === local.id);
           if (!remote) {
-            await pushToCloud("focus_sessions", local);
+            const ok = await pushToCloud("focus_sessions", local);
+            if (!ok) partialFailures.push("focus_sessions");
+            else counts.focus++;
           }
         }
       } catch (e) {
         console.warn("[Sync] Push local focus sessions failed:", e);
+        partialFailures.push("focus_sessions");
       }
 
       // Push unsynced or newer local day notes to the cloud
@@ -867,11 +991,13 @@ export const useStore = create<AppState>((set, get) => ({
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
           ) {
-            await pushToCloud("day_notes", local);
+            const ok = await pushToCloud("day_notes", local);
+            if (!ok) partialFailures.push("day_notes");
           }
         }
       } catch (e) {
         console.warn("[Sync] Push local day notes failed:", e);
+        partialFailures.push("day_notes");
       }
 
       // Push local settings to cloud if local is newer
@@ -886,10 +1012,12 @@ export const useStore = create<AppState>((set, get) => ({
           console.log(
             "[Sync] Pushing local settings (themes/accents) to cloud...",
           );
-          await pushToCloud("user_settings", localSettings);
+          const ok = await pushToCloud("user_settings", localSettings);
+          if (!ok) partialFailures.push("user_settings");
         }
       } catch (e) {
         console.warn("[Sync] Push local settings failed:", e);
+        partialFailures.push("user_settings");
       }
 
       // --- 2. BIDIRECTIONAL SYNC: HYDRATE LOCAL FROM REMOTE ---
@@ -924,10 +1052,11 @@ export const useStore = create<AppState>((set, get) => ({
               await db.addTask({ ...remote, user_id: userId });
             } else if (local.deleted_at) {
               // Deleted locally but active remotely: push local deletion to cloud
-              await pushToCloud("tasks", {
+              const ok = await pushToCloud("tasks", {
                 ...local,
                 completed: Boolean(local.completed),
               });
+              if (!ok) partialFailures.push("tasks_delete_resolution");
             } else if (
               new Date(remote.updated_at as string) >
               new Date(local.updated_at as string)
@@ -969,10 +1098,11 @@ export const useStore = create<AppState>((set, get) => ({
               await db.addHabit({ ...remote, user_id: userId });
             } else if (local.deleted_at) {
               // Deleted locally but active remotely: push local deletion to cloud
-              await pushToCloud("habits", {
+              const ok = await pushToCloud("habits", {
                 ...local,
                 is_paused: Boolean(local.is_paused),
               });
+              if (!ok) partialFailures.push("habits_delete_resolution");
             } else if (
               new Date(remote.updated_at as string) >
               new Date(local.updated_at as string)
@@ -1014,11 +1144,12 @@ export const useStore = create<AppState>((set, get) => ({
               db.addNote({ ...remote, user_id: userId });
             } else if (local.deleted_at) {
               // Deleted locally but active remotely: push local deletion to cloud
-              await pushToCloud("notes", {
+              const ok = await pushToCloud("notes", {
                 ...local,
                 is_locked: Boolean(local.is_locked),
                 is_pinned: Boolean(local.is_pinned),
               });
+              if (!ok) partialFailures.push("notes_delete_resolution");
             } else if (
               new Date(remote.updated_at as string) >
               new Date(local.updated_at as string)
@@ -1102,7 +1233,7 @@ export const useStore = create<AppState>((set, get) => ({
 
       // Sync achievements
       try {
-        const { data: achievementsData } = await supabase
+        const { data: achievementsData } = await (neonData as any)
           .from("connect_achievements")
           .select("*")
           .eq("user_id", userId);
@@ -1147,14 +1278,62 @@ export const useStore = create<AppState>((set, get) => ({
         useSettingsStore.setState({ ...settingsData.data });
       }
 
-      set({ lastSyncedAt: new Date().toISOString(), isSyncing: false });
+      if (partialFailures.length > 0) {
+        const uniqueFailures = Array.from(new Set(partialFailures));
+        // 'partial' — ≥1 required upload failed.
+        // CRITICAL: Do NOT overwrite lastSyncedAt; keep the last fully successful timestamp.
+        // syncError stays false because data was fetched successfully; only uploads failed.
+        set({
+          isSyncing: false,
+          syncStatus: 'partial',
+          syncError: false,
+          syncPartial: true,
+          syncPartialFailures: uniqueFailures,
+        });
+        db.updateConnectProfileStats(userId);
+        console.warn("[Sync] Partial sync completed with upload failures:", uniqueFailures);
+        return {
+          success: false,
+          partial: true,
+          partialFailures: uniqueFailures,
+          counts,
+        };
+      }
+
+      // Full success — every required operation (fetch + all uploads + conflict resolution) succeeded.
+      set({
+        lastSyncedAt: new Date().toISOString(),
+        isSyncing: false,
+        syncStatus: 'synced',
+        syncError: false,
+        syncPartial: false,
+        syncPartialFailures: [],
+      });
       db.updateConnectProfileStats(userId);
+
+      // Refresh and sync account rewards cross-device
+      try {
+        const { initializeAccountRewards } = require("@/lib/rewardsService");
+        await initializeAccountRewards(userId);
+      } catch (rwErr) {
+        console.warn("[Sync] Account rewards sync failed:", rwErr);
+      }
+
       console.log("[Sync] Bidirectional synchronization complete.");
+      return {
+        success: true,
+        counts,
+      };
     } catch (e: any) {
       console.error("[Sync] Failed:", e);
-      set({ isSyncing: false, syncError: true });
+      // 'failed' — unexpected exception; lastSyncedAt preserved.
+      set({ isSyncing: false, syncStatus: 'failed', syncError: true, syncPartial: false });
       // Do NOT show an Alert — offline usage should be silent and seamless.
-      // The syncError flag is available in state for any UI indicator.
+      // The syncError flag and syncStatus are available in state for any UI indicator.
+      return {
+        success: false,
+        error: e?.message || "Synchronization failed due to a network or server error.",
+      };
     }
   },
 }));

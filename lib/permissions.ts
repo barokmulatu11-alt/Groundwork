@@ -19,6 +19,22 @@ export const checkPermissionStatus = async (type: PermissionType): Promise<Permi
     return 'granted'; // Implicit for OS file picker
   }
 
+  if (Platform.OS === 'web') {
+    if (type === 'media') return 'granted'; // Browser file dialog
+    if (typeof navigator !== 'undefined' && typeof navigator.permissions?.query === 'function') {
+      try {
+        const queryName = type === 'camera' ? 'camera' : 'microphone';
+        const res = await (navigator.permissions as any).query({ name: queryName });
+        if (res.state === 'granted') return 'granted';
+        if (res.state === 'denied') return 'denied';
+        return 'undetermined';
+      } catch {
+        return 'undetermined';
+      }
+    }
+    return 'undetermined';
+  }
+
   return await safeCheck(async (): Promise<PermissionStatus> => {
     if (type === 'camera') {
       const ImagePicker = await import('expo-image-picker');
@@ -58,6 +74,25 @@ export const requestIntelligentPermission = async (type: PermissionType): Promis
   
   if (currentStatus === 'denied') {
     return { granted: false, status: 'denied' };
+  }
+
+  if (Platform.OS === 'web') {
+    if (type === 'files' || type === 'media') {
+      return { granted: true, status: 'granted' };
+    }
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(
+          type === 'camera' ? { video: true } : { audio: true }
+        );
+        stream.getTracks().forEach(t => t.stop());
+        return { granted: true, status: 'granted' };
+      } catch (err: any) {
+        const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
+        return { granted: false, status: isDenied ? 'denied' : 'undetermined' };
+      }
+    }
+    return { granted: false, status: 'undetermined' };
   }
 
   return await safeCheck(async () => {
@@ -115,6 +150,14 @@ export const checkAllPermissions = async () => {
 };
 
 export const openSettings = () => {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') {
+      window.alert(
+        'On web browsers, permissions are managed directly by your browser.\n\nClick the padlock or settings icon on the left of your browser address bar (URL) to allow or block Microphone, Camera, or Notifications for this site.'
+      );
+    }
+    return;
+  }
   if (Platform.OS === 'ios') {
     Linking.openURL('app-settings:');
   } else {

@@ -8,6 +8,7 @@
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useAuthStore';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -177,20 +178,28 @@ const uploadScreenshot = async (
     const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
     const path = `${userId}/${requestId}.${ext}`;
 
-    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-    const byteArray = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    let fileData;
+    if (Platform.OS === 'web') {
+      const response = await fetch(uri);
+      fileData = await response.blob();
+    } else {
+      fileData = {
+        uri,
+        type: mimeType,
+        name: `${requestId}.${ext}`,
+      } as any;
+    }
 
-    const { error } = await supabase.storage
-      .from('payment-screenshots')
-      .upload(path, byteArray, { contentType: mimeType, upsert: true });
+    const { error: uploadError } = await supabase.storage.from('payment-screenshots').upload(path, fileData, {
+      contentType: mimeType,
+      upsert: true,
+    });
 
-    if (error) return { url: null, error: error.message };
+    if (uploadError) {
+      return { url: null, error: uploadError.message };
+    }
 
-    const { data: urlData } = supabase.storage
-      .from('payment-screenshots')
-      .getPublicUrl(path);
-
-    return { url: urlData.publicUrl, error: null };
+    return { url: path, error: null };
   } catch (e: any) {
     return { url: null, error: e?.message || 'Upload failed' };
   }

@@ -5,42 +5,37 @@
  * Never rely solely on UI hiding.
  */
 
-import { supabase } from '@/lib/supabase';
+import { neonData as supabase } from '@/lib/neon';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useStore } from '@/store/useStore';
 
-// ─── Limits ────────────────────────────────────────────────────────────────────
+// ─── Core Productivity Limits: Unconditional Free Access ────────────────────────
 
 export const FREE_LIMITS = {
-  TASKS_LIFETIME: 100,
-  HABITS: 5,
-  STUDY_SPACES: 5,
-  SOCIAL_LINKS: 3,
+  TASKS_LIFETIME: Infinity,
+  HABITS: Infinity,
+  STUDY_SPACES: Infinity,
+  SOCIAL_LINKS: Infinity,
 } as const;
 
 // ─── Core ──────────────────────────────────────────────────────────────────────
 
+import {
+  isExistingPaidUser,
+  isRewardUnlocked,
+  REWARD_DEFINITIONS,
+  RewardId,
+} from '@/lib/rewardsService';
+
 /**
- * Returns true if the current user has an active Pro subscription.
- * This is the single source of truth — always call this, never read
- * profile.pro_status directly in feature-gating logic.
+ * Returns true if the user has unlocked all premium features (via past purchase or milestones).
+ * Preserves access for existing paid users.
  */
 export function isPro(): boolean {
-  const { profile, session, isGuest } = useAuthStore.getState();
-  if (isGuest) return false;
-  if (!session) return false;
+  if (isExistingPaidUser()) return true;
 
-  // Backend-authoritative: pro_status set by admin dashboard
-  if (profile?.pro_status === true) {
-    // If expiry is set, validate it
-    if (profile.pro_until) {
-      return new Date(profile.pro_until) > new Date();
-    }
-    return true;
-  }
-
-  // Fallback: user metadata (for edge cases right after purchase)
-  return session.user?.user_metadata?.is_pro === true;
+  // If all milestone rewards are earned, user has full Pro-level capability
+  return REWARD_DEFINITIONS.every((reward) => isRewardUnlocked(reward.id));
 }
 
 export type Plan = 'free' | 'pro';
@@ -63,13 +58,11 @@ export async function refreshSubscription(): Promise<void> {
   if (data) setProfile(data);
 }
 
-/** Stub: integrate with your payment provider (e.g. RevenueCat, Stripe) here. */
+/** Legacy no-op stubs */
 export async function subscribe(_plan: 'pro_1month' | 'pro_1year'): Promise<void> {
-  // TODO: trigger payment flow
-  throw new Error('Payment provider not yet integrated.');
+  return;
 }
 
-/** Stub: trigger restore purchases flow from payment provider. */
 export async function restorePurchases(): Promise<void> {
   await refreshSubscription();
 }
@@ -81,124 +74,96 @@ export interface GateResult {
   reason?: string;
   limit?: number;
   current?: number;
+  rewardId?: RewardId;
 }
 
-/** Check whether the user can create another task (lifetime cap for free users). */
+/** Core productivity: task creation is completely uncapped and free */
 export function canAddTask(): GateResult {
-  if (isPro()) return { allowed: true };
-
-  const { tasks } = useStore.getState();
-  // Count all tasks ever created (including deleted/completed)
-  const lifetime = tasks.length;
-  if (lifetime >= FREE_LIMITS.TASKS_LIFETIME) {
-    return {
-      allowed: false,
-      reason: `Free users can create up to ${FREE_LIMITS.TASKS_LIFETIME} tasks in total. Upgrade to Pro for unlimited tasks.`,
-      limit: FREE_LIMITS.TASKS_LIFETIME,
-      current: lifetime,
-    };
-  }
-  return { allowed: true, current: lifetime, limit: FREE_LIMITS.TASKS_LIFETIME };
+  return { allowed: true };
 }
 
-/** Check whether the user can create another habit. */
+/** Core productivity: habit creation is completely uncapped and free */
 export function canAddHabit(): GateResult {
-  if (isPro()) return { allowed: true };
-
-  const { habits } = useStore.getState();
-  const active = habits.filter(h => !h.deleted_at).length;
-  if (active >= FREE_LIMITS.HABITS) {
-    return {
-      allowed: false,
-      reason: `Free users can track up to ${FREE_LIMITS.HABITS} habits. Upgrade to Pro for unlimited habits.`,
-      limit: FREE_LIMITS.HABITS,
-      current: active,
-    };
-  }
-  return { allowed: true, current: active, limit: FREE_LIMITS.HABITS };
+  return { allowed: true };
 }
 
-/** Check whether the user can create another Study Space (folder). */
-export function canAddStudySpace(currentCount: number): GateResult {
-  if (isPro()) return { allowed: true };
-
-  if (currentCount >= FREE_LIMITS.STUDY_SPACES) {
-    return {
-      allowed: false,
-      reason: `Free users can create up to ${FREE_LIMITS.STUDY_SPACES} Study Spaces. Upgrade to Pro for unlimited spaces.`,
-      limit: FREE_LIMITS.STUDY_SPACES,
-      current: currentCount,
-    };
-  }
-  return { allowed: true, current: currentCount, limit: FREE_LIMITS.STUDY_SPACES };
+/** Study space creation is free */
+export function canAddStudySpace(currentCount?: number): GateResult {
+  return { allowed: true };
 }
 
-/** Check whether the user can add another social link. */
-export function canAddSocialLink(currentCount: number): GateResult {
-  if (isPro()) return { allowed: true };
-
-  if (currentCount >= FREE_LIMITS.SOCIAL_LINKS) {
-    return {
-      allowed: false,
-      reason: `Free users can add up to ${FREE_LIMITS.SOCIAL_LINKS} social links. Upgrade to Pro for unlimited links.`,
-      limit: FREE_LIMITS.SOCIAL_LINKS,
-      current: currentCount,
-    };
-  }
-  return { allowed: true, current: currentCount, limit: FREE_LIMITS.SOCIAL_LINKS };
+/** Social links are free */
+export function canAddSocialLink(currentCount?: number): GateResult {
+  return { allowed: true };
 }
 
-/** Check whether the user can use a premium theme. */
+/** Check whether user unlocked premium themes milestone */
 export function canUsePremiumTheme(): GateResult {
-  if (isPro()) return { allowed: true };
+  if (isRewardUnlocked('premium_themes')) return { allowed: true };
   return {
     allowed: false,
-    reason: 'Premium themes are exclusively available to Groundwork Pro members.',
+    reason: 'Unlocked at Milestone: 30 completed tasks & 15 focus sessions.',
+    rewardId: 'premium_themes',
   };
 }
 
-/** Check whether the user can export notes. */
+/** Check whether user unlocked logo variants milestone */
+export function canUseLogoVariants(): GateResult {
+  if (isRewardUnlocked('premium_themes')) return { allowed: true };
+  return {
+    allowed: false,
+    reason: 'Unlocked at Milestone: 30 completed tasks & 15 focus sessions.',
+    rewardId: 'premium_themes',
+  };
+}
+
+/** Check whether user unlocked note export milestone */
 export function canExportNotes(): GateResult {
-  if (isPro()) return { allowed: true };
+  if (isRewardUnlocked('note_export')) return { allowed: true };
   return {
     allowed: false,
-    reason: 'Note export (PDF & Markdown) is a Pro feature. Upgrade to unlock.',
+    reason: 'Unlocked at Milestone: 25 completed tasks.',
+    rewardId: 'note_export',
   };
 }
 
-/** Check whether the user can lock notes with biometrics. */
+/** Check whether user unlocked note security milestone */
 export function canLockNotes(): GateResult {
-  if (isPro()) return { allowed: true };
+  if (isRewardUnlocked('note_security')) return { allowed: true };
   return {
     allowed: false,
-    reason: 'Note locking with biometrics is a Pro feature. Upgrade to unlock.',
+    reason: 'Unlocked at Milestone: 10 completed tasks.',
+    rewardId: 'note_security',
   };
 }
 
-/** Check whether the user can use custom focus presets. */
+/** Check whether user unlocked custom focus presets milestone */
 export function canUseCustomFocusPreset(): GateResult {
-  if (isPro()) return { allowed: true };
+  if (isRewardUnlocked('focus_presets')) return { allowed: true };
   return {
     allowed: false,
-    reason: 'Custom focus presets are available to Pro users. Upgrade to set your own timer rules.',
+    reason: 'Unlocked at Milestone: 5 completed focus sessions.',
+    rewardId: 'focus_presets',
   };
 }
 
-/** Check whether the user can access revision analytics. */
+/** Check whether user unlocked deep revision analytics milestone */
 export function canAccessRevisionAnalytics(): GateResult {
-  if (isPro()) return { allowed: true };
+  if (isRewardUnlocked('deep_analytics')) return { allowed: true };
   return {
     allowed: false,
-    reason: 'Revision analytics is a Pro feature. Upgrade to track weak topics and review schedules.',
+    reason: 'Unlocked at Milestone: 10 focus sessions & 10 habit check-in days.',
+    rewardId: 'deep_analytics',
   };
 }
 
-/** Check whether the user can schedule or automate backups. */
+/** Check whether user unlocked automated cloud vault milestone */
 export function canScheduleBackup(): GateResult {
-  if (isPro()) return { allowed: true };
+  if (isRewardUnlocked('cloud_vault')) return { allowed: true };
   return {
     allowed: false,
-    reason: 'Scheduled and automatic cloud backup is a Pro feature.',
+    reason: 'Unlocked at Milestone: 40 completed tasks & 14 habit check-in days.',
+    rewardId: 'cloud_vault',
   };
 }
 

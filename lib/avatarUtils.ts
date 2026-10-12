@@ -5,7 +5,7 @@ export function resolveAvatarUrl(url: string | null | undefined): string | null 
   if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('file://') || trimmed.startsWith('content://')) {
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('file://') || trimmed.startsWith('content://') || trimmed.startsWith('data:')) {
     return trimmed;
   }
   const path = trimmed.replace(/^\/+/, '').replace(/^avatars\//, '');

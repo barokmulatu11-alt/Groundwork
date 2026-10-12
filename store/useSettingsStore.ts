@@ -333,12 +333,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       } = updatedState as any;
       
       try {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ settings: serializableSettings })
-          .eq('id', userId);
-        if (profileError) throw profileError;
-        await supabase.auth.updateUser({ data: { settings: serializableSettings } });
+        const { atomicUpdateProfileSettings } = await import('@/lib/profileSettingsService');
+        await atomicUpdateProfileSettings(userId, () => ({
+          settingsUpdates: serializableSettings,
+        }));
       } catch (e) {
         console.warn('[SettingsStore] Cloud sync failed:', e);
       }

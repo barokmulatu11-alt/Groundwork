@@ -13,7 +13,7 @@
  */
 
 import { db } from "@/lib/db";
-import { supabase } from "@/lib/supabase";
+import { neonData as supabase } from "@/lib/neon";
 import { useAuthStore } from "@/store/useAuthStore";
 
 // ─── Event Type Definitions ─────────────────────────────────────────────────────

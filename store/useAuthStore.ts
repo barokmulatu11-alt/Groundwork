@@ -11,13 +11,18 @@ interface AuthState {
   profile: any | null;
   isGuest: boolean;
   isLoading: boolean;
+  isOAuthPending: boolean;
   onboardingDone: boolean;
   welcomeShown: boolean;
+  isSigningOut: boolean;
   setSession: (session: Session | null) => void;
   setProfile: (profile: any | null) => void;
   setIsGuest: (isGuest: boolean) => void;
+  setIsOAuthPending: (pending: boolean) => void;
   setOnboardingDone: (done: boolean) => void;
   setWelcomeShown: (welcomeShown: boolean) => void;
+  /** Re-runs the SIGNED_IN / SIGNED_OUT side-effects when called from auth screens. */
+  handleAuthEvent: (event: string, data: { user?: any; session?: any } | null) => Promise<void>;
   initialize: () => Promise<void>;
   signOut: () => Promise<void>;
   getUserId: () => string;
@@ -29,8 +34,13 @@ const isOnline = async (): Promise<boolean> => {
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, 3000);
+    const isSupabase = process.env.EXPO_PUBLIC_USE_SUPABASE === 'true';
+    const apiUrl = isSupabase 
+      ? (process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || "https://yevrsmlwmegovfwdxpjw.supabase.co/rest/v1") 
+      : (process.env.EXPO_PUBLIC_NEON_API_URL || "https://ep-gentle-night-b4oacb89.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1");
+    
     const response = await fetch(
-      "https://yevrsmlwmegovfwdxpjw.supabase.co/rest/v1/",
+      apiUrl,
       {
         method: "HEAD",
         signal: controller.signal,
@@ -48,8 +58,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   isGuest: false,
   isLoading: true,
+  isSigningOut: false,
+  isOAuthPending: false,
   onboardingDone: false,
   welcomeShown: false,
+
+  setIsOAuthPending: (pending) => set({ isOAuthPending: pending }),
 
   setSession: (session) => {
     set({ session, isGuest: false });
@@ -111,37 +125,89 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return "guest";
   },
 
+  /**
+   * handleAuthEvent: replays SIGNED_IN / SIGNED_OUT logic for callers that need
+   * to drive auth-state changes from outside onAuthStateChange (e.g. OAuth callback
+   * in login.tsx where the session is retrieved manually after browser redirect).
+   */
+  handleAuthEvent: async (event, data) => {
+    if (event === "SIGNED_IN" && data?.user) {
+      const session = data.session ?? get().session;
+      set({ session: session as Session | null, isGuest: false, isLoading: false });
+      AsyncStorage.removeItem(IS_GUEST_KEY);
+      if (session) {
+        await AsyncStorage.setItem("groundwork_offline_session", JSON.stringify(session));
+        await AsyncStorage.removeItem("groundwork_manual_signout");
+      }
+      const userId = data.user?.id;
+      if (userId) {
+        try {
+          const { data: profile, error } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", userId)
+            .single();
+          if (!error && profile) {
+            set({ profile });
+            await AsyncStorage.setItem(`profile_${userId}`, JSON.stringify(profile));
+          } else {
+            const cached = await AsyncStorage.getItem(`profile_${userId}`);
+            if (cached) set({ profile: JSON.parse(cached) });
+          }
+        } catch (e) {
+          const cached = await AsyncStorage.getItem(`profile_${userId}`);
+          if (cached) set({ profile: JSON.parse(cached) });
+        }
+        try {
+          const { initializeAccountRewards } = require('@/lib/rewardsService');
+          await initializeAccountRewards(userId);
+        } catch (_) {}
+      }
+    } else if (event === "SIGNED_OUT") {
+      set({ session: null, profile: null, isGuest: false, isLoading: false });
+      await AsyncStorage.removeItem("groundwork_offline_session");
+    }
+  },
+
   initialize: async () => {
     try {
       console.log("[AuthStore] Initializing...");
       // 1. Check for existing session
-      let {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const isManualSignout = await AsyncStorage.getItem(
+        "groundwork_manual_signout",
+      );
 
-      // Offline fallback: if no session, check if we have groundwork_offline_session cached
-      if (!session) {
-        const offlineSessionStr = await AsyncStorage.getItem(
-          "groundwork_offline_session",
-        );
-        if (offlineSessionStr) {
-          try {
-            const online = await isOnline();
-            if (!online) {
-              session = JSON.parse(offlineSessionStr);
-              console.log("[AuthStore] Restored session from offline cache");
+      let session: any = null;
+      if (isManualSignout !== "true") {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session || null;
+
+        // Offline fallback: if no session, check if we have groundwork_offline_session cached
+        if (!session) {
+          const offlineSessionStr = await AsyncStorage.getItem(
+            "groundwork_offline_session",
+          );
+          if (offlineSessionStr) {
+            try {
+              const online = await isOnline();
+              if (!online) {
+                session = JSON.parse(offlineSessionStr);
+                console.log("[AuthStore] Restored session from offline cache");
+              }
+            } catch (err) {
+              console.warn("[AuthStore] Session restoration failed:", err);
             }
-          } catch (err) {
-            console.warn("[AuthStore] Session restoration failed:", err);
           }
         }
-      }
 
-      if (session) {
-        await AsyncStorage.setItem(
-          "groundwork_offline_session",
-          JSON.stringify(session),
-        );
+        if (session) {
+          await AsyncStorage.setItem(
+            "groundwork_offline_session",
+            JSON.stringify(session),
+          );
+        }
+      } else {
+        console.log("[AuthStore] Manual signout flag active, skipping session restoration");
       }
 
       // 2. Check for guest status if no session
@@ -186,6 +252,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             JSON.stringify(defaultGuestProfile),
           );
         }
+        try {
+          const { initializeAccountRewards } = require('@/lib/rewardsService');
+          await initializeAccountRewards('guest');
+        } catch (_) {}
       }
 
       // Check ban status and fetch profile if logged in (wrapped in try-catch for offline support)
@@ -243,10 +313,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { useStore } = require("./useStore");
         const { useSettingsStore } = require("./useSettingsStore");
 
-        // Parallel load
-        Promise.all([
+        // Parallel load — awaited so startup hydration and rewards complete before gates evaluate
+        await Promise.all([
           useStore.getState().syncFromCloud(session),
           useSettingsStore.getState().loadSettings(),
+          (async () => {
+            const { initializeAccountRewards } = require('@/lib/rewardsService');
+            await initializeAccountRewards(session.user.id);
+          })(),
         ]).catch((e) =>
           console.warn("[AuthStore] Pre-load hydration failed:", e),
         );
@@ -323,6 +397,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             await Promise.all([
               useStore.getState().syncFromCloud(session),
               useSettingsStore.getState().loadSettings(),
+              (async () => {
+                const { initializeAccountRewards } = require('@/lib/rewardsService');
+                await initializeAccountRewards(session.user.id);
+              })(),
             ]);
           } catch (e) {
             console.warn("[AuthStore] Post-login hydration failed:", e);
@@ -374,12 +452,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const userId = get().getUserId();
     console.log("[AuthStore] Initiating sign out for:", userId);
 
+    // 1. Immediately trigger loading state so UI reacts on first tap
+    set({ isSigningOut: true });
+
     try {
       await AsyncStorage.setItem("groundwork_manual_signout", "true");
       await AsyncStorage.removeItem("groundwork_offline_session");
+      // Keep welcome shown so the user lands directly on the Login screen
+      await AsyncStorage.setItem("groundwork_welcome_shown", "true");
     } catch (e) {}
 
-    // 1. Stop syncing
+    // 2. Stop account-specific background sync manager
     try {
       const { stopSyncManager } = require("./useStore");
       if (stopSyncManager) stopSyncManager();
@@ -387,20 +470,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn("[AuthStore] Failed to stop sync manager:", e);
     }
 
-    // 2. Revoke device session
+    // 3. Stop all active realtime PostgREST/Supabase channels
+    try {
+      (supabase as any).removeAllChannels?.();
+    } catch (e) {
+      console.warn("[AuthStore] Failed to remove realtime channels:", e);
+    }
+
+    // 4. Revoke device session with 2.5s timeout (never hang on poor connectivity)
     try {
       const { useSessionStore } = require("./useSessionStore");
       const sessionStore = useSessionStore.getState();
       if (sessionStore?.deviceId) {
-        await sessionStore.revokeSession(sessionStore.deviceId);
+        await Promise.race([
+          sessionStore.revokeSession(sessionStore.deviceId),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Revoke timeout")), 2500)),
+        ]).catch((err) => console.warn("[AuthStore] Session revocation skipped/timed out:", err));
       }
     } catch (e) {
       console.warn("[AuthStore] Session revocation failed:", e);
     }
 
-    // 3. Actual Supabase Sign Out
+    // 5. Remote sign out with 2.5s timeout (handle network failures honestly, never trap user)
     try {
-      await supabase.auth.signOut();
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("SignOut timeout")), 2500)),
+      ]).catch((err) => console.warn("[AuthStore] Remote sign out timed out, proceeding locally:", err));
     } catch (e) {
       console.warn("[AuthStore] Supabase signOut failed:", e);
     }
@@ -411,7 +507,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn("[AuthStore] Failed to remove guest key:", e);
     }
 
-    // 4. Clear sensitive AsyncStorage keys (Preserve permissions_onboarding_done because device permissions don't reset on log out!)
+    // 6. Clear sensitive session-specific keys
     try {
       await AsyncStorage.multiRemove([
         "last_ambient_sound",
@@ -421,16 +517,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn("[AuthStore] Failed to clear AsyncStorage keys:", e);
     }
 
-    // 5. Clear ALL local SQLite data (The cloud is the source of truth)
-    try {
-      if (userId) {
-        clearLocalData(userId);
-      }
-    } catch (e) {
-      console.warn("[AuthStore] Failed to clear local SQLite data:", e);
-    }
+    // 7. PRESERVE unsynced offline work under original owner (userId)!
+    // Notice: We deliberately DO NOT call clearLocalData(userId) here.
+    // Local SQLite rows remain intact under user_id, protecting offline work from data loss.
 
-    // 6. Reset in-memory states
+    // 8. Reset in-memory stores immediately so no account data leaks into UI
     try {
       const { useStore } = require("./useStore");
       const { useSettingsStore } = require("./useSettingsStore");
@@ -441,6 +532,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         notes: [],
         focusSessions: [],
         dayNotes: {},
+        isSyncing: false,
+        syncError: false,
       });
       useSettingsStore.setState({
         appPin: null,
@@ -453,13 +546,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn("[AuthStore] Failed to reset store states:", e);
     }
 
+    // 9. Complete sign-out state transition
+    set({
+      session: null,
+      profile: null,
+      isGuest: false,
+      welcomeShown: true,
+      isLoading: false,
+      isSigningOut: false,
+    });
     try {
-      await AsyncStorage.removeItem("groundwork_welcome_shown");
-    } catch (e) {
-      console.warn("[AuthStore] Failed to remove welcome shown key:", e);
-    }
-
-    set({ session: null, profile: null, isGuest: false, welcomeShown: false });
-    console.log("[AuthStore] Successfully signed out and cleared local data.");
+      const { initializeAccountRewards } = require('@/lib/rewardsService');
+      await initializeAccountRewards('guest');
+    } catch (_) {}
+    console.log("[AuthStore] Successfully completed sign out.");
   },
 }));

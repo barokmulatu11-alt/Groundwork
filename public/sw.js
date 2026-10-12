@@ -17,7 +17,6 @@ const PRECACHE = [
   "/_sitemap.html",
   "/(tabs)/connect/index.html",
   "/(tabs)/connect/user-profile.html",
-  "/(tabs)/courses.html",
   "/(tabs)/index.html",
   "/(tabs)/more.html",
   "/+not-found.html",

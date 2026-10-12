@@ -52,3 +52,9 @@ supabase/.temp/
 
 # local scratch folders created during builds/deploys
 tmp-*/
+scratch/
+scratch_browser_profile/
+scripts/backups/
+.uploads/
+release-output/
+

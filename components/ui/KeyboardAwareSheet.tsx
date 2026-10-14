@@ -68,7 +68,7 @@ export function KeyboardAwareSheet({ visible, onClose, title, children, variant 
 
 const styles = StyleSheet.create({
   flex: { flex: 1, justifyContent: 'flex-end' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  overlay: { ...(StyleSheet.absoluteFill as any), backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

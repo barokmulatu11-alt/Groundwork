@@ -5,6 +5,7 @@ import { ChevronLeft, MoreHorizontal } from 'lucide-react-native';
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useResponsive } from '@/hooks/useResponsive';
 
 interface BrandHeaderProps {
   title?: string;
@@ -28,6 +29,7 @@ export function BrandHeader({
   const router = useRouter();
   const { theme } = useTheme();
   const { profile, session, isGuest } = useAuthStore();
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
   const isBackVisible = showBack || Boolean(onBack);
 
   const handleBack = () => {
@@ -49,7 +51,16 @@ export function BrandHeader({
 
   return (
     <View style={[styles.wrapper, { backgroundColor: theme.background }]}>
-      <View style={styles.container}>
+      <View
+        style={[
+          styles.container,
+          isDesktop && {
+            maxWidth: contentMaxWidth,
+            alignSelf: 'center',
+            paddingHorizontal: horizontalPadding,
+          },
+        ]}
+      >
         {/* Left side: Back button or spacer */}
         <View style={styles.leftCol}>
           {isBackVisible ? (
@@ -64,14 +75,16 @@ export function BrandHeader({
             </TouchableOpacity>
           ) : null}
 
-          {/* Wordmark */}
+          {/* Wordmark or Page Title */}
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => router.replace('/')}
             accessibilityRole="link"
             accessibilityLabel="Groundwork home"
           >
-            <Text style={[styles.wordmark, { color: theme.primaryText }]}>groundwork.</Text>
+            <Text style={[styles.wordmark, { color: theme.primaryText }]}>
+              {title || (!isDesktop ? 'groundwork.' : isBackVisible ? 'groundwork.' : '')}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -79,7 +92,7 @@ export function BrandHeader({
         <View style={styles.rightCol}>
           {rightAction ? (
             rightAction
-          ) : showMoreMenu ? (
+          ) : showMoreMenu && !isDesktop ? (
             <TouchableOpacity
               onPress={onRightPress || (() => router.push('/settings' as any))}
               style={[styles.circleBtn, { borderColor: theme.separator }]}
@@ -89,7 +102,7 @@ export function BrandHeader({
             >
               <MoreHorizontal size={17} color={theme.primaryText} strokeWidth={2.2} />
             </TouchableOpacity>
-          ) : showAvatar ? (
+          ) : showAvatar && !isDesktop ? (
             <TouchableOpacity
               onPress={onRightPress || (() => router.push('/settings' as any))}
               style={[styles.avatarCircle, { borderColor: theme.separator, backgroundColor: theme.cardSolid }]}
@@ -106,7 +119,16 @@ export function BrandHeader({
       </View>
 
       {/* Signature electric blue separator line */}
-      <View style={[styles.accentLine, { backgroundColor: theme.accent }]} />
+      <View
+        style={[
+          styles.accentLine,
+          { backgroundColor: theme.accent },
+          isDesktop && {
+            maxWidth: contentMaxWidth,
+            alignSelf: 'center',
+          },
+        ]}
+      />
     </View>
   );
 }

@@ -54,7 +54,7 @@ export const XPBar: React.FC<Props> = ({ level, xp, nextXp, levelTitle, nextLeve
             colors={[DesignTokens.colors.gradientStart, DesignTokens.colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           />
         </Animated.View>
       </View>

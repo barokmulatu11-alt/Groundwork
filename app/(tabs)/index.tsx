@@ -11,7 +11,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Check, ChevronRight, Play, Timer, Sparkles } from 'lucide-react-native';
+import {
+  Check,
+  ChevronRight,
+  Play,
+  Timer,
+  Sparkles,
+  CloudCheck,
+  CloudOff,
+  ArrowUpRight,
+  Flame,
+  CheckCircle2,
+} from 'lucide-react-native';
 import { AppText as Text } from '@/components/ui/AppText';
 import { BrandHeader } from '@/components/ui/BrandHeader';
 import { NotificationSheet } from '@/components/NotificationSheet';
@@ -24,14 +35,14 @@ import { getMilestoneProgress } from '@/lib/rewardsService';
 import { neonData } from '@/lib/neon';
 import { getLocalDateString, formatHeaderDate } from '@/lib/dateUtils';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useResponsive } from '@/hooks/useResponsive';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { profile, session } = useAuthStore();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width >= 768;
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
   const {
     tasks,
@@ -42,7 +53,15 @@ export default function DashboardScreen() {
     loadFocusSessions,
     toggleTask,
     toggleHabit,
+    syncStatus,
   } = useStore();
+
+  const {
+    focusTimerActive,
+    focusTimerTimeLeft,
+    focusTimerDurationMinutes,
+    offlineMode,
+  } = useSettingsStore();
 
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
@@ -109,21 +128,18 @@ export default function DashboardScreen() {
 
   // Real Habits dataset: Real check-in status from dates_completed
   const realHabits = habits || [];
+  const completedHabitsCount = realHabits.filter((h) => habitCompletedOnDate(h, todayStr)).length;
 
   // Milestone Progress: only real numbers, zero is valid data
-  const milestoneProgress = getMilestoneProgress();
   const totalCompletedAllTime = activeTasks.filter((t) => t.completed).length;
   const rewardTarget = 10;
   const rewardCurrent = Math.min(rewardTarget, totalCompletedAllTime);
   const rewardPercent = Math.min(100, Math.round((rewardCurrent / rewardTarget) * 100));
 
-  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
-
-  const {
-    focusTimerActive,
-    focusTimerTimeLeft,
-    focusTimerDurationMinutes,
-  } = useSettingsStore();
+  // Focus time calculation
+  const todayFocusMinutes = (focusSessions || [])
+    .filter((s) => s.completed_at && s.completed_at.startsWith(todayStr))
+    .reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
 
   const formattedTimer = React.useMemo(() => {
     if (focusTimerActive && focusTimerTimeLeft > 0) {
@@ -135,6 +151,278 @@ export default function DashboardScreen() {
     return `${String(dur).padStart(2, '0')}:00`;
   }, [focusTimerActive, focusTimerTimeLeft, focusTimerDurationMinutes]);
 
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
+
+  // Tasks section JSX
+  const renderTasksSection = () => (
+    <View style={styles.sectionWrap}>
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleGroup}>
+          <Text style={styles.sectionIndex}>01</Text>
+          <Text style={styles.sectionTitle}>Your day</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/tasks?create=true' as any)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Add task"
+        >
+          <Text style={styles.blueActionText}>+ Add task</Text>
+        </TouchableOpacity>
+      </View>
+
+      {todayTasksList.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.zeroNumeralRow}>
+            <Text style={styles.hugeZeroNumeral}>0</Text>
+            <Text style={styles.numeralUnitText}>tasks planned</Text>
+          </View>
+          <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
+          <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
+
+          <TouchableOpacity
+            onPress={() => router.push('/tasks?create=true' as any)}
+            style={styles.inlineCreateBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.blueActionText}>+ Create your first task</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.listContainer}>
+          <Text style={styles.counterSummary}>
+            {completedTasksCount} of {totalTasksCount} completed
+          </Text>
+          {todayTasksList.slice(0, 4).map((task, idx) => {
+            const isLast = idx === Math.min(todayTasksList.length, 4) - 1;
+            return (
+              <View
+                key={task.id}
+                style={[styles.itemRow, !isLast && styles.itemRowBorder]}
+              >
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticSuccess();
+                    toggleTask(task.id, task.completed);
+                  }}
+                  style={[
+                    styles.taskCheckbox,
+                    task.completed && styles.taskCheckboxCompleted,
+                  ]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: task.completed }}
+                >
+                  {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: '/tasks/task-detail',
+                      params: { id: task.id },
+                    } as any)
+                  }
+                  style={styles.itemTextWrap}
+                >
+                  <Text
+                    style={[
+                      styles.taskTitleText,
+                      task.completed && styles.taskTitleCompleted,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {task.title || 'Untitled task'}
+                  </Text>
+                  {task.due_time ? (
+                    <Text style={styles.itemSubText}>Today · {task.due_time}</Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: '/tasks/task-detail',
+                      params: { id: task.id },
+                    } as any)
+                  }
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <ChevronRight size={16} color="#8E8C87" />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+
+          {todayTasksList.length > 4 && (
+            <TouchableOpacity
+              onPress={() => router.push('/tasks' as any)}
+              style={styles.viewMoreRow}
+            >
+              <Text style={styles.viewMoreText}>
+                View all {todayTasksList.length} tasks →
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
+  );
+
+  // Habits section JSX
+  const renderHabitsSection = () => (
+    <View style={styles.sectionWrap}>
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleGroup}>
+          <Text style={styles.sectionIndex}>02</Text>
+          <Text style={styles.sectionTitle}>Daily rituals</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/habits' as any)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+        >
+          <Text style={styles.blueActionText}>+ Add habit</Text>
+        </TouchableOpacity>
+      </View>
+
+      {realHabits.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.zeroNumeralRow}>
+            <Text style={styles.hugeZeroNumeral}>0</Text>
+            <Text style={styles.numeralUnitText}>habits yet</Text>
+          </View>
+          <Text style={styles.emptyPrimaryPrompt}>Start with something small.</Text>
+          <Text style={styles.emptySecondaryPrompt}>Choose one thing you want to repeat.</Text>
+
+          <TouchableOpacity
+            onPress={() => router.push('/habits' as any)}
+            style={styles.inlineCreateBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.blueActionText}>+ Create your first habit</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.listContainer}>
+          {realHabits.slice(0, 3).map((habit, idx) => {
+            const isCompleted = habitCompletedOnDate(habit, todayStr);
+            const isLast = idx === Math.min(realHabits.length, 3) - 1;
+
+            return (
+              <View
+                key={habit.id}
+                style={[styles.itemRow, !isLast && styles.itemRowBorder]}
+              >
+                <View style={styles.itemTextWrap}>
+                  <Text style={styles.habitTitleText}>{habit.title}</Text>
+                  <Text style={styles.itemSubText}>
+                    {habit.streak || 0} day streak
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={async () => {
+                    await toggleHabit(habit.id, todayStr);
+                  }}
+                  style={[
+                    styles.habitCheckCircle,
+                    isCompleted && styles.habitCheckCircleActive,
+                  ]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isCompleted }}
+                >
+                  {isCompleted && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+
+          {realHabits.length > 3 && (
+            <TouchableOpacity
+              onPress={() => router.push('/habits' as any)}
+              style={styles.viewMoreRow}
+            >
+              <Text style={styles.viewMoreText}>
+                View all {realHabits.length} habits →
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
+  );
+
+  // Focus section for mobile/tablet
+  const renderMobileFocusSection = () => (
+    <View style={styles.sectionWrap}>
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleGroup}>
+          <Timer size={18} color="#0066FF" strokeWidth={2} />
+          <Text style={styles.sectionTitle}>Focus</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/focus' as any)}
+          accessibilityRole="button"
+        >
+          <Text style={styles.blueActionText}>Open timer →</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.focusContainer}>
+        <View style={styles.focusTimerRow}>
+          <Text style={styles.serifTimerText}>{formattedTimer}</Text>
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              router.push('/focus' as any);
+            }}
+            style={styles.focusStartBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={focusTimerActive ? 'Resume focus session' : 'Start focus session'}
+          >
+            <Play size={14} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.focusStartBtnText}>
+              {focusTimerActive ? 'Resume focus' : 'Start focus'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.focusSubline}>
+          {focusTimerActive
+            ? 'Focus session in progress. Stay in the zone.'
+            : 'Give your mind single direction. Dedicated study session.'}
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Milestone section
+  const renderMilestoneSection = () => (
+    <TouchableOpacity
+      onPress={() => router.push('/rewards' as any)}
+      style={styles.milestoneBox}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel="Milestone rewards"
+    >
+      <View style={styles.milestoneHeader}>
+        <View style={styles.milestoneTitleGroup}>
+          <Sparkles size={16} color="#0066FF" />
+          <Text style={styles.milestoneTitle}>Consistency milestone</Text>
+        </View>
+        <Text style={styles.milestoneCount}>
+          {rewardCurrent} / {rewardTarget} tasks
+        </Text>
+      </View>
+
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${rewardPercent}%` }]} />
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.root}>
       {/* Approved wordmark header */}
@@ -145,295 +433,165 @@ export default function DashboardScreen() {
       <ScrollView
         style={{ flex: 1, width: '100%' }}
         contentContainerStyle={{
-          paddingHorizontal: isDesktop ? 32 : 20,
+          paddingHorizontal: horizontalPadding,
           paddingTop: 24,
           paddingBottom: Math.max(insets.bottom, 16) + 90,
-          maxWidth: isDesktop ? 640 : undefined,
-          alignSelf: isDesktop ? 'center' : undefined,
+          maxWidth: contentMaxWidth,
+          alignSelf: 'center',
           width: '100%',
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Date line */}
-        <Text style={styles.dateLabel}>{todayDateFormatted}</Text>
+        {isDesktop ? (
+          /* ── Desktop 2-Column Workspace Composition ─────────────── */
+          <View style={styles.desktopColumnsRow}>
+            {/* Left Column: Date, Headings, Tasks, Habits */}
+            <View style={styles.desktopMainCol}>
+              <Text style={styles.dateLabel}>{todayDateFormatted}</Text>
+              <Text style={styles.pageHeading}>Make space.</Text>
+              <Text style={styles.pageSubline}>A clear day starts with one focused action.</Text>
 
-        {/* Page Heading & Subtitle */}
-        <Text style={styles.pageHeading}>Make space.</Text>
-        <Text style={styles.pageSubline}>A clear day starts with one focused action.</Text>
+              <View style={styles.thinDivider} />
 
-        <View style={styles.thinDivider} />
+              {renderTasksSection()}
 
-        {/* ── 01 Your day (Tasks) ────────────────────────────────────────────── */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionTitleGroup}>
-              <Text style={styles.sectionIndex}>01</Text>
-              <Text style={styles.sectionTitle}>Your day</Text>
+              <View style={styles.thinDivider} />
+
+              {renderHabitsSection()}
             </View>
-            <TouchableOpacity
-              onPress={() => router.push('/tasks?create=true' as any)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel="Add task"
-            >
-              <Text style={styles.blueActionText}>+ Add task</Text>
-            </TouchableOpacity>
-          </View>
 
-          {todayTasksList.length === 0 ? (
-            /* Honest empty state matching mockup */
-            <View style={styles.emptyContainer}>
-              <View style={styles.zeroNumeralRow}>
-                <Text style={styles.hugeZeroNumeral}>0</Text>
-                <Text style={styles.numeralUnitText}>tasks planned</Text>
-              </View>
-              <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
-              <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
-
-              <TouchableOpacity
-                onPress={() => router.push('/tasks?create=true' as any)}
-                style={styles.inlineCreateBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.blueActionText}>+ Create your first task</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            /* Real task rows */
-            <View style={styles.listContainer}>
-              <Text style={styles.counterSummary}>
-                {completedTasksCount} of {totalTasksCount} completed
-              </Text>
-              {todayTasksList.slice(0, 4).map((task, idx) => {
-                const isLast = idx === Math.min(todayTasksList.length, 4) - 1;
-                return (
-                  <View
-                    key={task.id}
-                    style={[styles.itemRow, !isLast && styles.itemRowBorder]}
-                  >
-                    <TouchableOpacity
-                      onPress={() => {
-                        hapticSuccess();
-                        toggleTask(task.id, task.completed);
-                      }}
-                      style={[
-                        styles.taskCheckbox,
-                        task.completed && styles.taskCheckboxCompleted,
-                      ]}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: task.completed }}
-                    >
-                      {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() =>
-                        router.push({
-                          pathname: '/tasks/task-detail',
-                          params: { id: task.id },
-                        } as any)
-                      }
-                      style={styles.itemTextWrap}
-                    >
-                      <Text
-                        style={[
-                          styles.taskTitleText,
-                          task.completed && styles.taskTitleCompleted,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {task.title || 'Untitled task'}
-                      </Text>
-                      {task.due_time ? (
-                        <Text style={styles.itemSubText}>Today · {task.due_time}</Text>
-                      ) : null}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() =>
-                        router.push({
-                          pathname: '/tasks/task-detail',
-                          params: { id: task.id },
-                        } as any)
-                      }
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <ChevronRight size={16} color="#8E8C87" />
-                    </TouchableOpacity>
+            {/* Right Column: Prominent Focus Card, Rhythm, Milestones, Sync */}
+            <View style={styles.desktopSideCol}>
+              {/* 1. Prominent Focus Timer Card */}
+              <View style={styles.desktopCard}>
+                <View style={styles.desktopCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Timer size={18} color={theme.accent} strokeWidth={2.2} />
+                    <Text style={styles.desktopCardTitle}>Focus session</Text>
                   </View>
-                );
-              })}
+                  <TouchableOpacity
+                    onPress={() => router.push('/focus' as any)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <ArrowUpRight size={16} color={theme.accent} />
+                  </TouchableOpacity>
+                </View>
 
-              {todayTasksList.length > 4 && (
+                <View style={styles.prominentTimerBlock}>
+                  <Text style={styles.serifTimerTextDesktop}>{formattedTimer}</Text>
+                  <Text style={styles.prominentTimerSub}>
+                    {focusTimerActive ? 'Session in progress' : 'Ready to begin'}
+                  </Text>
+                </View>
+
                 <TouchableOpacity
-                  onPress={() => router.push('/tasks' as any)}
-                  style={styles.viewMoreRow}
+                  onPress={() => {
+                    hapticLight();
+                    router.push('/focus' as any);
+                  }}
+                  style={styles.desktopFocusBtn}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={focusTimerActive ? 'Resume focus' : 'Start focus'}
                 >
-                  <Text style={styles.viewMoreText}>
-                    View all {todayTasksList.length} tasks →
+                  <Play size={15} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.desktopFocusBtnText}>
+                    {focusTimerActive ? 'Resume focus' : 'Start focus session'}
                   </Text>
                 </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
+              </View>
 
-        <View style={styles.thinDivider} />
+              {/* 2. Today's Rhythm Summary Card */}
+              <View style={styles.desktopCard}>
+                <Text style={styles.desktopCardTitle}>Today's rhythm</Text>
+                <View style={styles.rhythmStatsGrid}>
+                  <View style={styles.rhythmStatBox}>
+                    <Text style={styles.rhythmStatNumber}>
+                      {completedTasksCount}/{totalTasksCount}
+                    </Text>
+                    <Text style={styles.rhythmStatLabel}>Tasks done</Text>
+                  </View>
+                  <View style={styles.rhythmStatBox}>
+                    <Text style={styles.rhythmStatNumber}>
+                      {completedHabitsCount}/{realHabits.length}
+                    </Text>
+                    <Text style={styles.rhythmStatLabel}>Rituals</Text>
+                  </View>
+                  <View style={styles.rhythmStatBox}>
+                    <Text style={styles.rhythmStatNumber}>{todayFocusMinutes}m</Text>
+                    <Text style={styles.rhythmStatLabel}>Focus time</Text>
+                  </View>
+                </View>
+              </View>
 
-        {/* ── Integrated Focus Section with Serif Timer ─────────────────────── */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionTitleGroup}>
-              <Timer size={18} color="#0066FF" strokeWidth={2} />
-              <Text style={styles.sectionTitle}>Focus</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push('/focus' as any)}
-              accessibilityRole="button"
-            >
-              <Text style={styles.blueActionText}>Open timer →</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.focusContainer}>
-            <View style={styles.focusTimerRow}>
-              <Text style={styles.serifTimerText}>{formattedTimer}</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  hapticLight();
-                  router.push('/focus' as any);
-                }}
-                style={styles.focusStartBtn}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={focusTimerActive ? 'Resume focus session' : 'Start focus session'}
-              >
-                <Play size={14} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.focusStartBtnText}>
-                  {focusTimerActive ? 'Resume focus' : 'Start focus'}
+              {/* 3. Consistency Milestone Card */}
+              <View style={styles.desktopCard}>
+                <View style={styles.desktopCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Sparkles size={16} color={theme.accent} />
+                    <Text style={styles.desktopCardTitle}>Consistency</Text>
+                  </View>
+                  <Text style={[styles.milestoneCount, { color: theme.secondaryText }]}>
+                    {rewardCurrent} / {rewardTarget}
+                  </Text>
+                </View>
+                <View style={[styles.progressTrack, { marginVertical: 10 }]}>
+                  <View style={[styles.progressFill, { width: `${rewardPercent}%` }]} />
+                </View>
+                <Text style={styles.milestoneHintText}>
+                  Complete {Math.max(0, rewardTarget - rewardCurrent)} more tasks to earn your next consistency reward.
                 </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.focusSubline}>
-              {focusTimerActive
-                ? 'Focus session in progress. Stay in the zone.'
-                : 'Give your mind single direction. Dedicated study session.'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.thinDivider} />
-
-        {/* ── 02 Daily rituals (Habits) ──────────────────────────────────────── */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionTitleGroup}>
-              <Text style={styles.sectionIndex}>02</Text>
-              <Text style={styles.sectionTitle}>Daily rituals</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push('/habits' as any)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-            >
-              <Text style={styles.blueActionText}>+ Add habit</Text>
-            </TouchableOpacity>
-          </View>
-
-          {realHabits.length === 0 ? (
-            /* Honest empty state matching mockup */
-            <View style={styles.emptyContainer}>
-              <View style={styles.zeroNumeralRow}>
-                <Text style={styles.hugeZeroNumeral}>0</Text>
-                <Text style={styles.numeralUnitText}>habits yet</Text>
               </View>
-              <Text style={styles.emptyPrimaryPrompt}>Start with something small.</Text>
-              <Text style={styles.emptySecondaryPrompt}>Choose one thing you want to repeat.</Text>
 
+              {/* 4. Sync & Storage Status */}
               <TouchableOpacity
-                onPress={() => router.push('/habits' as any)}
-                style={styles.inlineCreateBtn}
-                activeOpacity={0.7}
+                onPress={() => router.push('/data-settings' as any)}
+                style={[styles.desktopCard, styles.syncCardRow]}
+                activeOpacity={0.8}
               >
-                <Text style={styles.blueActionText}>+ Create your first habit</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {offlineMode ? (
+                    <CloudOff size={16} color={theme.textMuted} />
+                  ) : (
+                    <CloudCheck size={16} color={theme.accent} />
+                  )}
+                  <View>
+                    <Text style={styles.syncCardTitle}>
+                      {offlineMode ? 'Offline mode' : syncStatus === 'syncing' ? 'Syncing...' : 'Cloud synced'}
+                    </Text>
+                    <Text style={styles.syncCardSub}>
+                      {offlineMode ? 'Data saved on this device' : 'Data preserved & backed up'}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={16} color={theme.secondaryText} />
               </TouchableOpacity>
             </View>
-          ) : (
-            /* Real habits list */
-            <View style={styles.listContainer}>
-              {realHabits.slice(0, 3).map((habit, idx) => {
-                const isCompleted = habitCompletedOnDate(habit, todayStr);
-                const isLast = idx === Math.min(realHabits.length, 3) - 1;
-
-                return (
-                  <View
-                    key={habit.id}
-                    style={[styles.itemRow, !isLast && styles.itemRowBorder]}
-                  >
-                    <View style={styles.itemTextWrap}>
-                      <Text style={styles.habitTitleText}>{habit.title}</Text>
-                      <Text style={styles.itemSubText}>
-                        {habit.streak || 0} day streak
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      onPress={async () => {
-                        await toggleHabit(habit.id, todayStr);
-                      }}
-                      style={[
-                        styles.habitCheckCircle,
-                        isCompleted && styles.habitCheckCircleActive,
-                      ]}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isCompleted }}
-                    >
-                      {isCompleted && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-
-              {realHabits.length > 3 && (
-                <TouchableOpacity
-                  onPress={() => router.push('/habits' as any)}
-                  style={styles.viewMoreRow}
-                >
-                  <Text style={styles.viewMoreText}>
-                    View all {realHabits.length} habits →
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
-
-        <View style={styles.thinDivider} />
-
-        {/* ── Compact Milestone Progress (Real data only) ───────────────────── */}
-        <TouchableOpacity
-          onPress={() => router.push('/rewards' as any)}
-          style={styles.milestoneBox}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Milestone rewards"
-        >
-          <View style={styles.milestoneHeader}>
-            <View style={styles.milestoneTitleGroup}>
-              <Sparkles size={16} color="#0066FF" />
-              <Text style={styles.milestoneTitle}>Consistency milestone</Text>
-            </View>
-            <Text style={styles.milestoneCount}>
-              {rewardCurrent} / {rewardTarget} tasks
-            </Text>
           </View>
+        ) : (
+          /* ── Mobile / Tablet Sequential Flow ────────────────────── */
+          <View>
+            <Text style={styles.dateLabel}>{todayDateFormatted}</Text>
+            <Text style={styles.pageHeading}>Make space.</Text>
+            <Text style={styles.pageSubline}>A clear day starts with one focused action.</Text>
 
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${rewardPercent}%` }]} />
+            <View style={styles.thinDivider} />
+
+            {renderTasksSection()}
+
+            <View style={styles.thinDivider} />
+
+            {renderMobileFocusSection()}
+
+            <View style={styles.thinDivider} />
+
+            {renderHabitsSection()}
+
+            <View style={styles.thinDivider} />
+
+            {renderMilestoneSection()}
           </View>
-        </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Notifications modal */}
@@ -698,5 +856,126 @@ const createStyles = (theme: any, isDark: boolean) =>
       height: '100%',
       backgroundColor: theme.accent,
       borderRadius: 2,
+    },
+
+    // Desktop 2-column styles
+    desktopColumnsRow: {
+      flexDirection: 'row',
+      gap: 36,
+      width: '100%',
+      alignItems: 'flex-start',
+    },
+    desktopMainCol: {
+      flex: 1.35,
+      minWidth: 0,
+    },
+    desktopSideCol: {
+      flex: 0.95,
+      minWidth: 320,
+      gap: 16,
+    },
+    desktopCard: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 14,
+      padding: 18,
+      backgroundColor: isDark ? '#080808' : '#FFFFFF',
+    },
+    desktopCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    desktopCardTitle: {
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      letterSpacing: -0.3,
+    },
+    prominentTimerBlock: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+      marginBottom: 16,
+    },
+    serifTimerTextDesktop: {
+      fontSize: 48,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      letterSpacing: -1,
+      color: theme.primaryText,
+      fontVariant: ['tabular-nums'],
+    },
+    prominentTimerSub: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginTop: 4,
+    },
+    desktopFocusBtn: {
+      backgroundColor: theme.accent,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: 10,
+    },
+    desktopFocusBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontFamily: 'Inter_700Bold',
+    },
+    rhythmStatsGrid: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 14,
+      gap: 8,
+    },
+    rhythmStatBox: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 6,
+      borderRadius: 8,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+    },
+    rhythmStatNumber: {
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    rhythmStatLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+    milestoneHintText: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      lineHeight: 17,
+    },
+    syncCardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    syncCardTitle: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
+    },
+    syncCardSub: {
+      fontSize: 11,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginTop: 1,
     },
   });

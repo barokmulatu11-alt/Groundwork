@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   saveBtn: { backgroundColor: '#34C759', padding: 10, borderRadius: 20 },
   canvasContainer: { flex: 1 },
-  placeholder: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', opacity: 0.5 },
+  placeholder: { ...(StyleSheet.absoluteFill as any), alignItems: 'center', justifyContent: 'center', opacity: 0.5 },
   footer: { paddingBottom: Platform.OS === 'ios' ? 40 : 20, borderTopWidth: 1, paddingTop: 16 },
   colorScroll: { maxHeight: 50, marginBottom: 16, paddingHorizontal: 16 },
   colorDot: { width: 32, height: 32, borderRadius: 16, marginRight: 12 },

@@ -23,15 +23,15 @@ import {
   getTomorrowDateString,
   getDaysAheadDateString,
 } from '@/lib/dateUtils';
+import { useResponsive } from '@/hooks/useResponsive';
 import type { SubTask } from '@/lib/db';
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { theme, isDark } = useTheme();
-  const isDesktop = width >= 768;
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
   const { tasks, updateTask, deleteTask, toggleTask } = useStore();
   
@@ -154,6 +154,281 @@ export default function TaskDetailScreen() {
   const tomorrowStr = getTomorrowDateString();
   const nextWeekStr = getDaysAheadDateString(7);
 
+  // Helper renderers for modular desktop / mobile layout
+  const renderTitleAndStatus = () => (
+    <View style={styles.titleSectionWrap}>
+      {/* Status Indicator */}
+      <View style={styles.topStatusRow}>
+        <TouchableOpacity
+          onPress={() => {
+            hapticSuccess();
+            toggleTask(task.id, task.completed);
+          }}
+          style={[
+            styles.taskCheckbox,
+            task.completed && styles.taskCheckboxCompleted,
+          ]}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: task.completed }}
+        >
+          {task.completed && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+        </TouchableOpacity>
+        <Text style={styles.statusLabel}>
+          {task.completed ? 'COMPLETED' : 'IN PROGRESS'}
+        </Text>
+      </View>
+
+      {/* 1. Title Input & Inline Validation */}
+      <TextInput
+        value={title}
+        onChangeText={handleTitleChange}
+        placeholder="Task title"
+        placeholderTextColor={theme.textMuted}
+        style={[
+          styles.titleInput,
+          titleError ? { borderColor: '#EF4444' } : null,
+        ]}
+        multiline
+        accessibilityLabel="Task title"
+      />
+      {titleError ? (
+        <View style={styles.errorRow}>
+          <AlertCircle size={14} color="#EF4444" />
+          <Text style={styles.errorText}>{titleError}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const renderChecklistSection = () => (
+    <View style={styles.sectionBlock}>
+      <Text style={styles.fieldLabel}>CHECKLIST ITEMS</Text>
+      {subtasks.map((st) => (
+        <View key={st.id} style={styles.subtaskRow}>
+          <TouchableOpacity
+            onPress={() => handleToggleSubtask(st.id)}
+            style={[
+              styles.smallCheckbox,
+              st.completed && styles.smallCheckboxCompleted,
+            ]}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: st.completed }}
+          >
+            {st.completed && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
+          </TouchableOpacity>
+          <Text
+            style={[
+              styles.subtaskTitle,
+              st.completed && styles.subtaskTitleCompleted,
+            ]}
+          >
+            {st.title}
+          </Text>
+          <TouchableOpacity
+            onPress={() => handleRemoveSubtask(st.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Remove checklist item"
+          >
+            <X size={15} color={theme.textMuted} />
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      {/* Add checklist item */}
+      <View style={styles.addSubtaskRow}>
+        <TextInput
+          value={newSubtaskTitle}
+          onChangeText={setNewSubtaskTitle}
+          onSubmitEditing={handleAddSubtask}
+          placeholder="Add checklist item"
+          placeholderTextColor={theme.textMuted}
+          style={styles.addSubtaskInput}
+        />
+        {newSubtaskTitle.trim().length > 0 && (
+          <TouchableOpacity
+            onPress={handleAddSubtask}
+            style={styles.addSmallBtn}
+            accessibilityLabel="Add item"
+          >
+            <Plus size={16} color={theme.accent} strokeWidth={2.4} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderNotesSection = () => (
+    <View style={styles.sectionBlock}>
+      <Text style={styles.fieldLabel}>TASK NOTES</Text>
+      <TextInput
+        value={note}
+        onChangeText={setNote}
+        placeholder="Add relevant notes, links, or context..."
+        placeholderTextColor={theme.textMuted}
+        style={styles.notesInput}
+        multiline
+        numberOfLines={6}
+      />
+    </View>
+  );
+
+  const renderPrioritySection = () => (
+    <View style={styles.sideCardBlock}>
+      <Text style={styles.fieldLabel}>PRIORITY</Text>
+      <View style={styles.priorityRow}>
+        {(['low', 'medium', 'high'] as const).map((p) => {
+          const active = priority === p;
+          return (
+            <TouchableOpacity
+              key={p}
+              onPress={() => {
+                hapticLight();
+                setPriority(p);
+              }}
+              style={[
+                styles.priorityPill,
+                active && styles.priorityPillActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`${p} priority`}
+            >
+              <Text
+                style={[
+                  styles.priorityPillText,
+                  active && styles.priorityPillTextActive,
+                ]}
+              >
+                {p.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const renderScheduleSection = () => (
+    <View style={styles.sideCardBlock}>
+      <Text style={styles.fieldLabel}>SCHEDULE</Text>
+      
+      {/* Quick Date Pills */}
+      <View style={styles.quickDateRow}>
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            setDate(todayStr);
+          }}
+          style={[
+            styles.quickPill,
+            date === todayStr && styles.quickPillActive,
+          ]}
+        >
+          <Text style={[styles.quickPillText, date === todayStr && styles.quickPillTextActive]}>
+            Today
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            setDate(tomorrowStr);
+          }}
+          style={[
+            styles.quickPill,
+            date === tomorrowStr && styles.quickPillActive,
+          ]}
+        >
+          <Text style={[styles.quickPillText, date === tomorrowStr && styles.quickPillTextActive]}>
+            Tomorrow
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            setDate(nextWeekStr);
+          }}
+          style={[
+            styles.quickPill,
+            date === nextWeekStr && styles.quickPillActive,
+          ]}
+        >
+          <Text style={[styles.quickPillText, date === nextWeekStr && styles.quickPillTextActive]}>
+            Next Week
+          </Text>
+        </TouchableOpacity>
+
+        {date ? (
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              setDate('');
+            }}
+            style={styles.quickPillClear}
+          >
+            <Text style={styles.quickPillClearText}>Clear date</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      <View style={styles.scheduleRow}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.fieldHeaderRow}>
+            <Calendar size={13} color={theme.textSecondary} />
+            <Text style={styles.subFieldLabel}>Due date (YYYY-MM-DD)</Text>
+          </View>
+          <TextInput
+            value={date}
+            onChangeText={setDate}
+            placeholder="e.g. 2026-10-15"
+            placeholderTextColor={theme.textMuted}
+            style={styles.textInput}
+            autoCorrect={false}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={styles.fieldHeaderRow}>
+            <Clock size={13} color={theme.textSecondary} />
+            <Text style={styles.subFieldLabel}>Due time (HH:MM)</Text>
+          </View>
+          <TextInput
+            value={dueTime}
+            onChangeText={setDueTime}
+            placeholder="e.g. 14:00"
+            placeholderTextColor={theme.textMuted}
+            style={styles.textInput}
+            autoCorrect={false}
+          />
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderActionButtons = () => (
+    <View style={styles.actionBlock}>
+      <TouchableOpacity
+        onPress={handleSave}
+        style={styles.saveBtn}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+      >
+        <Text style={styles.saveBtnText}>
+          {savedFeedback ? 'Saved' : 'Save changes'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => setShowDeleteConfirm(true)}
+        style={styles.deleteBtn}
+        accessibilityRole="button"
+        accessibilityLabel="Delete task"
+      >
+        <Trash2 size={15} color="#EF4444" />
+        <Text style={styles.deleteBtnText}>Delete task</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top }}>
@@ -167,285 +442,93 @@ export default function TaskDetailScreen() {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            paddingHorizontal: isDesktop ? 32 : 20,
+            paddingHorizontal: horizontalPadding,
             paddingTop: 20,
             paddingBottom: Math.max(insets.bottom, 24) + 80,
-            maxWidth: isDesktop ? 640 : undefined,
-            alignSelf: isDesktop ? 'center' : undefined,
+            maxWidth: contentMaxWidth,
+            alignSelf: 'center',
             width: '100%',
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Status Indicator */}
-          <View style={styles.topStatusRow}>
-            <TouchableOpacity
-              onPress={() => {
-                hapticSuccess();
-                toggleTask(task.id, task.completed);
-              }}
-              style={[
-                styles.taskCheckbox,
-                task.completed && styles.taskCheckboxCompleted,
-              ]}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: task.completed }}
-            >
-              {task.completed && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
-            </TouchableOpacity>
-            <Text style={styles.statusLabel}>
-              {task.completed ? 'COMPLETED' : 'IN PROGRESS'}
-            </Text>
-          </View>
+          {isDesktop ? (
+            /* ── Desktop 2-Column Task Editor ───────────────────────── */
+            <View style={styles.desktopColumnsRow}>
+              {/* Left Column: Title, Checklist, Notes */}
+              <View style={styles.desktopEditorLeft}>
+                {renderTitleAndStatus()}
+                <View style={styles.thinDivider} />
+                {renderChecklistSection()}
+                <View style={styles.thinDivider} />
+                {renderNotesSection()}
+              </View>
 
-          {/* 1. Title Input & Inline Validation */}
-          <TextInput
-            value={title}
-            onChangeText={handleTitleChange}
-            placeholder="Task title"
-            placeholderTextColor={theme.textMuted}
-            style={[
-              styles.titleInput,
-              titleError ? { borderColor: '#EF4444' } : null,
-            ]}
-            multiline
-            accessibilityLabel="Task title"
-          />
-          {titleError ? (
-            <View style={styles.errorRow}>
-              <AlertCircle size={14} color="#EF4444" />
-              <Text style={styles.errorText}>{titleError}</Text>
+              {/* Right Column: Priority, Schedule, Actions */}
+              <View style={styles.desktopEditorRight}>
+                <View style={styles.desktopSideCard}>
+                  {renderPrioritySection()}
+                </View>
+
+                <View style={styles.desktopSideCard}>
+                  {renderScheduleSection()}
+                </View>
+
+                <View style={styles.desktopSideCard}>
+                  {renderActionButtons()}
+                </View>
+              </View>
             </View>
-          ) : null}
+          ) : (
+            /* ── Mobile / Tablet Sequential Editor ─────────────────── */
+            <View>
+              {renderTitleAndStatus()}
 
-          <View style={styles.thinDivider} />
+              <View style={styles.thinDivider} />
 
-          {/* 2. Priority Selector */}
-          <Text style={styles.fieldLabel}>PRIORITY</Text>
-          <View style={styles.priorityRow}>
-            {(['low', 'medium', 'high'] as const).map((p) => {
-              const active = priority === p;
-              return (
+              {renderPrioritySection()}
+
+              <View style={styles.thinDivider} />
+
+              {renderScheduleSection()}
+
+              <View style={styles.thinDivider} />
+
+              {renderChecklistSection()}
+
+              <View style={styles.thinDivider} />
+
+              {renderNotesSection()}
+
+              <View style={styles.thinDivider} />
+
+              {/* Save & Delete in linear flow */}
+              <View style={styles.saveActionWrap}>
                 <TouchableOpacity
-                  key={p}
-                  onPress={() => {
-                    hapticLight();
-                    setPriority(p);
-                  }}
-                  style={[
-                    styles.priorityPill,
-                    active && styles.priorityPillActive,
-                  ]}
+                  onPress={handleSave}
+                  style={styles.saveBtn}
+                  activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel={`${p} priority`}
                 >
-                  <Text
-                    style={[
-                      styles.priorityPillText,
-                      active && styles.priorityPillTextActive,
-                    ]}
-                  >
-                    {p.toUpperCase()}
+                  <Text style={styles.saveBtnText}>
+                    {savedFeedback ? 'Saved' : 'Save changes'}
                   </Text>
                 </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.thinDivider} />
-
-          {/* 3. Scheduling (Quick pills + inputs) */}
-          <Text style={styles.fieldLabel}>SCHEDULE</Text>
-          
-          {/* Quick Date Pills */}
-          <View style={styles.quickDateRow}>
-            <TouchableOpacity
-              onPress={() => {
-                hapticLight();
-                setDate(todayStr);
-              }}
-              style={[
-                styles.quickPill,
-                date === todayStr && styles.quickPillActive,
-              ]}
-            >
-              <Text style={[styles.quickPillText, date === todayStr && styles.quickPillTextActive]}>
-                Today
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                hapticLight();
-                setDate(tomorrowStr);
-              }}
-              style={[
-                styles.quickPill,
-                date === tomorrowStr && styles.quickPillActive,
-              ]}
-            >
-              <Text style={[styles.quickPillText, date === tomorrowStr && styles.quickPillTextActive]}>
-                Tomorrow
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                hapticLight();
-                setDate(nextWeekStr);
-              }}
-              style={[
-                styles.quickPill,
-                date === nextWeekStr && styles.quickPillActive,
-              ]}
-            >
-              <Text style={[styles.quickPillText, date === nextWeekStr && styles.quickPillTextActive]}>
-                Next Week
-              </Text>
-            </TouchableOpacity>
-
-            {date ? (
-              <TouchableOpacity
-                onPress={() => {
-                  hapticLight();
-                  setDate('');
-                }}
-                style={styles.quickPillClear}
-              >
-                <Text style={styles.quickPillClearText}>Clear date</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-
-          <View style={styles.scheduleRow}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.fieldHeaderRow}>
-                <Calendar size={13} color={theme.textSecondary} />
-                <Text style={styles.subFieldLabel}>Due date (YYYY-MM-DD)</Text>
               </View>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                placeholder="e.g. 2026-10-15"
-                placeholderTextColor={theme.textMuted}
-                style={styles.textInput}
-                autoCorrect={false}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.fieldHeaderRow}>
-                <Clock size={13} color={theme.textSecondary} />
-                <Text style={styles.subFieldLabel}>Due time (HH:MM)</Text>
+
+              <View style={styles.dangerZoneWrap}>
+                <TouchableOpacity
+                  onPress={() => setShowDeleteConfirm(true)}
+                  style={styles.deleteBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete task"
+                >
+                  <Trash2 size={15} color="#EF4444" />
+                  <Text style={styles.deleteBtnText}>Delete task</Text>
+                </TouchableOpacity>
               </View>
-              <TextInput
-                value={dueTime}
-                onChangeText={setDueTime}
-                placeholder="e.g. 14:00"
-                placeholderTextColor={theme.textMuted}
-                style={styles.textInput}
-                autoCorrect={false}
-              />
             </View>
-          </View>
-
-          <View style={styles.thinDivider} />
-
-          {/* 4. Checklist Items */}
-          <Text style={styles.fieldLabel}>CHECKLIST ITEMS</Text>
-          {subtasks.map((st) => (
-            <View key={st.id} style={styles.subtaskRow}>
-              <TouchableOpacity
-                onPress={() => handleToggleSubtask(st.id)}
-                style={[
-                  styles.smallCheckbox,
-                  st.completed && styles.smallCheckboxCompleted,
-                ]}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: st.completed }}
-              >
-                {st.completed && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
-              </TouchableOpacity>
-              <Text
-                style={[
-                  styles.subtaskTitle,
-                  st.completed && styles.subtaskTitleCompleted,
-                ]}
-              >
-                {st.title}
-              </Text>
-              <TouchableOpacity
-                onPress={() => handleRemoveSubtask(st.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Remove checklist item"
-              >
-                <X size={15} color={theme.textMuted} />
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {/* Add checklist item */}
-          <View style={styles.addSubtaskRow}>
-            <TextInput
-              value={newSubtaskTitle}
-              onChangeText={setNewSubtaskTitle}
-              onSubmitEditing={handleAddSubtask}
-              placeholder="Add checklist item"
-              placeholderTextColor={theme.textMuted}
-              style={styles.addSubtaskInput}
-            />
-            {newSubtaskTitle.trim().length > 0 && (
-              <TouchableOpacity
-                onPress={handleAddSubtask}
-                style={styles.addSmallBtn}
-                accessibilityLabel="Add item"
-              >
-                <Plus size={16} color={theme.accent} strokeWidth={2.4} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.thinDivider} />
-
-          {/* 5. Task Notes */}
-          <Text style={styles.fieldLabel}>TASK NOTES</Text>
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            placeholder="Add relevant notes, links, or context..."
-            placeholderTextColor={theme.textMuted}
-            style={styles.notesInput}
-            multiline
-            numberOfLines={4}
-          />
-
-          <View style={styles.thinDivider} />
-
-          {/* 6. Primary Action: Save Changes */}
-          <View style={styles.saveActionWrap}>
-            <TouchableOpacity
-              onPress={handleSave}
-              style={styles.saveBtn}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-            >
-              <Text style={styles.saveBtnText}>
-                {savedFeedback ? 'Saved' : 'Save changes'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 7. Visually Separated Danger Zone for Delete */}
-          <View style={styles.dangerZoneWrap}>
-            <TouchableOpacity
-              onPress={() => setShowDeleteConfirm(true)}
-              style={styles.deleteBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Delete task"
-            >
-              <Trash2 size={15} color="#EF4444" />
-              <Text style={styles.deleteBtnText}>Delete task</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 

@@ -19,14 +19,15 @@ import { useStore } from '@/store/useStore';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { getLocalDateString, getTomorrowDateString, formatHeaderDate } from '@/lib/dateUtils';
 
+import { useResponsive } from '@/hooks/useResponsive';
+
 type TabView = 'Today' | 'Upcoming' | 'All';
 
 export default function TasksScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width >= 768;
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
   const { tasks, loadAllTasks, addTask, toggleTask } = useStore();
 
@@ -121,231 +122,541 @@ export default function TasksScreen() {
         <ScrollView
           style={{ flex: 1, width: '100%' }}
           contentContainerStyle={{
-            paddingHorizontal: isDesktop ? 32 : 20,
+            paddingHorizontal: horizontalPadding,
             paddingTop: 24,
             paddingBottom: Math.max(insets.bottom, 16) + 80,
-            maxWidth: isDesktop ? 640 : undefined,
-            alignSelf: isDesktop ? 'center' : undefined,
+            maxWidth: contentMaxWidth,
+            alignSelf: 'center',
             width: '100%',
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Date Stamp */}
-          <Text style={styles.dateLabel}>{todayFormatted}</Text>
+          {isDesktop ? (
+            /* ── Desktop 2-Column Task Workspace Composition ─────────────── */
+            <View style={styles.desktopColumnsRow}>
+              {/* Left Column: Primary Task Workspace */}
+              <View style={styles.desktopMainCol}>
+                {/* Date Stamp */}
+                <Text style={styles.dateLabel}>{todayFormatted}</Text>
 
-          {/* Heading */}
-          <Text style={styles.pageHeading}>Tasks.</Text>
-          <Text style={styles.pageSubline}>One thing at a time.</Text>
+                {/* Heading */}
+                <Text style={styles.pageHeading}>Tasks.</Text>
+                <Text style={styles.pageSubline}>One thing at a time.</Text>
 
-          {/* Tabs: Today / Upcoming / All */}
-          <View style={styles.tabsRow}>
-            {(['Today', 'Upcoming', 'All'] as TabView[]).map((tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <TouchableOpacity
-                  key={tab}
-                  onPress={() => {
-                    hapticLight();
-                    setActiveTab(tab);
-                  }}
-                  style={styles.tabItem}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                    {tab}
-                  </Text>
-                  {isActive && <View style={styles.tabUnderline} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <View style={styles.tabsBottomLine} />
+                {/* Tabs: Today / Upcoming / All */}
+                <View style={styles.tabsRow}>
+                  {(['Today', 'Upcoming', 'All'] as TabView[]).map((tab) => {
+                    const isActive = activeTab === tab;
+                    return (
+                      <TouchableOpacity
+                        key={tab}
+                        onPress={() => {
+                          hapticLight();
+                          setActiveTab(tab);
+                        }}
+                        style={styles.tabItem}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: isActive }}
+                      >
+                        <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                          {tab}
+                        </Text>
+                        {isActive && <View style={styles.tabUnderline} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={styles.tabsBottomLine} />
 
-          {/* Section: 01 Your day */}
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionTitleGroup}>
-              <Text style={styles.sectionIndex}>01</Text>
-              <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                quickInputRef.current?.focus();
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel="Add task"
-            >
-              <Text style={styles.blueActionText}>+ Add task</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Zero tasks planned empty state */}
-          {currentPendingTasks.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <View style={styles.zeroNumeralRow}>
-                <Text style={styles.hugeZeroNumeral}>0</Text>
-                <Text style={styles.numeralUnitText}>tasks planned</Text>
-              </View>
-              <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
-              <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
-            </View>
-          ) : (
-            /* Populated task rows */
-            <View style={styles.tasksListWrap}>
-              {currentPendingTasks.map((task, idx) => {
-                const isLast = idx === currentPendingTasks.length - 1;
-                return (
-                  <View
-                    key={task.id}
-                    style={[styles.taskItemRow, !isLast && styles.taskItemRowBorder]}
-                  >
+                {/* Quick Add Input */}
+                <View style={[styles.quickAddRow, { marginBottom: 20 }]}>
+                  <Plus size={18} color="#0066FF" strokeWidth={2.4} style={styles.plusIcon} />
+                  <TextInput
+                    ref={quickInputRef}
+                    value={quickTitle}
+                    onChangeText={setQuickTitle}
+                    onSubmitEditing={handleQuickAdd}
+                    placeholder="What needs to get done?"
+                    placeholderTextColor="#0066FF"
+                    style={styles.quickAddInput}
+                    returnKeyType="done"
+                    editable={!isSubmitting}
+                  />
+                  {quickTitle.trim().length > 0 && (
                     <TouchableOpacity
-                      onPress={() => {
-                        hapticSuccess();
-                        toggleTask(task.id, task.completed);
-                      }}
-                      style={styles.taskCheckbox}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: false }}
+                      onPress={handleQuickAdd}
+                      style={styles.returnBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Submit task"
                     >
-                      {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                      <CornerDownLeft size={16} color="#0066FF" strokeWidth={2.4} />
                     </TouchableOpacity>
+                  )}
+                </View>
 
-                    <TouchableOpacity
-                      onPress={() =>
-                        router.push({
-                          pathname: '/tasks/task-detail',
-                          params: { id: task.id },
-                        } as any)
-                      }
-                      style={styles.taskTitleWrap}
-                    >
-                      <Text style={styles.taskTitleText} numberOfLines={2}>
-                        {task.title || 'Untitled task'}
-                      </Text>
-                      <View style={styles.taskMetaRow}>
-                        {task.due_time ? (
-                          <Text style={styles.taskMetaText}>
-                            {task.date === todayStr ? 'Today' : task.date || 'Today'} · {task.due_time}
-                          </Text>
-                        ) : null}
-                        {task.priority && task.priority !== 'medium' && (
-                          <Text
-                            style={[
-                              styles.priorityBadgeText,
-                              { color: task.priority === 'high' ? '#EF4444' : '#8E8C87' },
-                            ]}
-                          >
-                            {task.priority.toUpperCase()}
-                          </Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() =>
-                        router.push({
-                          pathname: '/tasks/task-detail',
-                          params: { id: task.id },
-                        } as any)
-                      }
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <ChevronRight size={16} color="#8E8C87" />
-                    </TouchableOpacity>
+                {/* Section: 01 Your day */}
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionTitleGroup}>
+                    <Text style={styles.sectionIndex}>01</Text>
+                    <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
                   </View>
-                );
-              })}
-            </View>
-          )}
-
-          <View style={styles.thinDivider} />
-
-          {/* Quick Add Input matching mockup: + What needs to get done? ↵ */}
-          <View style={styles.quickAddRow}>
-            <Plus size={18} color="#0066FF" strokeWidth={2.4} style={styles.plusIcon} />
-            <TextInput
-              ref={quickInputRef}
-              value={quickTitle}
-              onChangeText={setQuickTitle}
-              onSubmitEditing={handleQuickAdd}
-              placeholder="What needs to get done?"
-              placeholderTextColor="#0066FF"
-              style={styles.quickAddInput}
-              returnKeyType="done"
-              editable={!isSubmitting}
-            />
-            {quickTitle.trim().length > 0 && (
-              <TouchableOpacity
-                onPress={handleQuickAdd}
-                style={styles.returnBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Submit task"
-              >
-                <CornerDownLeft size={16} color="#0066FF" strokeWidth={2.4} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.thinDivider} />
-
-          {/* Completed collapsible section matching mockup: 0 Completed v */}
-          <TouchableOpacity
-            onPress={() => setCompletedExpanded(!completedExpanded)}
-            style={styles.completedHeaderRow}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-          >
-            <Text style={styles.completedHeaderText}>
-              {currentCompletedTasks.length} Completed
-            </Text>
-            {completedExpanded ? (
-              <ChevronUp size={18} color="#8E8C87" />
-            ) : (
-              <ChevronDown size={18} color="#8E8C87" />
-            )}
-          </TouchableOpacity>
-
-          {completedExpanded && currentCompletedTasks.length > 0 && (
-            <View style={styles.completedListWrap}>
-              {currentCompletedTasks.map((task) => (
-                <View key={task.id} style={styles.completedItemRow}>
                   <TouchableOpacity
                     onPress={() => {
-                      hapticSuccess();
-                      toggleTask(task.id, task.completed);
+                      quickInputRef.current?.focus();
                     }}
-                    style={[styles.taskCheckbox, styles.taskCheckboxCompleted]}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add task"
                   >
-                    <Check size={13} color="#FFFFFF" strokeWidth={3} />
+                    <Text style={styles.blueActionText}>+ Add task</Text>
                   </TouchableOpacity>
-                  <Text style={styles.completedTitleText} numberOfLines={1}>
-                    {task.title || 'Untitled task'}
-                  </Text>
                 </View>
-              ))}
+
+                {/* Zero tasks planned empty state */}
+                {currentPendingTasks.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <View style={styles.zeroNumeralRow}>
+                      <Text style={styles.hugeZeroNumeral}>0</Text>
+                      <Text style={styles.numeralUnitText}>tasks planned</Text>
+                    </View>
+                    <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
+                    <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
+                  </View>
+                ) : (
+                  /* Populated task rows */
+                  <View style={styles.tasksListWrap}>
+                    {currentPendingTasks.map((task, idx) => {
+                      const isLast = idx === currentPendingTasks.length - 1;
+                      return (
+                        <View
+                          key={task.id}
+                          style={[styles.taskItemRow, !isLast && styles.taskItemRowBorder]}
+                        >
+                          <TouchableOpacity
+                            onPress={() => {
+                              hapticSuccess();
+                              toggleTask(task.id, task.completed);
+                            }}
+                            style={styles.taskCheckbox}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: false }}
+                          >
+                            {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() =>
+                              router.push({
+                                pathname: '/tasks/task-detail',
+                                params: { id: task.id },
+                              } as any)
+                            }
+                            style={styles.taskTitleWrap}
+                          >
+                            <Text style={styles.taskTitleText} numberOfLines={2}>
+                              {task.title || 'Untitled task'}
+                            </Text>
+                            <View style={styles.taskMetaRow}>
+                              {task.due_time ? (
+                                <Text style={styles.taskMetaText}>
+                                  {task.date === todayStr ? 'Today' : task.date || 'Today'} · {task.due_time}
+                                </Text>
+                              ) : null}
+                              {task.priority && task.priority !== 'medium' && (
+                                <Text
+                                  style={[
+                                    styles.priorityBadgeText,
+                                    { color: task.priority === 'high' ? '#EF4444' : '#8E8C87' },
+                                  ]}
+                                >
+                                  {task.priority.toUpperCase()}
+                                </Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() =>
+                              router.push({
+                                pathname: '/tasks/task-detail',
+                                params: { id: task.id },
+                              } as any)
+                            }
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <ChevronRight size={16} color="#8E8C87" />
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <View style={styles.thinDivider} />
+
+                {/* Completed collapsible section */}
+                <TouchableOpacity
+                  onPress={() => setCompletedExpanded(!completedExpanded)}
+                  style={styles.completedHeaderRow}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.completedHeaderText}>
+                    {currentCompletedTasks.length} Completed
+                  </Text>
+                  {completedExpanded ? (
+                    <ChevronUp size={18} color="#8E8C87" />
+                  ) : (
+                    <ChevronDown size={18} color="#8E8C87" />
+                  )}
+                </TouchableOpacity>
+
+                {completedExpanded && currentCompletedTasks.length > 0 && (
+                  <View style={styles.completedListWrap}>
+                    {currentCompletedTasks.map((task) => (
+                      <View key={task.id} style={styles.completedItemRow}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            hapticSuccess();
+                            toggleTask(task.id, task.completed);
+                          }}
+                          style={[styles.taskCheckbox, styles.taskCheckboxCompleted]}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Check size={13} color="#FFFFFF" strokeWidth={3} />
+                        </TouchableOpacity>
+                        <Text style={styles.completedTitleText} numberOfLines={1}>
+                          {task.title || 'Untitled task'}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Right Column: Supporting Overview, Priorities, and Focus Launcher */}
+              <View style={styles.desktopSideCol}>
+                {/* 1. Tasks Summary Card */}
+                <View style={styles.desktopCard}>
+                  <Text style={styles.desktopCardTitle}>Overview</Text>
+                  <View style={styles.summaryStatsGrid}>
+                    <View style={styles.summaryStatBox}>
+                      <Text style={styles.summaryStatNumber}>{currentPendingTasks.length}</Text>
+                      <Text style={styles.summaryStatLabel}>Pending</Text>
+                    </View>
+                    <View style={styles.summaryStatBox}>
+                      <Text style={styles.summaryStatNumber}>{currentCompletedTasks.length}</Text>
+                      <Text style={styles.summaryStatLabel}>Completed</Text>
+                    </View>
+                    <View style={styles.summaryStatBox}>
+                      <Text style={styles.summaryStatNumber}>
+                        {Math.round(
+                          (currentCompletedTasks.length /
+                            Math.max(1, currentPendingTasks.length + currentCompletedTasks.length)) *
+                            100
+                        )}
+                        %
+                      </Text>
+                      <Text style={styles.summaryStatLabel}>Done</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.progressTrack, { marginTop: 14 }]}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.round(
+                            (currentCompletedTasks.length /
+                              Math.max(1, currentPendingTasks.length + currentCompletedTasks.length)) *
+                              100
+                          )}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+
+                {/* 2. Priority Legend Card */}
+                <View style={styles.desktopCard}>
+                  <Text style={styles.desktopCardTitle}>Priority guide</Text>
+                  <View style={{ gap: 10, marginTop: 12 }}>
+                    <View style={styles.priorityGuideRow}>
+                      <View style={[styles.priorityDot, { backgroundColor: '#EF4444' }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.priorityGuideTitle}>High priority</Text>
+                        <Text style={styles.priorityGuideSub}>Critical & time-sensitive items</Text>
+                      </View>
+                      <Text style={styles.priorityGuideCount}>
+                        {activeAllTasks.filter((t) => !t.completed && t.priority === 'high').length}
+                      </Text>
+                    </View>
+                    <View style={styles.priorityGuideRow}>
+                      <View style={[styles.priorityDot, { backgroundColor: '#F59E0B' }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.priorityGuideTitle}>Medium priority</Text>
+                        <Text style={styles.priorityGuideSub}>Standard daily tasks</Text>
+                      </View>
+                      <Text style={styles.priorityGuideCount}>
+                        {activeAllTasks.filter((t) => !t.completed && (t.priority === 'medium' || !t.priority)).length}
+                      </Text>
+                    </View>
+                    <View style={styles.priorityGuideRow}>
+                      <View style={[styles.priorityDot, { backgroundColor: '#8E8C87' }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.priorityGuideTitle}>Low priority</Text>
+                        <Text style={styles.priorityGuideSub}>Flexible when time allows</Text>
+                      </View>
+                      <Text style={styles.priorityGuideCount}>
+                        {activeAllTasks.filter((t) => !t.completed && t.priority === 'low').length}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* 3. Focus Session Launcher Card */}
+                <TouchableOpacity
+                  onPress={() => router.push('/focus' as any)}
+                  style={styles.desktopCard}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Timer size={18} color="#0066FF" strokeWidth={2.2} />
+                      <Text style={styles.desktopCardTitle}>Focus mode</Text>
+                    </View>
+                    <ChevronRight size={16} color="#0066FF" />
+                  </View>
+                  <Text style={styles.focusCardDesc}>
+                    Dedicate a distraction-free timer block to power through your top task.
+                  </Text>
+                  <View style={styles.focusActionPill}>
+                    <Text style={styles.focusActionPillText}>Open focus timer →</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* ── Mobile / Tablet Sequential Task List ────────────────────── */
+            <View>
+              {/* Date Stamp */}
+              <Text style={styles.dateLabel}>{todayFormatted}</Text>
+
+              {/* Heading */}
+              <Text style={styles.pageHeading}>Tasks.</Text>
+              <Text style={styles.pageSubline}>One thing at a time.</Text>
+
+              {/* Tabs: Today / Upcoming / All */}
+              <View style={styles.tabsRow}>
+                {(['Today', 'Upcoming', 'All'] as TabView[]).map((tab) => {
+                  const isActive = activeTab === tab;
+                  return (
+                    <TouchableOpacity
+                      key={tab}
+                      onPress={() => {
+                        hapticLight();
+                        setActiveTab(tab);
+                      }}
+                      style={styles.tabItem}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                        {tab}
+                      </Text>
+                      {isActive && <View style={styles.tabUnderline} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={styles.tabsBottomLine} />
+
+              {/* Section: 01 Your day */}
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionTitleGroup}>
+                  <Text style={styles.sectionIndex}>01</Text>
+                  <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    quickInputRef.current?.focus();
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add task"
+                >
+                  <Text style={styles.blueActionText}>+ Add task</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Zero tasks planned empty state */}
+              {currentPendingTasks.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <View style={styles.zeroNumeralRow}>
+                    <Text style={styles.hugeZeroNumeral}>0</Text>
+                    <Text style={styles.numeralUnitText}>tasks planned</Text>
+                  </View>
+                  <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
+                  <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
+                </View>
+              ) : (
+                /* Populated task rows */
+                <View style={styles.tasksListWrap}>
+                  {currentPendingTasks.map((task, idx) => {
+                    const isLast = idx === currentPendingTasks.length - 1;
+                    return (
+                      <View
+                        key={task.id}
+                        style={[styles.taskItemRow, !isLast && styles.taskItemRowBorder]}
+                      >
+                        <TouchableOpacity
+                          onPress={() => {
+                            hapticSuccess();
+                            toggleTask(task.id, task.completed);
+                          }}
+                          style={styles.taskCheckbox}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: false }}
+                        >
+                          {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() =>
+                            router.push({
+                              pathname: '/tasks/task-detail',
+                              params: { id: task.id },
+                            } as any)
+                          }
+                          style={styles.taskTitleWrap}
+                        >
+                          <Text style={styles.taskTitleText} numberOfLines={2}>
+                            {task.title || 'Untitled task'}
+                          </Text>
+                          <View style={styles.taskMetaRow}>
+                            {task.due_time ? (
+                              <Text style={styles.taskMetaText}>
+                                {task.date === todayStr ? 'Today' : task.date || 'Today'} · {task.due_time}
+                              </Text>
+                            ) : null}
+                            {task.priority && task.priority !== 'medium' && (
+                              <Text
+                                style={[
+                                  styles.priorityBadgeText,
+                                  { color: task.priority === 'high' ? '#EF4444' : '#8E8C87' },
+                                ]}
+                              >
+                                {task.priority.toUpperCase()}
+                              </Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() =>
+                            router.push({
+                              pathname: '/tasks/task-detail',
+                              params: { id: task.id },
+                            } as any)
+                          }
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <ChevronRight size={16} color="#8E8C87" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={styles.thinDivider} />
+
+              {/* Quick Add Input matching mockup: + What needs to get done? ↵ */}
+              <View style={styles.quickAddRow}>
+                <Plus size={18} color="#0066FF" strokeWidth={2.4} style={styles.plusIcon} />
+                <TextInput
+                  ref={quickInputRef}
+                  value={quickTitle}
+                  onChangeText={setQuickTitle}
+                  onSubmitEditing={handleQuickAdd}
+                  placeholder="What needs to get done?"
+                  placeholderTextColor="#0066FF"
+                  style={styles.quickAddInput}
+                  returnKeyType="done"
+                  editable={!isSubmitting}
+                />
+                {quickTitle.trim().length > 0 && (
+                  <TouchableOpacity
+                    onPress={handleQuickAdd}
+                    style={styles.returnBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Submit task"
+                  >
+                    <CornerDownLeft size={16} color="#0066FF" strokeWidth={2.4} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.thinDivider} />
+
+              {/* Completed collapsible section matching mockup: 0 Completed v */}
+              <TouchableOpacity
+                onPress={() => setCompletedExpanded(!completedExpanded)}
+                style={styles.completedHeaderRow}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <Text style={styles.completedHeaderText}>
+                  {currentCompletedTasks.length} Completed
+                </Text>
+                {completedExpanded ? (
+                  <ChevronUp size={18} color="#8E8C87" />
+                ) : (
+                  <ChevronDown size={18} color="#8E8C87" />
+                )}
+              </TouchableOpacity>
+
+              {completedExpanded && currentCompletedTasks.length > 0 && (
+                <View style={styles.completedListWrap}>
+                  {currentCompletedTasks.map((task) => (
+                    <View key={task.id} style={styles.completedItemRow}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          hapticSuccess();
+                          toggleTask(task.id, task.completed);
+                        }}
+                        style={[styles.taskCheckbox, styles.taskCheckboxCompleted]}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Check size={13} color="#FFFFFF" strokeWidth={3} />
+                      </TouchableOpacity>
+                      <Text style={styles.completedTitleText} numberOfLines={1}>
+                        {task.title || 'Untitled task'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.thinDivider} />
+
+              {/* Action linking to Focus: Make time for a task -> */}
+              <TouchableOpacity
+                onPress={() => router.push('/focus' as any)}
+                style={styles.makeTimeRow}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <View style={styles.makeTimeLeft}>
+                  <Timer size={19} color="#0066FF" strokeWidth={2} />
+                  <Text style={styles.makeTimeText}>Make time for a task</Text>
+                </View>
+                <ChevronRight size={18} color="#0066FF" strokeWidth={2} />
+              </TouchableOpacity>
             </View>
           )}
-
-          <View style={styles.thinDivider} />
-
-          {/* Action linking to Focus: Make time for a task -> */}
-          <TouchableOpacity
-            onPress={() => router.push('/focus' as any)}
-            style={styles.makeTimeRow}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-          >
-            <View style={styles.makeTimeLeft}>
-              <Timer size={19} color="#0066FF" strokeWidth={2} />
-              <Text style={styles.makeTimeText}>Make time for a task</Text>
-            </View>
-            <ChevronRight size={18} color="#0066FF" strokeWidth={2} />
-          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -596,6 +907,120 @@ const createStyles = (theme: any, isDark: boolean) =>
     },
     makeTimeText: {
       fontSize: 15,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+
+    // Desktop layout styles
+    desktopColumnsRow: {
+      flexDirection: 'row',
+      gap: 36,
+      width: '100%',
+      alignItems: 'flex-start',
+    },
+    desktopMainCol: {
+      flex: 1.45,
+      minWidth: 0,
+    },
+    desktopSideCol: {
+      flex: 0.95,
+      minWidth: 320,
+      gap: 16,
+    },
+    desktopCard: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 14,
+      padding: 18,
+      backgroundColor: isDark ? '#080808' : '#FFFFFF',
+    },
+    desktopCardTitle: {
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      letterSpacing: -0.3,
+    },
+    summaryStatsGrid: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 14,
+      gap: 8,
+    },
+    summaryStatBox: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 6,
+      borderRadius: 8,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+    },
+    summaryStatNumber: {
+      fontSize: 17,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    summaryStatLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+    progressTrack: {
+      height: 4,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+      borderRadius: 2,
+      overflow: 'hidden',
+      width: '100%',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: theme.accent,
+      borderRadius: 2,
+    },
+    priorityGuideRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    priorityDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    priorityGuideTitle: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
+    },
+    priorityGuideSub: {
+      fontSize: 11,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginTop: 1,
+    },
+    priorityGuideCount: {
+      fontSize: 13,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+    },
+    focusCardDesc: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      lineHeight: 18,
+      marginBottom: 12,
+    },
+    focusActionPill: {
+      alignSelf: 'flex-start',
+      backgroundColor: isDark ? 'rgba(0, 102, 255, 0.15)' : 'rgba(0, 102, 255, 0.1)',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    focusActionPillText: {
+      fontSize: 12,
       fontFamily: 'Inter_600SemiBold',
       color: theme.accent,
     },

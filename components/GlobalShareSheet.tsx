@@ -998,7 +998,7 @@ export function GlobalShareSheet({
                     <Image
                       source={{ uri: bgImageUri }}
                       style={[
-                        StyleSheet.absoluteFillObject,
+                        StyleSheet.absoluteFill,
                         { opacity: bgOpacity, transform: [{ scale: bgZoom }] },
                       ]}
                       blurRadius={bgBlur}
@@ -1007,7 +1007,7 @@ export function GlobalShareSheet({
                   {bgImageUri && (
                     <View
                       style={[
-                        StyleSheet.absoluteFillObject,
+                        StyleSheet.absoluteFill,
                         { backgroundColor: "#000", opacity: 1 - bgBrightness },
                       ]}
                     />

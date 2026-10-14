@@ -112,7 +112,7 @@ export const SwipeableTaskCard = (props: Props) => {
 const styles = StyleSheet.create({
   container: { position: 'relative', marginBottom: 8 },
   background: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as any),
     borderRadius: 20,
     marginBottom: 12,
   },
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     paddingLeft: 24,
   },
   leftBackground: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as any),
     flexDirection: 'row',
     justifyContent: 'flex-end',
     borderRadius: 20,

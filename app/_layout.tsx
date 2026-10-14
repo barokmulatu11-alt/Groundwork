@@ -44,6 +44,8 @@ import * as rewardsService from '@/lib/rewardsService';
 import * as audioStorage from '@/lib/audioStorage';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import * as profileSettingsService from '@/lib/profileSettingsService';
+import { useResponsive } from '@/hooks/useResponsive';
+import { WebDesktopNav } from '@/components/layout/WebDesktopNav';
 
 export {
   ErrorBoundary
@@ -83,7 +85,7 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
 // Renders the correct status bar style (light/dark) based on the current theme
 function ThemeAwareStatusBar() {
   const { isDark } = useTheme();
-  return <StatusBar style={isDark ? 'light' : 'dark'} translucent backgroundColor="transparent" />;
+  return <StatusBar style={isDark ? 'light' : 'dark'} />;
 }
 
 // Root layout — manages splash screen, fonts, database init, auth init, and sync
@@ -240,6 +242,18 @@ function RootLayoutNav() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const navTheme = isDark ? DarkTheme : DefaultTheme;
+  const segments = useSegments();
+  const { isDesktop, isWeb } = useResponsive();
+
+  const isAuthOrOnboarding =
+    segments[0] === 'login' ||
+    segments[0] === 'signup' ||
+    segments[0] === 'welcome' ||
+    segments[0] === 'forgot-password' ||
+    segments[0] === 'reset-password' ||
+    segments[0] === 'permissions_onboarding';
+
+  const showDesktopRail = isWeb && isDesktop && !isAuthOrOnboarding;
 
   useEffect(() => {
     // Check if app was opened from a notification while killed
@@ -343,45 +357,50 @@ function RootLayoutNav() {
           <NavigationThemeProvider value={navTheme}>
             <BottomSheetModalProvider>
               <XPToastProvider>
-              <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: theme.background } }}>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
-                <Stack.Screen name="login" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-                <Stack.Screen name="signup" options={{ headerShown: false, animation: 'slide_from_right' }} />
-                <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
-                <Stack.Screen name="reset-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
-                <Stack.Screen name="tasks/index" options={{ headerShown: false }} />
-                <Stack.Screen name="tasks/task-detail" options={{ headerShown: false }} />
-                <Stack.Screen name="habits" options={{ headerShown: false }} />
-                <Stack.Screen name="focus" options={{ headerShown: false }} />
-                <Stack.Screen name="notes/index" options={{ headerShown: false }} />
-                <Stack.Screen name="notes/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="achievements" options={{ headerShown: false }} />
-                <Stack.Screen name="downloads" options={{ headerShown: false }} />
-                <Stack.Screen name="recap" options={{ headerShown: false }} />
-                <Stack.Screen name="calendar" options={{ headerShown: false }} />
-                <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
-                <Stack.Screen name="profile" options={{ headerShown: false }} />
-                <Stack.Screen name="journey" options={{ headerShown: false }} />
-                <Stack.Screen name="edit-profile" options={{ presentation: 'modal', headerShown: false }} />
-                <Stack.Screen name="change-password" options={{ presentation: 'modal', headerShown: false }} />
-                <Stack.Screen name="permissions_onboarding" options={{ headerShown: false }} />
-                <Stack.Screen name="permissions_settings" options={{ headerShown: false }} />
-                <Stack.Screen name="account-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="logo-center" options={{ headerShown: false }} />
-                <Stack.Screen name="productivity-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="data-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="privacy-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="support-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="subscription-settings" options={{ headerShown: false }} />
-                <Stack.Screen name="analytics" options={{ headerShown: false }} />
-                <Stack.Screen name="upgrade" options={{ headerShown: false }} />
-                <Stack.Screen name="payment-history" options={{ headerShown: false }} />
-                <Stack.Screen name="reports" options={{ headerShown: false }} />
-                <Stack.Screen name="revision-insights" options={{ headerShown: false }} />
-              </Stack>
+                <View style={{ flex: 1, flexDirection: showDesktopRail ? 'row' : 'column' }}>
+                  {showDesktopRail && <WebDesktopNav />}
+                  <View style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                    <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: theme.background } }}>
+                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                      <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+                      <Stack.Screen name="login" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+                      <Stack.Screen name="signup" options={{ headerShown: false, animation: 'slide_from_right' }} />
+                      <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
+                      <Stack.Screen name="reset-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
+                      <Stack.Screen name="tasks/index" options={{ headerShown: false }} />
+                      <Stack.Screen name="tasks/task-detail" options={{ headerShown: false }} />
+                      <Stack.Screen name="habits" options={{ headerShown: false }} />
+                      <Stack.Screen name="focus" options={{ headerShown: false }} />
+                      <Stack.Screen name="notes/index" options={{ headerShown: false }} />
+                      <Stack.Screen name="notes/[id]" options={{ headerShown: false }} />
+                      <Stack.Screen name="achievements" options={{ headerShown: false }} />
+                      <Stack.Screen name="downloads" options={{ headerShown: false }} />
+                      <Stack.Screen name="recap" options={{ headerShown: false }} />
+                      <Stack.Screen name="calendar" options={{ headerShown: false }} />
+                      <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
+                      <Stack.Screen name="profile" options={{ headerShown: false }} />
+                      <Stack.Screen name="journey" options={{ headerShown: false }} />
+                      <Stack.Screen name="edit-profile" options={{ presentation: 'modal', headerShown: false }} />
+                      <Stack.Screen name="change-password" options={{ presentation: 'modal', headerShown: false }} />
+                      <Stack.Screen name="permissions_onboarding" options={{ headerShown: false }} />
+                      <Stack.Screen name="permissions_settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="account-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="logo-center" options={{ headerShown: false }} />
+                      <Stack.Screen name="productivity-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="data-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="privacy-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="support-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="subscription-settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="analytics" options={{ headerShown: false }} />
+                      <Stack.Screen name="upgrade" options={{ headerShown: false }} />
+                      <Stack.Screen name="payment-history" options={{ headerShown: false }} />
+                      <Stack.Screen name="reports" options={{ headerShown: false }} />
+                      <Stack.Screen name="revision-insights" options={{ headerShown: false }} />
+                    </Stack>
+                  </View>
+                </View>
               </XPToastProvider>
             </BottomSheetModalProvider>
           </NavigationThemeProvider>

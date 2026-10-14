@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 22, fontFamily: 'Inter_800ExtraBold', marginBottom: 4 },
   heroSub: { fontSize: 13, fontFamily: 'Inter_500Medium', lineHeight: 18 },
   ringWrap: { width: 108, height: 108, alignItems: 'center', justifyContent: 'center' },
-  ringCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  ringCenter: { ...(StyleSheet.absoluteFill as any), alignItems: 'center', justifyContent: 'center' },
   ringPct: { fontSize: 22, fontFamily: 'Inter_800ExtraBold' },
   heroStats: {
     flexDirection: 'row',

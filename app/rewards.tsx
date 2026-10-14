@@ -22,8 +22,7 @@ import {
   UserProgress,
 } from '@/lib/rewardsService';
 import { useTheme } from '@/lib/ThemeContext';
-import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Award,
   Check,

@@ -33,6 +33,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Dimensions, LayoutAnimation, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import { useResponsive } from '@/hooks/useResponsive';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -129,7 +130,9 @@ export default function CalendarScreen() {
 
   const handleDatePress = (date: Date) => {
     setSelectedDate(date);
-    setDetailVisible(true);
+    if (!isDesktop) {
+      setDetailVisible(true);
+    }
   };
 
   const renderMonthDay = (day: Date) => {
@@ -217,131 +220,266 @@ export default function CalendarScreen() {
 
   // ─── Main Render ───────────────────────────────────────────────────────────
 
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
+  const activeDate = selectedDate || new Date();
+  const activeData = getDayData(activeDate);
+  const activeDateStr = format(activeDate, 'yyyy-MM-dd');
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView
-        style={{ flex: 1, paddingHorizontal: 24 }}
-        contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 120 }}
+        style={{ flex: 1, paddingHorizontal: horizontalPadding }}
+        contentContainerStyle={{
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 120,
+          maxWidth: isDesktop ? contentMaxWidth : undefined,
+          alignSelf: isDesktop ? 'center' : undefined,
+          width: '100%',
+        }}
         showsVerticalScrollIndicator={false}
       >
         <BrandHeader title="groundwork." onBack={() => router.back()} />
 
-        <View style={{ marginBottom: 28, marginTop: 8 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
-            Calendar.
-          </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
-            {format(currentDate, 'MMMM yyyy')}
-          </Text>
-        </View>
-        
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 24 }}>
-          {/* Mode Switcher */}
-          <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderRadius: 20, padding: 4, borderWidth: 1, borderColor: theme.separator }}>
-            <Pressable 
-              testID="calendar-mode-monthly"
-              accessibilityRole="button"
-              accessibilityLabel="Switch to monthly view"
-              onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('monthly'); }}
-              style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'monthly' ? theme.accent : 'transparent' }}
-            >
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'monthly' ? 'white' : theme.textSecondary }}>Monthly</Text>
-            </Pressable>
-            <Pressable 
-              testID="calendar-mode-weekly"
-              accessibilityRole="button"
-              accessibilityLabel="Switch to weekly view"
-              onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('weekly'); }}
-              style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'weekly' ? theme.accent : 'transparent' }}
-            >
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'weekly' ? 'white' : theme.textSecondary }}>Weekly</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Month/Week Navigation */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>
-            {format(currentDate, viewMode === 'monthly' ? 'MMMM yyyy' : "'Week' w, MMMM")}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Pressable 
-              testID="calendar-prev-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Previous period"
-              onPress={() => setCurrentDate(viewMode === 'monthly' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1))}
-              style={[styles.iconBox, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderWidth: 1, borderColor: theme.separator }]}
-            >
-              <ChevronLeft size={20} color={theme.text} />
-            </Pressable>
-            <Pressable 
-              testID="calendar-next-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Next period"
-              onPress={() => setCurrentDate(viewMode === 'monthly' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1))}
-              style={[styles.iconBox, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderWidth: 1, borderColor: theme.separator }]}
-            >
-              <ChevronRight size={20} color={theme.text} />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Calendar View */}
-        <AnimatedCard style={{ padding: 16, marginBottom: 24, backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
-          {viewMode === 'monthly' ? (
-            <View>
-              <View style={{ flexDirection: 'row', marginBottom: 16 }}>
-                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                  <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>{d}</Text>
-                ))}
-              </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                {Array.from({ length: (getDay(startOfMonth(currentDate)) + 6) % 7 }).map((_, i) => (
-                  <View key={`blank-${i}`} style={{ width: `${100/7}%`, height: 75 }} />
-                ))}
-                {monthDays.map(renderMonthDay)}
+        <View style={isDesktop ? styles.desktopTwoColLayout : undefined}>
+          {/* Main Column */}
+          <View style={isDesktop ? styles.desktopMainCol : undefined}>
+            <View style={{ marginBottom: 28, marginTop: 8 }}>
+              <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+                Calendar.
+              </Text>
+              <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+                {format(currentDate, 'MMMM yyyy')}
+              </Text>
+            </View>
+            
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 24 }}>
+              {/* Mode Switcher */}
+              <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderRadius: 20, padding: 4, borderWidth: 1, borderColor: theme.separator }}>
+                <Pressable 
+                  testID="calendar-mode-monthly"
+                  accessibilityRole="button"
+                  accessibilityLabel="Switch to monthly view"
+                  onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('monthly'); }}
+                  style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'monthly' ? theme.accent : 'transparent' }}
+                >
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'monthly' ? 'white' : theme.textSecondary }}>Monthly</Text>
+                </Pressable>
+                <Pressable 
+                  testID="calendar-mode-weekly"
+                  accessibilityRole="button"
+                  accessibilityLabel="Switch to weekly view"
+                  onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('weekly'); }}
+                  style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'weekly' ? theme.accent : 'transparent' }}
+                >
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'weekly' ? 'white' : theme.textSecondary }}>Weekly</Text>
+                </Pressable>
               </View>
             </View>
-          ) : (
-            <View style={{ flexDirection: 'row' }}>
-              {weekDays.map(renderWeekDay)}
+
+            {/* Month/Week Navigation */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>
+                {format(currentDate, viewMode === 'monthly' ? 'MMMM yyyy' : "'Week' w, MMMM")}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <Pressable 
+                  testID="calendar-prev-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous period"
+                  onPress={() => setCurrentDate(viewMode === 'monthly' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1))}
+                  style={[styles.iconBox, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderWidth: 1, borderColor: theme.separator }]}
+                >
+                  <ChevronLeft size={20} color={theme.text} />
+                </Pressable>
+                <Pressable 
+                  testID="calendar-next-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Next period"
+                  onPress={() => setCurrentDate(viewMode === 'monthly' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1))}
+                  style={[styles.iconBox, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderWidth: 1, borderColor: theme.separator }]}
+                >
+                  <ChevronRight size={20} color={theme.text} />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Calendar View */}
+            <AnimatedCard style={{ padding: 16, marginBottom: 24, backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
+              {viewMode === 'monthly' ? (
+                <View>
+                  <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                      <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>{d}</Text>
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                    {Array.from({ length: (getDay(startOfMonth(currentDate)) + 6) % 7 }).map((_, i) => (
+                      <View key={`blank-${i}`} style={{ width: `${100/7}%`, height: 75 }} />
+                    ))}
+                    {monthDays.map(renderMonthDay)}
+                  </View>
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row' }}>
+                  {weekDays.map(renderWeekDay)}
+                </View>
+              )}
+            </AnimatedCard>
+
+            {/* Legend */}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: isDesktop ? 0 : 40 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent }} />
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>Activity Indicators</Text>
+              </View>
+            </View>
+
+            {/* Insights Section (Mobile & Tablet) */}
+            {!isDesktop && (
+              <>
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginBottom: 20 }}>Productivity Insights</Text>
+                <View style={{ gap: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 16 }}>
+                    <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
+                      <ProductivityRing percentage={monthlyConsistency} size={60} strokeWidth={6} color={theme.accent} />
+                      <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 12 }}>{monthlyConsistency}%</Text>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 4 }}>CONSISTENCY</Text>
+                    </AnimatedCard>
+                    <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
+                      <Flame size={32} color={theme.accent} />
+                      <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 12 }}>{longestStreak}d</Text>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 4 }}>LONGEST STREAK</Text>
+                    </AnimatedCard>
+                  </View>
+                  
+                  <AnimatedCard style={{ padding: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
+                    <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(0,102,255,0.15)' : 'rgba(0,102,255,0.08)', marginRight: 16 }]}>
+                      <Award size={24} color={theme.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>Best Performance</Text>
+                      <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.textSecondary }}>You perform best on Mondays</Text>
+                    </View>
+                  </AnimatedCard>
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* Desktop Right Column: Selected Day Snapshot + Productivity Insights */}
+          {isDesktop && (
+            <View style={styles.desktopSideCol}>
+              {/* Selected Day Snapshot Card */}
+              <View style={[styles.desktopCard, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <View>
+                    <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>
+                      {format(activeDate, 'MMMM do')}
+                    </Text>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.textSecondary }}>
+                      {format(activeDate, 'EEEE, yyyy')}
+                    </Text>
+                  </View>
+                  {activeData.isPerfect && (
+                    <View style={{ backgroundColor: '#FFD60A20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_800ExtraBold', color: '#B29400' }}>Perfect Day</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Day Stats Row */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#0A0A0A' : '#F5F2EB', padding: 10, borderRadius: 12, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>
+                      {activeData.tasks.filter(t => t.completed).length}/{activeData.tasks.length}
+                    </Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>TASKS</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#0A0A0A' : '#F5F2EB', padding: 10, borderRadius: 12, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>
+                      {activeData.habits.length}
+                    </Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>HABITS</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#0A0A0A' : '#F5F2EB', padding: 10, borderRadius: 12, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>
+                      {Math.round(activeData.sessions.reduce((acc, s) => acc + s.duration_minutes, 0) / 60)}h
+                    </Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>FOCUS</Text>
+                  </View>
+                </View>
+
+                {/* Day Note Input */}
+                <View style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Pencil size={12} color={theme.accent} />
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: theme.textSecondary }}>DAY REFLECTION</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => saveDayNote(activeDateStr, dayNoteInput)}
+                      style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: theme.accent + '22' }}
+                    >
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: theme.accent }}>Save</Text>
+                    </Pressable>
+                  </View>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.separator,
+                      borderRadius: 12,
+                      padding: 10,
+                      color: theme.text,
+                      fontSize: 12,
+                      fontFamily: 'Inter_400Regular',
+                      minHeight: 50,
+                      backgroundColor: isDark ? '#050505' : '#FAFAFA',
+                    }}
+                    placeholder="Reflect on this day..."
+                    placeholderTextColor={theme.textSecondary}
+                    value={dayNoteInput}
+                    onChangeText={setDayNoteInput}
+                    multiline
+                  />
+                </View>
+
+                <AnimatedButton 
+                  testID="calendar-plan-task-desktop-btn"
+                  title="+ Plan Task for this day" 
+                  onPress={() => router.push({ pathname: '/tasks', params: { date: activeDateStr } } as any)} 
+                />
+              </View>
+
+              {/* Productivity Insights Card */}
+              <View style={[styles.desktopCard, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator }]}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 1.5, color: theme.secondaryText, marginBottom: 14 }}>
+                  PRODUCTIVITY INSIGHTS
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
+                  <View style={{ flex: 1, padding: 14, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: theme.separator, backgroundColor: isDark ? '#0A0A0A' : '#FAFAFA' }}>
+                    <ProductivityRing percentage={monthlyConsistency} size={50} strokeWidth={5} color={theme.accent} />
+                    <Text style={{ fontSize: 17, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 8 }}>{monthlyConsistency}%</Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 2 }}>CONSISTENCY</Text>
+                  </View>
+                  <View style={{ flex: 1, padding: 14, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: theme.separator, backgroundColor: isDark ? '#0A0A0A' : '#FAFAFA' }}>
+                    <Flame size={26} color={theme.accent} />
+                    <Text style={{ fontSize: 17, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 8 }}>{longestStreak}d</Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 2 }}>LONGEST STREAK</Text>
+                  </View>
+                </View>
+
+                <View style={{ padding: 14, flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: theme.separator, backgroundColor: isDark ? '#0A0A0A' : '#FAFAFA' }}>
+                  <View style={[styles.iconBox, { width: 34, height: 34, backgroundColor: isDark ? 'rgba(0,102,255,0.15)' : 'rgba(0,102,255,0.08)', marginRight: 12 }]}>
+                    <Award size={18} color={theme.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>Best Performance</Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: theme.textSecondary }}>You perform best on Mondays</Text>
+                  </View>
+                </View>
+              </View>
             </View>
           )}
-        </AnimatedCard>
-
-        {/* Legend */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 40 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent }} />
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>Activity Indicators</Text>
-          </View>
-        </View>
-
-        {/* Insights Section */}
-        <Text style={{ fontSize: 18, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginBottom: 20 }}>Productivity Insights</Text>
-        <View style={{ gap: 16 }}>
-          <View style={{ flexDirection: 'row', gap: 16 }}>
-            <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
-              <ProductivityRing percentage={monthlyConsistency} size={60} strokeWidth={6} color={theme.accent} />
-              <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 12 }}>{monthlyConsistency}%</Text>
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 4 }}>CONSISTENCY</Text>
-            </AnimatedCard>
-            <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
-              <Flame size={32} color={theme.accent} />
-              <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 12 }}>{longestStreak}d</Text>
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 4 }}>LONGEST STREAK</Text>
-            </AnimatedCard>
-          </View>
-          
-          <AnimatedCard style={{ padding: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
-            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(0,102,255,0.15)' : 'rgba(0,102,255,0.08)', marginRight: 16 }]}>
-              <Award size={24} color={theme.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>Best Performance</Text>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.textSecondary }}>You perform best on Mondays</Text>
-            </View>
-          </AnimatedCard>
         </View>
 
         {/* Day Detail — Centered Modal */}
@@ -454,6 +592,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-  }
+  },
+  desktopTwoColLayout: {
+    flexDirection: 'row',
+    gap: 36,
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  desktopMainCol: {
+    flex: 1.35,
+    maxWidth: 720,
+  },
+  desktopSideCol: {
+    flex: 0.95,
+    gap: 20,
+  },
+  desktopCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+  },
 });
 

@@ -12,7 +12,7 @@ import { AppText as Text } from '@/components/ui/AppText';
 import { subscribeToConnectEvents } from '@/lib/connect/xpSystem';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAchievements, AchievementItem } from '@/hooks/connect/useAchievements';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import { hapticLight, hapticSelection } from '@/lib/haptics';
 
 // ─── 3 Active Milestone Categories matching latest reference image ───────────

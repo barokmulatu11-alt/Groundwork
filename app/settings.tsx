@@ -17,13 +17,15 @@ import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 
+import { useResponsive } from '@/hooks/useResponsive';
+import { Shield, Sparkles, CloudCheck, Cloud } from 'lucide-react-native';
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, isDark, showAlert } = useTheme();
   const { profile, session, isGuest, signOut, isSigningOut } = useAuthStore();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width >= 768;
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
   const [signOutLoading, setSignOutLoading] = useState(false);
 
@@ -85,64 +87,71 @@ export default function SettingsScreen() {
       <ScrollView
         style={{ flex: 1, width: '100%' }}
         contentContainerStyle={{
-          paddingHorizontal: isDesktop ? 32 : 20,
+          paddingHorizontal: horizontalPadding,
           paddingTop: 24,
           paddingBottom: Math.max(insets.bottom, 24) + 80,
-          maxWidth: isDesktop ? 640 : undefined,
+          maxWidth: isDesktop ? contentMaxWidth : undefined,
           alignSelf: isDesktop ? 'center' : undefined,
           width: '100%',
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Label */}
-        <Text style={styles.categoryLabel}>SETTINGS</Text>
+        <View style={isDesktop ? styles.desktopTwoColLayout : undefined}>
+          {/* Main settings column */}
+          <View style={isDesktop ? styles.desktopMainCol : undefined}>
+            {/* Label */}
+            <Text style={styles.categoryLabel}>SETTINGS</Text>
 
-        {/* Heading & Subtitle */}
-        <Text style={styles.pageHeading}>Your space.</Text>
-        <Text style={styles.pageSubline}>Set it up your way.</Text>
+            {/* Heading & Subtitle */}
+            <Text style={styles.pageHeading}>Your space.</Text>
+            <Text style={styles.pageSubline}>Set it up your way.</Text>
 
-        {/* Account Area */}
-        <View style={styles.accountCard}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
-          </View>
-
-          <View style={styles.accountInfoCol}>
-            {isUserAuthenticated ? (
+            {/* Account Area (Mobile & Tablet) */}
+            {!isDesktop && (
               <>
-                <Text style={styles.accountPrimaryText} numberOfLines={1}>
-                  {profile?.full_name || profile?.username || 'Groundwork User'}
-                </Text>
-                <Text style={styles.accountSecondaryText} numberOfLines={1}>
-                  {session?.user?.email || 'Authenticated account'}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.accountPrimaryText}>Guest mode</Text>
-                <Text style={styles.accountSecondaryText}>Saved on this device</Text>
+                <View style={styles.accountCard}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
+                  </View>
+
+                  <View style={styles.accountInfoCol}>
+                    {isUserAuthenticated ? (
+                      <>
+                        <Text style={styles.accountPrimaryText} numberOfLines={1}>
+                          {profile?.full_name || profile?.username || 'Groundwork User'}
+                        </Text>
+                        <Text style={styles.accountSecondaryText} numberOfLines={1}>
+                          {session?.user?.email || 'Authenticated account'}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.accountPrimaryText}>Guest mode</Text>
+                        <Text style={styles.accountSecondaryText}>Saved on this device</Text>
+                      </>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (isUserAuthenticated) {
+                        router.push('/account-settings' as any);
+                      } else {
+                        router.push('/login' as any);
+                      }
+                    }}
+                    style={styles.accountActionBtn}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.blueActionText}>
+                      {isUserAuthenticated ? 'Account →' : 'Sign in →'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.thinDivider} />
               </>
             )}
-          </View>
-
-          <TouchableOpacity
-            onPress={() => {
-              if (isUserAuthenticated) {
-                router.push('/account-settings' as any);
-              } else {
-                router.push('/login' as any);
-              }
-            }}
-            style={styles.accountActionBtn}
-            accessibilityRole="button"
-          >
-            <Text style={styles.blueActionText}>
-              {isUserAuthenticated ? 'Account →' : 'Sign in →'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.thinDivider} />
 
         {/* ── 01 YOUR WORKSPACE ────────────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
@@ -326,24 +335,160 @@ export default function SettingsScreen() {
           <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
         </TouchableOpacity>
 
-        <View style={styles.thinDivider} />
+        {/* Bottom Exit guest mode / Sign out action (Mobile/Tablet only) */}
+            {!isDesktop && (
+              <>
+                <View style={styles.thinDivider} />
+                <TouchableOpacity
+                  onPress={handleExitOrSignOut}
+                  disabled={signOutLoading || isSigningOut}
+                  style={styles.exitActionRow}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  {signOutLoading || isSigningOut ? (
+                    <ActivityIndicator size="small" color="#0066FF" />
+                  ) : (
+                    <Text style={styles.exitActionText}>
+                      {isGuest ? 'Exit guest mode →' : 'Sign out →'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
 
-        {/* Bottom Exit guest mode / Sign out action */}
-        <TouchableOpacity
-          onPress={handleExitOrSignOut}
-          disabled={signOutLoading || isSigningOut}
-          style={styles.exitActionRow}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-        >
-          {signOutLoading || isSigningOut ? (
-            <ActivityIndicator size="small" color="#0066FF" />
-          ) : (
-            <Text style={styles.exitActionText}>
-              {isGuest ? 'Exit guest mode →' : 'Sign out →'}
-            </Text>
+          {/* Desktop Right Supporting Column */}
+          {isDesktop && (
+            <View style={styles.desktopSideCol}>
+              {/* Account & Identity Card */}
+              <View style={styles.desktopCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.accountPrimaryText} numberOfLines={1}>
+                      {isUserAuthenticated
+                        ? (profile?.full_name || profile?.username || 'Groundwork User')
+                        : 'Guest mode'}
+                    </Text>
+                    <Text style={styles.accountSecondaryText} numberOfLines={1}>
+                      {isUserAuthenticated
+                        ? (session?.user?.email || 'Authenticated account')
+                        : 'Saved on this device'}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (isUserAuthenticated) {
+                      router.push('/account-settings' as any);
+                    } else {
+                      router.push('/login' as any);
+                    }
+                  }}
+                  style={[styles.desktopActionButton, { backgroundColor: isDark ? '#111111' : '#F0EDE6', marginBottom: 10 }]}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.desktopActionBtnText, { color: theme.primaryText }]}>
+                    {isUserAuthenticated ? 'Manage account' : 'Sign in to sync'}
+                  </Text>
+                  <ChevronRight size={16} color={theme.accent} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleExitOrSignOut}
+                  disabled={signOutLoading || isSigningOut}
+                  style={[styles.desktopActionButton, { borderColor: theme.separator, borderWidth: 1 }]}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  {signOutLoading || isSigningOut ? (
+                    <ActivityIndicator size="small" color="#0066FF" />
+                  ) : (
+                    <>
+                      <Text style={[styles.desktopActionBtnText, { color: isGuest ? theme.secondaryText : '#FF453A' }]}>
+                        {isGuest ? 'Exit guest mode' : 'Sign out'}
+                      </Text>
+                      <ChevronRight size={16} color={isGuest ? theme.secondaryText : '#FF453A'} />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* System & Sync Status Card */}
+              <View style={styles.desktopCard}>
+                <Text style={styles.desktopCardLabel}>SYSTEM & STORAGE</Text>
+                
+                <View style={styles.systemStatusRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Cloud size={16} color={theme.accent} />
+                    <Text style={styles.systemStatusText}>Cloud Sync</Text>
+                  </View>
+                  <Text style={[styles.systemStatusBadge, { color: theme.accent }]}>
+                    {isUserAuthenticated ? 'Connected' : 'Offline'}
+                  </Text>
+                </View>
+
+                <View style={styles.systemDivider} />
+
+                <View style={styles.systemStatusRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Sparkles size={16} color={theme.secondaryText} />
+                    <Text style={styles.systemStatusText}>Theme Mode</Text>
+                  </View>
+                  <Text style={[styles.systemStatusBadge, { color: theme.secondaryText }]}>
+                    {isDark ? 'Dark (Pure Black)' : 'Light (Ivory)'}
+                  </Text>
+                </View>
+
+                <View style={styles.systemDivider} />
+
+                <View style={styles.systemStatusRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Shield size={16} color={theme.secondaryText} />
+                    <Text style={styles.systemStatusText}>Version</Text>
+                  </View>
+                  <Text style={[styles.systemStatusBadge, { color: theme.secondaryText }]}>
+                    v1.0.0 Stable
+                  </Text>
+                </View>
+              </View>
+
+              {/* Quick Jump Card */}
+              <View style={styles.desktopCard}>
+                <Text style={styles.desktopCardLabel}>QUICK SHORTCUTS</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/appearance-settings' as any)}
+                  style={styles.shortcutRow}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.shortcutTitle}>Appearance settings</Text>
+                  <ChevronRight size={16} color={theme.accent} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push('/data-settings' as any)}
+                  style={styles.shortcutRow}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.shortcutTitle}>Data & backup</Text>
+                  <ChevronRight size={16} color={theme.accent} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push('/rewards' as any)}
+                  style={styles.shortcutRow}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.shortcutTitle}>Milestone rewards</Text>
+                  <ChevronRight size={16} color={theme.accent} />
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
-        </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -354,6 +499,77 @@ const createStyles = (theme: any, isDark: boolean) =>
     root: {
       flex: 1,
       backgroundColor: theme.background,
+    },
+    desktopTwoColLayout: {
+      flexDirection: 'row',
+      gap: 36,
+      alignItems: 'flex-start',
+      width: '100%',
+    },
+    desktopMainCol: {
+      flex: 1.35,
+      maxWidth: 720,
+    },
+    desktopSideCol: {
+      flex: 0.95,
+      gap: 20,
+    },
+    desktopCard: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: theme.cardSolid,
+      padding: 22,
+    },
+    desktopCardLabel: {
+      fontSize: 10,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.5,
+      color: theme.secondaryText,
+      marginBottom: 14,
+    },
+    desktopActionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+    },
+    desktopActionBtnText: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+    },
+    systemStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 6,
+    },
+    systemStatusText: {
+      fontSize: 13,
+      fontFamily: 'Inter_500Medium',
+      color: theme.primaryText,
+    },
+    systemStatusBadge: {
+      fontSize: 12,
+      fontFamily: 'Inter_600SemiBold',
+    },
+    systemDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: theme.separator,
+      marginVertical: 10,
+    },
+    shortcutRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 10,
+    },
+    shortcutTitle: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
     },
     categoryLabel: {
       fontSize: 11,

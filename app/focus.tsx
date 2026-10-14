@@ -22,6 +22,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { Svg, Circle } from 'react-native-svg';
 import { getLocalDateString } from '@/lib/dateUtils';
+import { useResponsive } from '@/hooks/useResponsive';
 
 const PRESET_DURATIONS = [15, 25, 45, 60];
 
@@ -29,8 +30,7 @@ export default function FocusScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width >= 768;
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
   const { tasks, loadAllTasks, focusSessions, addFocusSession, loadFocusSessions } = useStore();
   const { session } = useAuthStore();
@@ -218,6 +218,288 @@ export default function FocusScreen() {
 
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
+  const renderTimerBlock = () => (
+    <View style={styles.timerCenterWrap}>
+      <View style={styles.ringWrapper}>
+        <Svg width={ringSize} height={ringSize} style={styles.svgRing}>
+          {/* Subtle background track */}
+          <Circle
+            cx={ringSize / 2}
+            cy={ringSize / 2}
+            r={radius}
+            stroke={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          {/* Accurate progress track */}
+          <Circle
+            cx={ringSize / 2}
+            cy={ringSize / 2}
+            r={radius}
+            stroke={theme.accent}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+            transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+          />
+        </Svg>
+
+        {/* Inner Ring Content */}
+        <View style={styles.innerRingContent}>
+          <View
+            style={[
+              styles.stateBadge,
+              timerState === 'running' && styles.stateBadgeRunning,
+              timerState === 'paused' && styles.stateBadgePaused,
+              timerState === 'completed' && styles.stateBadgeCompleted,
+            ]}
+          >
+            <Text
+              style={[
+                styles.stateBadgeText,
+                timerState === 'running' && { color: theme.accent },
+                timerState === 'paused' && { color: '#EAB308' },
+                timerState === 'completed' && { color: '#10B981' },
+              ]}
+            >
+              {timerState === 'running'
+                ? 'IN FOCUS'
+                : timerState === 'paused'
+                ? 'PAUSED'
+                : timerState === 'completed'
+                ? 'COMPLETED'
+                : 'READY'}
+            </Text>
+          </View>
+
+          <Text style={styles.serifTimerDisplay}>{timeFormatted}</Text>
+
+          <Text style={styles.breakInfoText} numberOfLines={1}>
+            {selectedTaskObj ? selectedTaskObj.title : `Break: ${pomodoroBreakDuration || 5}m after`}
+          </Text>
+        </View>
+      </View>
+
+      {/* Primary Controls */}
+      <View style={styles.controlsRow}>
+        {!isRunning ? (
+          <TouchableOpacity
+            onPress={handleStart}
+            style={styles.primaryPillBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={timeLeft < selectedDuration * 60 ? 'Resume timer' : 'Start focus'}
+          >
+            <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.primaryPillBtnText}>
+              {timeLeft < selectedDuration * 60 ? 'Resume' : 'Start focus'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={handlePause}
+            style={styles.secondaryPillBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Pause timer"
+          >
+            <Pause size={16} color={theme.text} style={{ marginRight: 8 }} />
+            <Text style={styles.secondaryPillBtnText}>Pause</Text>
+          </TouchableOpacity>
+        )}
+
+        {(timeLeft < selectedDuration * 60 || isRunning) && (
+          <TouchableOpacity
+            onPress={handleReset}
+            style={styles.resetBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Reset timer"
+          >
+            <RotateCcw size={16} color={theme.textSecondary} style={{ marginRight: 6 }} />
+            <Text style={styles.resetBtnText}>Reset</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderIntentionBlock = () => (
+    <View style={styles.taskSelectionBox}>
+      <Text style={styles.fieldLabel}>INTENTION</Text>
+      <TouchableOpacity
+        onPress={() => setTaskPickerOpen(!taskPickerOpen)}
+        style={styles.taskPickerTrigger}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Select intention task"
+      >
+        <View style={styles.taskPickerLeft}>
+          <Target size={18} color="#0066FF" strokeWidth={2} />
+          <Text style={styles.selectedTaskTitle} numberOfLines={1}>
+            {selectedTaskObj ? selectedTaskObj.title : 'Free focus (no task linked)'}
+          </Text>
+        </View>
+        <Text style={styles.changeActionText}>
+          {taskPickerOpen ? 'Done' : 'Change'}
+        </Text>
+      </TouchableOpacity>
+
+      {taskPickerOpen && (
+        <View style={styles.taskDropdownWrap}>
+          <TouchableOpacity
+            onPress={() => {
+              setSelectedTaskId(null);
+              setFocusTimerSelectedTaskId(null);
+              setTaskPickerOpen(false);
+            }}
+            style={[
+              styles.taskDropdownItem,
+              !selectedTaskId && styles.taskDropdownItemActive,
+            ]}
+          >
+            <Text style={styles.taskDropdownText}>Free focus (no task linked)</Text>
+            {!selectedTaskId && <Check size={16} color="#0066FF" />}
+          </TouchableOpacity>
+
+          {activeTasksList.map((t) => (
+            <TouchableOpacity
+              key={t.id}
+              onPress={() => {
+                setSelectedTaskId(t.id);
+                setFocusTimerSelectedTaskId(t.id);
+                setTaskPickerOpen(false);
+              }}
+              style={[
+                styles.taskDropdownItem,
+                selectedTaskId === t.id && styles.taskDropdownItemActive,
+              ]}
+            >
+              <Text style={styles.taskDropdownText} numberOfLines={1}>
+                {t.title}
+              </Text>
+              {selectedTaskId === t.id && <Check size={16} color="#0066FF" />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
+  const renderDurationBlock = () => (
+    <View style={styles.durationBlockWrap}>
+      <Text style={styles.fieldLabel}>DURATION</Text>
+      <View style={styles.presetsRow}>
+        {PRESET_DURATIONS.map((dur) => {
+          const active = !isCustom && selectedDuration === dur;
+          return (
+            <TouchableOpacity
+              key={dur}
+              onPress={() => handleSelectPreset(dur)}
+              disabled={isRunning}
+              style={[
+                styles.presetPill,
+                active && styles.presetPillActive,
+                isRunning && { opacity: 0.5 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`${dur} minutes duration`}
+            >
+              <Text
+                style={[
+                  styles.presetPillText,
+                  active && styles.presetPillTextActive,
+                ]}
+              >
+                {dur}m
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
+        <TouchableOpacity
+          onPress={() => {
+            if (isRunning) return;
+            setIsCustom(true);
+          }}
+          disabled={isRunning}
+          style={[
+            styles.presetPill,
+            isCustom && styles.presetPillActive,
+            isRunning && { opacity: 0.5 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Custom minutes duration"
+        >
+          <Text
+            style={[
+              styles.presetPillText,
+              isCustom && styles.presetPillTextActive,
+            ]}
+          >
+            Custom
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {isCustom && !isRunning && (
+        <View style={styles.customInputRow}>
+          <Text style={styles.customInputLabel}>Minutes:</Text>
+          <TextInput
+            value={customMinutesInput}
+            onChangeText={handleSetCustom}
+            keyboardType="number-pad"
+            maxLength={3}
+            style={styles.customTextInput}
+            accessibilityLabel="Custom duration in minutes"
+          />
+        </View>
+      )}
+    </View>
+  );
+
+  const renderHistoryBlock = () => (
+    <View style={styles.historySection}>
+      <View style={styles.historyHeaderRow}>
+        <Text style={styles.fieldLabel}>TODAY'S RHYTHM</Text>
+        <Text style={styles.dailyTotalStat}>
+          {todayTotalMinutes}m focused · {todaySessions.length} sessions
+        </Text>
+      </View>
+
+      {todaySessions.length === 0 ? (
+        <View style={styles.emptyHistoryBox}>
+          <Text style={styles.emptyHistoryText}>
+            No sessions recorded yet today. Start your first session to build momentum.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.sessionsListWrap}>
+          {todaySessions.slice(0, 5).map((session, idx) => (
+            <View key={session.id || idx} style={styles.sessionItemRow}>
+              <View style={styles.sessionItemLeft}>
+                <Clock size={15} color={theme.accent} />
+                <Text style={styles.sessionItemTitle}>
+                  {session.duration_minutes}m focused session
+                </Text>
+              </View>
+              <Text style={styles.sessionItemTime}>
+                {session.completed_at
+                  ? new Date(session.completed_at).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : 'Today'}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top }}>
@@ -227,300 +509,65 @@ export default function FocusScreen() {
       <ScrollView
         style={{ flex: 1, width: '100%' }}
         contentContainerStyle={{
-          paddingHorizontal: isDesktop ? 32 : 20,
+          paddingHorizontal: horizontalPadding,
           paddingTop: 20,
           paddingBottom: Math.max(insets.bottom, 16) + 80,
-          maxWidth: isDesktop ? 640 : undefined,
-          alignSelf: isDesktop ? 'center' : undefined,
+          maxWidth: contentMaxWidth,
+          alignSelf: 'center',
           width: '100%',
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Heading */}
-        <Text style={styles.pageHeading}>Focus.</Text>
-        <Text style={styles.pageSubline}>Give your mind single direction.</Text>
+        {isDesktop ? (
+          /* ── Desktop 2-Column Focus Layout ─────────────────────── */
+          <View style={styles.desktopColumnsRow}>
+            {/* Left Column: Heading & Central Timer Card */}
+            <View style={styles.desktopFocusLeft}>
+              <Text style={styles.pageHeading}>Focus.</Text>
+              <Text style={styles.pageSubline}>Give your mind single direction.</Text>
 
-        <View style={styles.thinDivider} />
+              <View style={styles.desktopTimerCard}>
+                {renderTimerBlock()}
+              </View>
+            </View>
 
-        {/* ── Central Focal Point: Serif Timer & Restrained Progress Ring ── */}
-        <View style={styles.timerCenterWrap}>
-          <View style={styles.ringWrapper}>
-            <Svg width={ringSize} height={ringSize} style={styles.svgRing}>
-              {/* Subtle background track */}
-              <Circle
-                cx={ringSize / 2}
-                cy={ringSize / 2}
-                r={radius}
-                stroke={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
-                strokeWidth={strokeWidth}
-                fill="none"
-              />
-              {/* Accurate progress track */}
-              <Circle
-                cx={ringSize / 2}
-                cy={ringSize / 2}
-                r={radius}
-                stroke={theme.accent}
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${circumference} ${circumference}`}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                fill="none"
-                transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
-              />
-            </Svg>
-
-            {/* Inner Ring Content */}
-            <View style={styles.innerRingContent}>
-              <View
-                style={[
-                  styles.stateBadge,
-                  timerState === 'running' && styles.stateBadgeRunning,
-                  timerState === 'paused' && styles.stateBadgePaused,
-                  timerState === 'completed' && styles.stateBadgeCompleted,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.stateBadgeText,
-                    timerState === 'running' && { color: theme.accent },
-                    timerState === 'paused' && { color: '#EAB308' },
-                    timerState === 'completed' && { color: '#10B981' },
-                  ]}
-                >
-                  {timerState === 'running'
-                    ? 'IN FOCUS'
-                    : timerState === 'paused'
-                    ? 'PAUSED'
-                    : timerState === 'completed'
-                    ? 'COMPLETED'
-                    : 'READY'}
-                </Text>
+            {/* Right Column: Intention, Duration, and History */}
+            <View style={styles.desktopFocusRight}>
+              <View style={styles.desktopSideCard}>
+                {renderIntentionBlock()}
               </View>
 
-              <Text style={styles.serifTimerDisplay}>{timeFormatted}</Text>
+              <View style={styles.desktopSideCard}>
+                {renderDurationBlock()}
+              </View>
 
-              <Text style={styles.breakInfoText} numberOfLines={1}>
-                {selectedTaskObj ? selectedTaskObj.title : `Break: ${pomodoroBreakDuration || 5}m after`}
-              </Text>
+              <View style={styles.desktopSideCard}>
+                {renderHistoryBlock()}
+              </View>
             </View>
           </View>
+        ) : (
+          /* ── Mobile / Tablet Sequential Focus Layout ───────────── */
+          <View>
+            {/* Heading */}
+            <Text style={styles.pageHeading}>Focus.</Text>
+            <Text style={styles.pageSubline}>Give your mind single direction.</Text>
 
-          {/* Primary Controls */}
-          <View style={styles.controlsRow}>
-            {!isRunning ? (
-              <TouchableOpacity
-                onPress={handleStart}
-                style={styles.primaryPillBtn}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={timeLeft < selectedDuration * 60 ? 'Resume timer' : 'Start focus'}
-              >
-                <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.primaryPillBtnText}>
-                  {timeLeft < selectedDuration * 60 ? 'Resume' : 'Start focus'}
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={handlePause}
-                style={styles.secondaryPillBtn}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Pause timer"
-              >
-                <Pause size={16} color={theme.text} style={{ marginRight: 8 }} />
-                <Text style={styles.secondaryPillBtnText}>Pause</Text>
-              </TouchableOpacity>
-            )}
+            <View style={styles.thinDivider} />
 
-            {(timeLeft < selectedDuration * 60 || isRunning) && (
-              <TouchableOpacity
-                onPress={handleReset}
-                style={styles.resetBtn}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Reset timer"
-              >
-                <RotateCcw size={16} color={theme.textSecondary} style={{ marginRight: 6 }} />
-                <Text style={styles.resetBtnText}>Reset</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+            {renderTimerBlock()}
 
-        <View style={styles.thinDivider} />
+            <View style={styles.thinDivider} />
 
-        {/* ── Secondary Controls: Intention & Duration ── */}
-        <View style={styles.taskSelectionBox}>
-          <Text style={styles.fieldLabel}>INTENTION</Text>
-          <TouchableOpacity
-            onPress={() => setTaskPickerOpen(!taskPickerOpen)}
-            style={styles.taskPickerTrigger}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Select intention task"
-          >
-            <View style={styles.taskPickerLeft}>
-              <Target size={18} color="#0066FF" strokeWidth={2} />
-              <Text style={styles.selectedTaskTitle} numberOfLines={1}>
-                {selectedTaskObj ? selectedTaskObj.title : 'Free focus (no task linked)'}
-              </Text>
-            </View>
-            <Text style={styles.changeActionText}>
-              {taskPickerOpen ? 'Done' : 'Change'}
-            </Text>
-          </TouchableOpacity>
+            {renderIntentionBlock()}
 
-          {taskPickerOpen && (
-            <View style={styles.taskDropdownWrap}>
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedTaskId(null);
-                  setFocusTimerSelectedTaskId(null);
-                  setTaskPickerOpen(false);
-                }}
-                style={[
-                  styles.taskDropdownItem,
-                  !selectedTaskId && styles.taskDropdownItemActive,
-                ]}
-              >
-                <Text style={styles.taskDropdownText}>Free focus (no task linked)</Text>
-                {!selectedTaskId && <Check size={16} color="#0066FF" />}
-              </TouchableOpacity>
+            <View style={{ height: 14 }} />
 
-              {activeTasksList.map((t) => (
-                <TouchableOpacity
-                  key={t.id}
-                  onPress={() => {
-                    setSelectedTaskId(t.id);
-                    setFocusTimerSelectedTaskId(t.id);
-                    setTaskPickerOpen(false);
-                  }}
-                  style={[
-                    styles.taskDropdownItem,
-                    selectedTaskId === t.id && styles.taskDropdownItemActive,
-                  ]}
-                >
-                  <Text style={styles.taskDropdownText} numberOfLines={1}>
-                    {t.title}
-                  </Text>
-                  {selectedTaskId === t.id && <Check size={16} color="#0066FF" />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
+            {renderDurationBlock()}
 
-        <View style={{ height: 14 }} />
-
-        {/* Duration Presets */}
-        <Text style={styles.fieldLabel}>DURATION</Text>
-        <View style={styles.presetsRow}>
-          {PRESET_DURATIONS.map((dur) => {
-            const active = !isCustom && selectedDuration === dur;
-            return (
-              <TouchableOpacity
-                key={dur}
-                onPress={() => handleSelectPreset(dur)}
-                disabled={isRunning}
-                style={[
-                  styles.presetPill,
-                  active && styles.presetPillActive,
-                  isRunning && { opacity: 0.5 },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={`${dur} minutes duration`}
-              >
-                <Text
-                  style={[
-                    styles.presetPillText,
-                    active && styles.presetPillTextActive,
-                  ]}
-                >
-                  {dur}m
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          <TouchableOpacity
-            onPress={() => {
-              if (isRunning) return;
-              setIsCustom(true);
-            }}
-            disabled={isRunning}
-            style={[
-              styles.presetPill,
-              isCustom && styles.presetPillActive,
-              isRunning && { opacity: 0.5 },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Custom minutes duration"
-          >
-            <Text
-              style={[
-                styles.presetPillText,
-                isCustom && styles.presetPillTextActive,
-              ]}
-            >
-              Custom
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {isCustom && !isRunning && (
-          <View style={styles.customInputRow}>
-            <Text style={styles.customInputLabel}>Minutes:</Text>
-            <TextInput
-              value={customMinutesInput}
-              onChangeText={handleSetCustom}
-              keyboardType="number-pad"
-              maxLength={3}
-              style={styles.customTextInput}
-              accessibilityLabel="Custom duration in minutes"
-            />
+            {renderHistoryBlock()}
           </View>
         )}
-
-        {/* Daily Totals & Session History */}
-        <View style={styles.historySection}>
-          <View style={styles.historyHeaderRow}>
-            <Text style={styles.fieldLabel}>TODAY'S RHYTHM</Text>
-            <Text style={styles.dailyTotalStat}>
-              {todayTotalMinutes}m focused · {todaySessions.length} sessions
-            </Text>
-          </View>
-
-          {todaySessions.length === 0 ? (
-            <View style={styles.emptyHistoryBox}>
-              <Text style={styles.emptyHistoryText}>
-                No sessions recorded yet today. Start your first session to build momentum.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.sessionsListWrap}>
-              {todaySessions.slice(0, 5).map((session, idx) => (
-                <View key={session.id || idx} style={styles.sessionItemRow}>
-                  <View style={styles.sessionItemLeft}>
-                    <Clock size={15} color={theme.accent} />
-                    <Text style={styles.sessionItemTitle}>
-                      {session.duration_minutes}m focused session
-                    </Text>
-                  </View>
-                  <Text style={styles.sessionItemTime}>
-                    {session.completed_at
-                      ? new Date(session.completed_at).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : 'Today'}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
       </ScrollView>
     </View>
   );
@@ -820,6 +867,42 @@ function createStyles(theme: any, isDark: boolean) {
       fontSize: 12,
       fontFamily: 'Inter_400Regular',
       color: theme.textSecondary,
+    },
+
+    // Modular desktop layout styles
+    desktopColumnsRow: {
+      flexDirection: 'row',
+      gap: 36,
+      width: '100%',
+      alignItems: 'flex-start',
+    },
+    desktopFocusLeft: {
+      flex: 1.35,
+      minWidth: 0,
+    },
+    desktopFocusRight: {
+      flex: 0.95,
+      minWidth: 320,
+      gap: 18,
+    },
+    desktopTimerCard: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 16,
+      padding: 24,
+      backgroundColor: isDark ? '#080808' : '#FFFFFF',
+      marginTop: 16,
+      alignItems: 'center',
+    },
+    desktopSideCard: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 14,
+      padding: 18,
+      backgroundColor: isDark ? '#080808' : '#FFFFFF',
+    },
+    durationBlockWrap: {
+      width: '100%',
     },
   });
 }

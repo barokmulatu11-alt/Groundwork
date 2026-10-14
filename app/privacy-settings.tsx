@@ -6,8 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { checkPermissionStatus, openSettings } from '@/lib/permissions';
 import {
   Camera,

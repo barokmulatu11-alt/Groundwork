@@ -15,8 +15,7 @@ import {
 import { isRewardUnlocked } from "@/lib/rewardsService";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from "@react-navigation/native";
+import { useRouter, useFocusEffect } from 'expo-router';
 import { format, parseISO } from "date-fns";
 import {
   Award,

@@ -40,6 +40,7 @@ import { habitCompletedOnDate, parseHabitDates } from '@/lib/habitUtils';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { getLocalDateString, formatHeaderDate } from '@/lib/dateUtils';
 import { useReducedMotion } from '@/lib/animationUtils';
+import { useResponsive } from '@/hooks/useResponsive';
 import type { Habit } from '@/lib/db';
 
 function getHabitIcon(title: string) {
@@ -158,8 +159,7 @@ export default function HabitsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width >= 768;
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
   const { habits, loadHabits, toggleHabit, addHabit, updateHabit, deleteHabit } = useStore();
   const { session, isGuest } = useAuthStore();
@@ -239,6 +239,228 @@ export default function HabitsScreen() {
 
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
+  // Helper renderers for habits
+  const renderHabitsMainContent = () => (
+    <View style={{ width: '100%' }}>
+      {/* Date Stamp */}
+      <Text style={styles.dateLabel}>{todayFormatted}</Text>
+
+      {/* Heading */}
+      <Text style={styles.pageHeading}>Habits.</Text>
+      <Text style={styles.pageSubline}>Small steps. Repeated.</Text>
+
+      {/* Weekly Date Strip matching mockup */}
+      <View style={styles.weekStripRow}>
+        {weekDays.map((item, index) => {
+          const isSelected = selectedDateIndex === index;
+          return (
+            <TouchableOpacity
+              key={item.dateStr}
+              onPress={() => {
+                hapticLight();
+                setSelectedDateIndex(index);
+              }}
+              style={styles.weekDayCol}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.dayName} ${item.dayNum}`}
+            >
+              <Text style={[styles.weekDayName, isSelected && styles.weekDayNameSelected]}>
+                {item.dayName}
+              </Text>
+              <Text style={[styles.weekDayNum, isSelected && styles.weekDayNumSelected]}>
+                {item.dayNum}
+              </Text>
+              {isSelected && <View style={styles.weekDayIndicator} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={styles.thinDivider} />
+
+      {/* Tabs: Today / All habits / Paused */}
+      <View style={styles.tabsRow}>
+        {(['Today', 'All habits', 'Paused'] as HabitTab[]).map((tab) => {
+          const isActive = activeTab === tab;
+          return (
+            <TouchableOpacity
+              key={tab}
+              onPress={() => {
+                hapticLight();
+                setActiveTab(tab);
+              }}
+              style={styles.tabItem}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab}
+              </Text>
+              {isActive && <View style={styles.tabUnderline} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={styles.tabsBottomLine} />
+
+      {/* Section 01 Daily rituals */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleGroup}>
+          <Text style={styles.sectionIndex}>01</Text>
+          <Text style={styles.sectionTitle}>Daily rituals</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => setIsAddModalOpen(true)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+        >
+          <Text style={styles.blueActionText}>+ Add habit</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Empty state matching mockup */}
+      {visibleHabits.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.zeroNumeralRow}>
+            <Text style={styles.hugeZeroNumeral}>0</Text>
+            <Text style={styles.numeralUnitText}>habits yet</Text>
+          </View>
+          <Text style={styles.emptyPrimaryPrompt}>Start with something small.</Text>
+          <Text style={styles.emptySecondaryPrompt}>
+            Choose one thing you want to repeat.
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => setIsAddModalOpen(true)}
+            style={styles.inlineCreateBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <Text style={styles.blueActionText}>+ Create your first habit</Text>
+          </TouchableOpacity>
+
+          <View style={styles.thinDivider} />
+
+          {/* Section 02 Consistency */}
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleGroup}>
+              <Text style={styles.sectionIndex}>02</Text>
+              <Text style={styles.sectionTitle}>Consistency</Text>
+            </View>
+          </View>
+          <Text style={styles.consistencyPrompt}>Your progress will appear here.</Text>
+          <Text style={styles.consistencySubline}>
+            Check in each day to build your rhythm.
+          </Text>
+        </View>
+      ) : (
+        /* Populated Habits List */
+        <View style={styles.habitsListWrap}>
+          {visibleHabits.map((habit, idx) => (
+            <HabitRowItem
+              key={habit.id}
+              habit={habit}
+              isLast={idx === visibleHabits.length - 1}
+              selectedDateStr={selectedDateStr}
+              todayStr={todayStr}
+              weekDays={weekDays}
+              onPressDetail={() => setSelectedHabitForDetail(habit)}
+              onToggleCheckin={() => handleToggleCheckin(habit.id)}
+              theme={theme}
+              isDark={isDark}
+              styles={styles}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
+  const completedTodayCount = allHabits.filter((h) => habitCompletedOnDate(h, todayStr)).length;
+  const bestOverallStreak = Math.max(0, ...allHabits.map((h) => h.streak || 0));
+
+  const renderDesktopSidePanel = () => (
+    <View style={styles.desktopHabitsRight}>
+      {/* 1. Quick Add Habit Card */}
+      <View style={styles.desktopSideCard}>
+        <Text style={styles.desktopCardTitle}>New ritual</Text>
+        <TextInput
+          value={newTitle}
+          onChangeText={setNewTitle}
+          placeholder="e.g. Morning stretch"
+          placeholderTextColor={theme.textMuted}
+          style={styles.desktopQuickInput}
+          onSubmitEditing={handleCreateHabit}
+        />
+        <View style={styles.desktopFreqRow}>
+          {['Daily', 'Weekdays', 'Weekends'].map((freq) => (
+            <TouchableOpacity
+              key={freq}
+              onPress={() => setNewFrequency(freq)}
+              style={[
+                styles.desktopFreqPill,
+                newFrequency === freq && styles.desktopFreqPillActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.desktopFreqText,
+                  newFrequency === freq && styles.desktopFreqTextActive,
+                ]}
+              >
+                {freq}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity
+          onPress={handleCreateHabit}
+          style={styles.desktopCreateBtn}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.desktopCreateBtnText}>+ Create ritual</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 2. Streak & Consistency Card */}
+      <View style={styles.desktopSideCard}>
+        <Text style={styles.desktopCardTitle}>Ritual consistency</Text>
+        <View style={styles.habitStatsGrid}>
+          <View style={styles.habitStatBox}>
+            <Text style={styles.habitStatNumber}>{completedTodayCount}/{allHabits.length}</Text>
+            <Text style={styles.habitStatLabel}>Done today</Text>
+          </View>
+          <View style={styles.habitStatBox}>
+            <Text style={styles.habitStatNumber}>{bestOverallStreak}d</Text>
+            <Text style={styles.habitStatLabel}>Best streak</Text>
+          </View>
+        </View>
+        <View style={[styles.progressTrack, { marginTop: 14 }]}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${allHabits.length > 0 ? Math.round((completedTodayCount / allHabits.length) * 100) : 0}%`,
+              },
+            ]}
+          />
+        </View>
+      </View>
+
+      {/* 3. Rhythm Guide Card */}
+      <View style={styles.desktopSideCard}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <Sparkles size={16} color={theme.accent} />
+          <Text style={styles.desktopCardTitle}>Compounding habits</Text>
+        </View>
+        <Text style={styles.desktopGuideText}>
+          Focus on showing up. Missing once is an accident, missing twice is the start of a new habit.
+        </Text>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top }}>
@@ -248,146 +470,26 @@ export default function HabitsScreen() {
       <ScrollView
         style={{ flex: 1, width: '100%' }}
         contentContainerStyle={{
-          paddingHorizontal: isDesktop ? 32 : 20,
+          paddingHorizontal: horizontalPadding,
           paddingTop: 24,
           paddingBottom: Math.max(insets.bottom, 16) + 80,
-          maxWidth: isDesktop ? 640 : undefined,
-          alignSelf: isDesktop ? 'center' : undefined,
+          maxWidth: contentMaxWidth,
+          alignSelf: 'center',
           width: '100%',
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Date Stamp */}
-        <Text style={styles.dateLabel}>{todayFormatted}</Text>
-
-        {/* Heading */}
-        <Text style={styles.pageHeading}>Habits.</Text>
-        <Text style={styles.pageSubline}>Small steps. Repeated.</Text>
-
-        {/* Weekly Date Strip matching mockup */}
-        <View style={styles.weekStripRow}>
-          {weekDays.map((item, index) => {
-            const isSelected = selectedDateIndex === index;
-            return (
-              <TouchableOpacity
-                key={item.dateStr}
-                onPress={() => {
-                  hapticLight();
-                  setSelectedDateIndex(index);
-                }}
-                style={styles.weekDayCol}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.dayName} ${item.dayNum}`}
-              >
-                <Text style={[styles.weekDayName, isSelected && styles.weekDayNameSelected]}>
-                  {item.dayName}
-                </Text>
-                <Text style={[styles.weekDayNum, isSelected && styles.weekDayNumSelected]}>
-                  {item.dayNum}
-                </Text>
-                {isSelected && <View style={styles.weekDayIndicator} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.thinDivider} />
-
-        {/* Tabs: Today / All habits / Paused */}
-        <View style={styles.tabsRow}>
-          {(['Today', 'All habits', 'Paused'] as HabitTab[]).map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                onPress={() => {
-                  hapticLight();
-                  setActiveTab(tab);
-                }}
-                style={styles.tabItem}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                  {tab}
-                </Text>
-                {isActive && <View style={styles.tabUnderline} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.tabsBottomLine} />
-
-        {/* Section 01 Daily rituals */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.sectionTitleGroup}>
-            <Text style={styles.sectionIndex}>01</Text>
-            <Text style={styles.sectionTitle}>Daily rituals</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setIsAddModalOpen(true)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityRole="button"
-          >
-            <Text style={styles.blueActionText}>+ Add habit</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Empty state matching mockup */}
-        {visibleHabits.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.zeroNumeralRow}>
-              <Text style={styles.hugeZeroNumeral}>0</Text>
-              <Text style={styles.numeralUnitText}>habits yet</Text>
+        {isDesktop ? (
+          /* ── Desktop 2-Column Composition ─────────────────────── */
+          <View style={styles.desktopColumnsRow}>
+            <View style={styles.desktopHabitsLeft}>
+              {renderHabitsMainContent()}
             </View>
-            <Text style={styles.emptyPrimaryPrompt}>Start with something small.</Text>
-            <Text style={styles.emptySecondaryPrompt}>
-              Choose one thing you want to repeat.
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => setIsAddModalOpen(true)}
-              style={styles.inlineCreateBtn}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-            >
-              <Text style={styles.blueActionText}>+ Create your first habit</Text>
-            </TouchableOpacity>
-
-            <View style={styles.thinDivider} />
-
-            {/* Section 02 Consistency */}
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionTitleGroup}>
-                <Text style={styles.sectionIndex}>02</Text>
-                <Text style={styles.sectionTitle}>Consistency</Text>
-              </View>
-            </View>
-            <Text style={styles.consistencyPrompt}>Your progress will appear here.</Text>
-            <Text style={styles.consistencySubline}>
-              Check in each day to build your rhythm.
-            </Text>
+            {renderDesktopSidePanel()}
           </View>
         ) : (
-          /* Populated Habits List */
-          <View style={styles.habitsListWrap}>
-            {visibleHabits.map((habit, idx) => (
-              <HabitRowItem
-                key={habit.id}
-                habit={habit}
-                isLast={idx === visibleHabits.length - 1}
-                selectedDateStr={selectedDateStr}
-                todayStr={todayStr}
-                weekDays={weekDays}
-                onPressDetail={() => setSelectedHabitForDetail(habit)}
-                onToggleCheckin={() => handleToggleCheckin(habit.id)}
-                theme={theme}
-                isDark={isDark}
-                styles={styles}
-              />
-            ))}
-          </View>
+          /* ── Mobile / Tablet Sequential Flow ─────────────────── */
+          renderHabitsMainContent()
         )}
       </ScrollView>
 
@@ -889,6 +991,127 @@ function createStyles(theme: any, isDark: boolean) {
       color: '#EF4444',
       fontSize: 13,
       fontFamily: 'Inter_600SemiBold',
+    },
+
+    // Modular desktop layout styles
+    desktopColumnsRow: {
+      flexDirection: 'row',
+      gap: 36,
+      width: '100%',
+      alignItems: 'flex-start',
+    },
+    desktopHabitsLeft: {
+      flex: 1.4,
+      minWidth: 0,
+    },
+    desktopHabitsRight: {
+      flex: 0.95,
+      minWidth: 320,
+      gap: 18,
+    },
+    desktopSideCard: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 14,
+      padding: 18,
+      backgroundColor: isDark ? '#080808' : '#FFFFFF',
+    },
+    desktopCardTitle: {
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      letterSpacing: -0.3,
+      marginBottom: 12,
+    },
+    desktopQuickInput: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+      fontFamily: 'Inter_500Medium',
+      color: theme.primaryText,
+      backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF',
+      marginBottom: 12,
+    },
+    desktopFreqRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 16,
+    },
+    desktopFreqPill: {
+      flex: 1,
+      paddingVertical: 6,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      alignItems: 'center',
+    },
+    desktopFreqPillActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    desktopFreqText: {
+      fontSize: 11,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.secondaryText,
+    },
+    desktopFreqTextActive: {
+      color: '#FFFFFF',
+    },
+    desktopCreateBtn: {
+      backgroundColor: theme.accent,
+      paddingVertical: 10,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    desktopCreateBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontFamily: 'Inter_700Bold',
+    },
+    habitStatsGrid: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 4,
+    },
+    habitStatBox: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+    },
+    habitStatNumber: {
+      fontSize: 17,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    habitStatLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+    desktopGuideText: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      lineHeight: 18,
+    },
+    progressTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 3,
+      backgroundColor: theme.accent,
     },
   });
 }

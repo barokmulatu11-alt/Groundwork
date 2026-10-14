@@ -21,8 +21,7 @@ import { isPro } from "@/lib/subscriptionService";
 import { isRewardUnlocked } from "@/lib/rewardsService";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useFocusEffect } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import {
     Activity,
     Award,
@@ -47,6 +46,7 @@ import {
 } from "react-native";
 import Animated, { FadeInDown, FadeInLeft } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useResponsive } from "@/hooks/useResponsive";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

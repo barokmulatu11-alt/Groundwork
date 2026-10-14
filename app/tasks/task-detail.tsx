@@ -827,5 +827,41 @@ function createStyles(theme: any, isDark: boolean) {
       fontSize: 13,
       fontFamily: 'Inter_600SemiBold',
     },
+
+    // Modular desktop styles
+    desktopColumnsRow: {
+      flexDirection: 'row',
+      gap: 36,
+      width: '100%',
+      alignItems: 'flex-start',
+    },
+    desktopEditorLeft: {
+      flex: 1.35,
+      minWidth: 0,
+    },
+    desktopEditorRight: {
+      flex: 0.95,
+      minWidth: 320,
+      gap: 18,
+    },
+    desktopSideCard: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 14,
+      padding: 18,
+      backgroundColor: isDark ? '#080808' : '#FFFFFF',
+    },
+    titleSectionWrap: {
+      width: '100%',
+    },
+    sectionBlock: {
+      width: '100%',
+    },
+    sideCardBlock: {
+      width: '100%',
+    },
+    actionBlock: {
+      gap: 16,
+    },
   });
 }

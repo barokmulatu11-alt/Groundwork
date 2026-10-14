@@ -33,6 +33,7 @@ import {
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useResponsive } from "@/hooks/useResponsive";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -696,19 +697,28 @@ export default function AppearanceSettingsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 90 },
+          {
+            paddingHorizontal: horizontalPadding,
+            paddingBottom: insets.bottom + 90,
+            maxWidth: isDesktop ? contentMaxWidth : undefined,
+            alignSelf: isDesktop ? 'center' : undefined,
+            width: '100%',
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginBottom: 28, marginTop: 8 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
-            Appearance.
-          </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
-            Type, colour, atmosphere.
-          </Text>
-        </View>
-        {/* ── THEME ─────────────────────────────── */}
+        <View style={isDesktop ? styles.desktopTwoColLayout : undefined}>
+          {/* Main Column */}
+          <View style={isDesktop ? styles.desktopMainCol : undefined}>
+            <View style={{ marginBottom: 28, marginTop: 8 }}>
+              <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+                Appearance.
+              </Text>
+              <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+                Type, colour, atmosphere.
+              </Text>
+            </View>
+            {/* ── THEME ─────────────────────────────── */}
         <SectionLabel label="THEME" theme={theme} />
         <Card theme={theme}>
           <SegmentedControl
@@ -896,9 +906,90 @@ export default function AppearanceSettingsScreen() {
           </View>
         </Card>
 
-        {/* ── APP ICON ──────────────────────────── */}
-        <SectionLabel label="APP ICON & BRANDING" theme={theme} />
-        <LogoCenterInline theme={theme} isDark={isDark} accentColor={accentColor} isPro={isPro} router={router} />
+            {/* ── APP ICON (Mobile & Tablet) ──────────────────────────── */}
+            {!isDesktop && (
+              <>
+                <SectionLabel label="APP ICON & BRANDING" theme={theme} />
+                <LogoCenterInline theme={theme} isDark={isDark} accentColor={accentColor} isPro={isPro} router={router} />
+              </>
+            )}
+          </View>
+
+          {/* Desktop Right Column: Live Atmosphere & Branding Panel */}
+          {isDesktop && (
+            <View style={styles.desktopSideCol}>
+              <View style={[styles.desktopCard, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <Text style={[styles.sectionLabel, { color: theme.secondaryText, marginVertical: 0, marginLeft: 0 }]}>
+                    ATMOSPHERE PREVIEW
+                  </Text>
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: accentColor + '20' }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: accentColor }}>
+                      LIVE
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Mini Groundwork Preview Surface */}
+                <View style={[styles.miniAppSurface, { backgroundColor: theme.background, borderColor: theme.separator }]}>
+                  {/* Mini Header */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>
+                      groundwork<Text style={{ color: accentColor }}>.</Text>
+                    </Text>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: accentColor }} />
+                  </View>
+
+                  {/* Mini Greeting Card */}
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 18, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>
+                      Make space.
+                    </Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary }}>
+                      Today's rhythm
+                    </Text>
+                  </View>
+
+                  {/* Sample Task Row */}
+                  <View style={[styles.miniTaskCard, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+                    <View style={[styles.miniCheckbox, { borderColor: accentColor, backgroundColor: accentColor + '25' }]}>
+                      <Check size={11} color={accentColor} strokeWidth={3} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: theme.text }}>
+                        Deep focus block
+                      </Text>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: theme.textSecondary }}>
+                        High priority · 45 mins
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Mini Focus Timer Bar */}
+                  <View style={[styles.miniTimerBar, { borderColor: theme.separator }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Sparkles size={12} color={accentColor} />
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: accentColor }}>
+                        25:00
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: theme.textSecondary }}>
+                      {themeMode.toUpperCase()} · {ACCENT_COLORS.find(c => c.color === accentColor)?.name || 'Custom'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Branding and App Icon on Desktop */}
+              <View style={[styles.desktopCard, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+                <Text style={[styles.sectionLabel, { color: theme.secondaryText, marginTop: 0, marginBottom: 12, marginLeft: 0 }]}>
+                  APP ICON & BRANDING
+                </Text>
+                <LogoCenterInline theme={theme} isDark={isDark} accentColor={accentColor} isPro={isPro} router={router} />
+              </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -907,6 +998,53 @@ export default function AppearanceSettingsScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  desktopTwoColLayout: {
+    flexDirection: 'row',
+    gap: 36,
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  desktopMainCol: {
+    flex: 1.35,
+    maxWidth: 720,
+  },
+  desktopSideCol: {
+    flex: 0.95,
+    gap: 20,
+  },
+  desktopCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 20,
+  },
+  miniAppSurface: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  miniTaskCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  miniCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniTimerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   header: {
     paddingHorizontal: 20,
     paddingBottom: 16,

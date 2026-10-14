@@ -23,28 +23,28 @@ const STEPS = [
     id: 'camera',
     icon: Camera,
     title: 'Camera Access',
-    description: 'groundwork. uses your camera to let you attach photos to your notes and capture images directly. Photos are only taken when you choose to.',
+    description: 'groundwork. uses your camera to let you capture avatars and profile photos directly. Photos are only taken when you choose to.',
     action: requestCameraPermission,
   },
   {
     id: 'mic',
     icon: Mic,
     title: 'Microphone Access',
-    description: 'We use your microphone to let you record voice notes and attach audio to your habits and daily entries. Your recordings stay on your device.',
+    description: 'We use your microphone to let you record audio check-ins and attach sound to habits. Your recordings stay on your device.',
     action: requestMicrophonePermission,
   },
   {
     id: 'media',
     icon: ImageIcon,
     title: 'Photo Library Access',
-    description: 'groundwork. can pull images from your gallery to attach to notes, habits or your profile. We only access photos you choose to share with us.',
+    description: 'groundwork. can pull images from your gallery for your habits or profile avatar. We only access photos you choose to share with us.',
     action: requestMediaPermission,
   },
   {
     id: 'files',
     icon: Folder,
     title: 'File Access',
-    description: 'File access lets you attach PDFs, documents and other files to your notes and save documents for offline use. Your files are never shared.',
+    description: 'File access lets you export backups, reports, and data for offline storage. Your files are never shared.',
     action: async () => true,
   },
 ];
@@ -82,31 +82,31 @@ export default function PermissionsOnboarding() {
 
   if (isFinished) {
     return (
-      <BG>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <Animated.View entering={FadeIn} style={styles.content}>
-          <View style={[styles.emojiCircle, { backgroundColor: theme.card }]}>
+          <View style={[styles.emojiCircle, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
             <CheckCircle size={40} color={theme.accent} />
           </View>
-          <Text style={[styles.title, { color: theme.primaryText }]}>You're all set!</Text>
-          <Text style={[styles.description, { color: theme.secondaryText }]}>groundwork. is ready to help you stay focused and productive</Text>
+          <Text style={[styles.title, { color: theme.text }]}>You're all set!</Text>
+          <Text style={[styles.description, { color: theme.textSecondary }]}>groundwork. is ready to help you stay focused and productive</Text>
           
-          <TouchableOpacity onPress={finishOnboarding} style={[styles.primaryButton, { backgroundColor: theme.accent, }]}>
+          <TouchableOpacity onPress={finishOnboarding} style={[styles.primaryButton, { backgroundColor: theme.accent }]}>
             <Text style={styles.primaryButtonText}>Let's Go</Text>
           </TouchableOpacity>
         </Animated.View>
-      </BG>
+      </View>
     );
   }
 
   const step = STEPS[currentStep];
 
   return (
-    <BG>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={[styles.progressHeader, { paddingTop: insets.top + 20 }]}>
-        <View style={styles.progressBarBg}>
+        <View style={[styles.progressBarBg, { backgroundColor: theme.separator }]}>
           <Animated.View style={[styles.progressBarFill, animatedProgressStyle, { backgroundColor: theme.accent }]} />
         </View>
-        <Text style={[styles.stepIndicator, { color: theme.secondaryText }]}>{currentStep + 1} of {STEPS.length}</Text>
+        <Text style={[styles.stepIndicator, { color: theme.textSecondary }]}>{currentStep + 1} of {STEPS.length}</Text>
       </View>
 
       <Animated.View 
@@ -115,26 +115,26 @@ export default function PermissionsOnboarding() {
         exiting={SlideOutLeft}
         style={styles.content}
       >
-          <View style={[styles.emojiCircle, { backgroundColor: theme.card }]}>
-            {React.createElement(step.icon, { size: 40, color: theme.accent })}
-          </View>
+        <View style={[styles.emojiCircle, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
+          {React.createElement(step.icon, { size: 40, color: theme.accent })}
+        </View>
           
-        <Text style={[styles.title, { color: theme.primaryText }]}>{step.title}</Text>
-        <Text style={[styles.description, { color: theme.secondaryText }]}>{step.description}</Text>
+        <Text style={[styles.title, { color: theme.text }]}>{step.title}</Text>
+        <Text style={[styles.description, { color: theme.textSecondary }]}>{step.description}</Text>
 
         <View style={styles.actions}>
-          <TouchableOpacity onPress={() => handleNext(true)} style={[styles.primaryButton, { backgroundColor: theme.accent, }]}>
+          <TouchableOpacity onPress={() => handleNext(true)} style={[styles.primaryButton, { backgroundColor: theme.accent }]}>
             <Text style={styles.primaryButtonText}>Allow Access</Text>
           </TouchableOpacity>
           
           <TouchableOpacity onPress={() => handleNext(false)} style={styles.secondaryLink}>
-            <Text style={[styles.secondaryLinkText, { color: theme.secondaryText }]}>Not Now</Text>
+            <Text style={[styles.secondaryLinkText, { color: theme.textSecondary }]}>Not Now</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.note, { color: theme.secondaryText }]}>You can always change this later in your phone settings</Text>
+        <Text style={[styles.note, { color: theme.textSecondary }]}>You can always change this later in your phone settings</Text>
       </Animated.View>
-    </BG>
+    </View>
   );
 }
 

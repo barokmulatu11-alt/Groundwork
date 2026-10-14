@@ -1,6 +1,6 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { TabHeader } from '@/components/ui/TabHeader';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSessionStore } from '@/store/useSessionStore';
@@ -50,7 +50,7 @@ function SectionLabel({ label, theme }: { label: string; theme: any }) {
 
 function Card({ children, theme }: { children: React.ReactNode; theme: any }) {
   return (
-    <View style={[styles.card, { backgroundColor: theme.card }]}>
+    <View style={[styles.card, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
       {children}
     </View>
   );
@@ -311,15 +311,22 @@ export default function PrivacySettingsScreen() {
   };
 
   return (
-    <BackgroundGradient>
-      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 24 }}>
-        <TabHeader title="Privacy & Permissions" subtitle="Protect your focus and manage data access" />
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Privacy.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            App lock, sessions and permissions.
+          </Text>
+        </View>
+
         <Animated.View entering={FadeInDown.delay(50).duration(500)}>
           {/* ── APP PERMISSIONS ────────────────────────── */}
           <SectionLabel label="APP PERMISSIONS" theme={theme} />
@@ -327,7 +334,7 @@ export default function PrivacySettingsScreen() {
             <SettingRow
               icon={Camera}
               title="Camera"
-              subtitle="Photos for your notes & profile"
+              subtitle="Photos for profile and avatars"
               theme={theme}
               onPress={openSettings}
             >
@@ -339,7 +346,7 @@ export default function PrivacySettingsScreen() {
             <SettingRow
               icon={Mic}
               title="Microphone"
-              subtitle="Voice recordings & audio notes"
+              subtitle="Voice recordings & audio input"
               theme={theme}
               onPress={openSettings}
             >
@@ -620,7 +627,7 @@ export default function PrivacySettingsScreen() {
         />
       </Modal>
 
-    </BackgroundGradient>
+    </View>
   );
 }
 

@@ -253,9 +253,9 @@ export function JourneyShowcaseCard({
         color: "#AF52DE",
       },
       {
-        Icon: BookOpen,
-        label: "Notes",
-        value: stats.totalNotesCreated + "",
+        Icon: Flame,
+        label: "Habits",
+        value: ((stats as any).totalHabitsCompleted || stats.longestStreak || 0) + "",
         color: "#34C759",
       },
     ];
@@ -341,9 +341,9 @@ export function JourneyShowcaseCard({
 
           {[
             {
-              icon: BookOpen,
-              label: "Notes Created",
-              value: stats.totalNotesCreated,
+              icon: Flame,
+              label: "Habits Maintained",
+              value: (stats as any).totalHabitsCompleted || stats.longestStreak || 0,
             },
             {
               icon: Target,

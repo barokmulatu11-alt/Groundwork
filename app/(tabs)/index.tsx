@@ -1,53 +1,29 @@
-import { AnnouncementBanner } from '@/components/AnnouncementBanner';
-import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { DailyQuoteBanner } from '@/components/DailyQuoteBanner';
-import { NotificationSheet } from '@/components/NotificationSheet';
-import { ActionRow } from '@/components/ui/ActionRow';
-import { AnimatedCard } from '@/components/ui/AnimatedCard';
-import { AppText as Text } from '@/components/ui/AppText';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { getPersonalizedGreetingParts } from '@/lib/GreetingUtils';
-import { useTheme } from '@/lib/ThemeContext';
-import { hapticLight } from '@/lib/haptics';
-import { neonData } from '@/lib/neon';
-import { getMilestoneProgress, isRewardUnlocked, REWARD_DEFINITIONS } from '@/lib/rewardsService';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useSettingsStore } from '@/store/useSettingsStore';
-import { useStore } from '@/store/useStore';
-import Constants from 'expo-constants';
-import { useFocusEffect, useRouter } from 'expo-router';
-import {
-  AlignJustify as ListIcon,
-  Award,
-  BellRing as Bell,
-  Calendar,
-  CheckCircle2,
-  ChevronRight,
-  Circle,
-  Clock,
-  FileText,
-  Flame,
-  LayoutGrid,
-  Play,
-  Plus,
-  Settings,
-  Shield,
-  Zap,
-} from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  AppState,
-  type AppStateStatus,
-  Platform,
-  Pressable,
+  View,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  View,
+  Platform,
   useWindowDimensions,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { Check, ChevronRight, Play, Timer, Sparkles } from 'lucide-react-native';
+import { AppText as Text } from '@/components/ui/AppText';
+import { BrandHeader } from '@/components/ui/BrandHeader';
+import { NotificationSheet } from '@/components/NotificationSheet';
+import { useTheme } from '@/lib/ThemeContext';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useStore } from '@/store/useStore';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { habitCompletedOnDate, parseHabitDates } from '@/lib/habitUtils';
+import { getMilestoneProgress } from '@/lib/rewardsService';
+import { neonData } from '@/lib/neon';
+import { getLocalDateString, formatHeaderDate } from '@/lib/dateUtils';
+import { useSettingsStore } from '@/store/useSettingsStore';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -60,73 +36,52 @@ export default function DashboardScreen() {
   const {
     tasks,
     habits,
-    notes,
     focusSessions,
     loadAllTasks,
     loadHabits,
-    loadNotes,
     loadFocusSessions,
     toggleTask,
-    lastSyncedAt,
-    syncPartial,
+    toggleHabit,
   } = useStore();
-  const { tasksLayout, setTasksLayout, notificationsEnabled } = useSettingsStore();
 
-  const [greetingHeadline, setGreetingHeadline] = useState('');
-  const [greetingSubline, setGreetingSubline] = useState<string | undefined>();
-  const [isLoading, setIsLoading] = useState(true);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
 
+  // Sync / refresh data on screen focus
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
       const fetchData = async () => {
         try {
-          const { useAuthStore } = require('@/store/useAuthStore');
-          const { migrateGuestData } = require('@/lib/db');
-          const session = useAuthStore.getState().session;
-          if (session?.user?.id) {
-            migrateGuestData('guest', session.user.id);
-          }
-
-          await loadAllTasks();
-          await loadHabits();
-          await loadNotes();
-          await loadFocusSessions();
-
-          if (!isActive) return;
-          const currentHabits = useStore.getState().habits;
-          const currentStreak = currentHabits.reduce((acc, h) => acc + h.streak, 0);
-
-          const { rescheduleAll } = require('@/lib/notifications');
-          if (notificationsEnabled) {
-            await rescheduleAll(true, currentStreak);
-          }
-
-          setIsLoading(false);
+          await Promise.all([
+            loadAllTasks(),
+            loadHabits(),
+            loadFocusSessions ? loadFocusSessions() : Promise.resolve(),
+          ]);
         } catch (e) {
-          console.error('Failed to load dashboard data:', e);
-          if (isActive) setIsLoading(false);
+          console.error('[DashboardScreen] Failed to load dashboard data:', e);
         }
       };
       fetchData();
       return () => {
         isActive = false;
       };
-    }, [loadAllTasks, loadHabits, loadNotes, loadFocusSessions, notificationsEnabled])
+    }, [loadAllTasks, loadHabits, loadFocusSessions])
   );
 
+  // Notification badge & AppState listener
   useEffect(() => {
     const checkUnread = async () => {
       const { session } = useAuthStore.getState();
       if (!session?.user?.id) return;
-      const { count } = await neonData
-        .from('user_notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.user.id)
-        .eq('is_read', false);
-      setHasUnread((count || 0) > 0);
+      try {
+        const { count } = await neonData
+          .from('user_notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', session.user.id)
+          .eq('is_read', false);
+        setHasUnread((count || 0) > 0);
+      } catch (_) {}
     };
     checkUnread();
 
@@ -136,637 +91,612 @@ export default function DashboardScreen() {
       }
     });
 
-    const today = new Date().toISOString().split('T')[0];
-    const todayTasks = useStore.getState().tasks.filter((t) => t.date === today && !t.deleted_at);
-    const completedToday = todayTasks.filter((t) => t.completed).length;
-    const streak = useStore.getState().habits.reduce((acc, h) => acc + h.streak, 0);
-    const displayName =
-      profile?.full_name ||
-      profile?.username ||
-      session?.user?.user_metadata?.full_name ||
-      session?.user?.email?.split('@')[0] ||
-      null;
-    const { headline, subline } = getPersonalizedGreetingParts({
-      displayName,
-      totalStreak: streak,
-      tasksCompletedToday: completedToday,
-      tasksTotalToday: todayTasks.length,
-    });
-    setGreetingHeadline(headline);
-    setGreetingSubline(subline);
-
-    const { requestPermissionsAsync } = require('@/lib/notifications');
-    requestPermissionsAsync();
-
     return () => {
       appStateSub.remove();
     };
   }, []);
 
-  const totalTasksCount = (tasks || []).length;
-  const totalStreak = (habits || []).reduce((acc, h) => acc + h.streak, 0);
-  const completedTasks = (tasks || []).filter((t) => t.completed).length;
-  const completionPercentage =
-    totalTasksCount > 0 ? Math.round((completedTasks / totalTasksCount) * 100) : 0;
+  // Date formatting using local calendar dates
+  const todayDateFormatted = formatHeaderDate();
+  const todayStr = getLocalDateString();
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const activeTodayTasks = (tasks || []).filter((t) => t.date === todayStr && !t.deleted_at);
-  const completedTodayTasks = activeTodayTasks.filter((t) => t.completed);
+  // Tasks dataset: Real data only, no sample fallbacks
+  const activeTasks = (tasks || []).filter((t) => !t.deleted_at);
+  const todayTasksList = activeTasks.filter((t) => t.date === todayStr || !t.date);
+  const completedTodayTasks = todayTasksList.filter((t) => t.completed);
+  const completedTasksCount = completedTodayTasks.length;
+  const totalTasksCount = todayTasksList.length;
 
-  // Next milestone calculation
-  const nextReward = REWARD_DEFINITIONS.find((r) => !isRewardUnlocked(r.id));
+  // Real Habits dataset: Real check-in status from dates_completed
+  const realHabits = habits || [];
+
+  // Milestone Progress: only real numbers, zero is valid data
   const milestoneProgress = getMilestoneProgress();
+  const totalCompletedAllTime = activeTasks.filter((t) => t.completed).length;
+  const rewardTarget = 10;
+  const rewardCurrent = Math.min(rewardTarget, totalCompletedAllTime);
+  const rewardPercent = Math.min(100, Math.round((rewardCurrent / rewardTarget) * 100));
 
-  const todayDateStr = new Date()
-    .toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-    .toUpperCase();
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
-  const isGrid = tasksLayout === 'grid';
+  const {
+    focusTimerActive,
+    focusTimerTimeLeft,
+    focusTimerDurationMinutes,
+  } = useSettingsStore();
 
-  const renderCard = (
-    type: string,
-    title: string,
-    count: string | number,
-    Icon: any,
-    color: string,
-    route: any
-  ) => {
-    if (isGrid || isDesktop) {
-      const cardWidth = isDesktop
-        ? width >= 1024
-          ? '31.5%'
-          : '48.5%'
-        : width < 380
-        ? '48%'
-        : '48.5%';
-      return (
-        <AnimatedCard
-          key={type}
-          testID={`home-card-${type}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Navigate to ${title}`}
-          onPress={() => router.push(route)}
-          style={{ width: cardWidth, minHeight: 110, padding: 14, marginBottom: 12 }}
-        >
-          <View style={[styles.iconBox, { backgroundColor: 'transparent', marginBottom: 10 }]}>
-            <Icon size={20} color={theme.accent} />
-          </View>
-          <View>
-            <Text
-              style={{
-                fontSize: 15,
-                fontFamily: 'Inter_700Bold',
-                color: theme.primaryText,
-              }}
-            >
-              {title}
-            </Text>
-            <Text
-              style={{
-                fontSize: 12,
-                color: theme.secondaryText,
-                marginTop: 2,
-                fontFamily: 'Inter_600SemiBold',
-              }}
-            >
-              {count} {type}
-            </Text>
-          </View>
-        </AnimatedCard>
-      );
+  const formattedTimer = React.useMemo(() => {
+    if (focusTimerActive && focusTimerTimeLeft > 0) {
+      const mins = Math.floor(focusTimerTimeLeft / 60);
+      const secs = focusTimerTimeLeft % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
-
-    return (
-      <View key={type} style={{ width: '100%', alignSelf: 'stretch', marginBottom: 10 }}>
-        <ActionRow
-          testID={`home-card-${type}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Navigate to ${title}`}
-          Icon={Icon}
-          title={title}
-          subtitle={`${count} ${type}`}
-          onPress={() => router.push(route)}
-        />
-      </View>
-    );
-  };
+    const dur = focusTimerDurationMinutes || 25;
+    return `${String(dur).padStart(2, '0')}:00`;
+  }, [focusTimerActive, focusTimerTimeLeft, focusTimerDurationMinutes]);
 
   return (
-    <BackgroundGradient>
+    <View style={styles.root}>
+      {/* Approved wordmark header */}
+      <View style={{ paddingTop: insets.top }}>
+        <BrandHeader showMoreMenu onRightPress={() => router.push('/settings' as any)} />
+      </View>
+
       <ScrollView
         style={{ flex: 1, width: '100%' }}
         contentContainerStyle={{
-          paddingHorizontal: isDesktop ? 32 : width < 380 ? 14 : 18,
-          paddingBottom: Math.max(insets.bottom, 24) + 160,
-          paddingTop: insets.top + 16,
-          maxWidth: isDesktop ? 1080 : undefined,
+          paddingHorizontal: isDesktop ? 32 : 20,
+          paddingTop: 24,
+          paddingBottom: Math.max(insets.bottom, 16) + 90,
+          maxWidth: isDesktop ? 640 : undefined,
           alignSelf: isDesktop ? 'center' : undefined,
           width: '100%',
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Block: Date, Today title, quiet greeting & controls */}
-        <Animated.View entering={FadeIn.duration(300)} style={styles.headerBlock}>
-          <View style={styles.headerTopRow}>
-            <Text style={[styles.dateText, { color: theme.secondaryText }]}>{todayDateStr}</Text>
-            <View style={styles.headerIcons}>
-              <Pressable
-                style={[styles.iconBox, { backgroundColor: 'transparent' }]}
-                onPress={() => {
-                  hapticLight();
-                  setNotificationsVisible(true);
-                }}
-                accessibilityLabel="Notifications"
-              >
-                <View>
-                  <Bell size={18} color={theme.accent} />
-                  {hasUnread && <View style={[styles.badge, { backgroundColor: theme.danger }]} />}
-                </View>
-              </Pressable>
-              <Pressable
-                style={[styles.iconBox, { backgroundColor: 'transparent' }]}
-                onPress={() => router.push('/calendar')}
-                accessibilityLabel="Calendar"
-              >
-                <Calendar size={18} color={theme.accent} />
-              </Pressable>
-              <Pressable
-                testID="home-layout-toggle-btn"
-                accessibilityRole="button"
-                accessibilityLabel={isGrid ? 'Switch to list layout' : 'Switch to grid layout'}
-                style={[styles.iconBox, { backgroundColor: 'transparent' }]}
-                onPress={() => setTasksLayout(isGrid ? 'list' : 'grid')}
-              >
-                {isGrid ? (
-                  <ListIcon size={18} color={theme.accent} />
-                ) : (
-                  <LayoutGrid size={18} color={theme.accent} />
-                )}
-              </Pressable>
-              <Pressable
-                style={[styles.iconBox, { backgroundColor: 'transparent' }]}
-                onPress={() => router.push('/settings')}
-                accessibilityLabel="Settings"
-              >
-                <Settings size={18} color={theme.accent} />
-              </Pressable>
-            </View>
-          </View>
-          <Text style={[styles.greetingText, { color: theme.primaryText }]}>Today</Text>
-          {greetingSubline ? (
-            <Text style={[styles.greetingSubline, { color: theme.secondaryText }]}>
-              {greetingSubline}
-            </Text>
-          ) : null}
-        </Animated.View>
+        {/* Date line */}
+        <Text style={styles.dateLabel}>{todayDateFormatted}</Text>
 
-        <AnnouncementBanner />
+        {/* Page Heading & Subtitle */}
+        <Text style={styles.pageHeading}>Make space.</Text>
+        <Text style={styles.pageSubline}>A clear day starts with one focused action.</Text>
 
-        {/* Sync Status Indicator */}
-        {(lastSyncedAt || syncPartial) && (
-          <Animated.View entering={FadeIn.delay(100).duration(200)} style={{ marginBottom: 12 }}>
-            <Text
-              style={{
-                fontSize: 11,
-                color: syncPartial ? '#F59E0B' : theme.secondaryText,
-                fontFamily: 'Inter_600SemiBold',
-              }}
-            >
-              {syncPartial
-                ? lastSyncedAt
-                  ? `Partially synced (last full sync: ${new Date(lastSyncedAt).toLocaleTimeString()})`
-                  : 'Partially synced (pending uploads)'
-                : lastSyncedAt
-                ? `Synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
-                : 'Local changes saved'}
-            </Text>
-          </Animated.View>
-        )}
+        <View style={styles.thinDivider} />
 
-        {/* Start Focus Quick Panel */}
-        <View
-          style={[
-            styles.focusQuickPanel,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
-        >
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <Clock size={16} color={theme.accent} />
-              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: theme.primaryText }}>
-                Focus Session
-              </Text>
-            </View>
-            <Text style={{ fontSize: 12, color: theme.secondaryText, fontFamily: 'Inter_500Medium' }}>
-              25m Pomodoro interval
-            </Text>
-          </View>
-          <TouchableOpacity
-            testID="home-start-focus-btn"
-            accessibilityRole="button"
-            accessibilityLabel="Start Focus Session"
-            onPress={() => router.push('/focus')}
-            style={[styles.focusStartBtn, { backgroundColor: theme.accent }]}
-          >
-            <Play size={14} color="#ffffff" fill="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={styles.focusStartBtnText}>Start</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Today's Tasks Section */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Tasks for Today</Text>
-              <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
-                {completedTodayTasks.length} of {activeTodayTasks.length} completed
-              </Text>
+        {/* ── 01 Your day (Tasks) ────────────────────────────────────────────── */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleGroup}>
+              <Text style={styles.sectionIndex}>01</Text>
+              <Text style={styles.sectionTitle}>Your day</Text>
             </View>
             <TouchableOpacity
-              testID="home-add-task-btn"
+              onPress={() => router.push('/tasks?create=true' as any)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel="Add task"
-              onPress={() => router.push('/tasks' as any)}
-              style={[styles.smallActionBtn, { backgroundColor: theme.accentLight }]}
             >
-              <Plus size={14} color={theme.accent} style={{ marginRight: 4 }} />
-              <Text style={[styles.smallActionBtnText, { color: theme.accent }]}>Add</Text>
+              <Text style={styles.blueActionText}>+ Add task</Text>
             </TouchableOpacity>
           </View>
 
-          {activeTodayTasks.length > 0 ? (
-            <View
-              style={[
-                styles.taskListBox,
-                { backgroundColor: theme.card, borderColor: theme.cardBorder },
-              ]}
-            >
-              {activeTodayTasks.slice(0, 4).map((task) => (
-                <TouchableOpacity
-                  key={task.id}
-                  onPress={() => toggleTask(task.id, task.completed)}
-                  style={styles.taskItemRow}
-                  activeOpacity={0.7}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: task.completed }}
-                >
-                  <View style={{ marginRight: 10 }}>
-                    {task.completed ? (
-                      <CheckCircle2 size={18} color={theme.success} />
-                    ) : (
-                      <Circle size={18} color={theme.tertiaryText} />
-                    )}
-                  </View>
-                  <Text
-                    style={[
-                      styles.taskItemText,
-                      { color: theme.primaryText },
-                      task.completed && {
-                        textDecorationLine: 'line-through',
-                        color: theme.secondaryText,
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {task.title}
-                  </Text>
-                  {task.priority && task.priority !== 'medium' && (
-                    <View
-                      style={[
-                        styles.priorityDot,
-                        {
-                          backgroundColor:
-                            task.priority === 'high' ? theme.danger : theme.success,
-                        },
-                      ]}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
+          {todayTasksList.length === 0 ? (
+            /* Honest empty state matching mockup */
+            <View style={styles.emptyContainer}>
+              <View style={styles.zeroNumeralRow}>
+                <Text style={styles.hugeZeroNumeral}>0</Text>
+                <Text style={styles.numeralUnitText}>tasks planned</Text>
+              </View>
+              <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
+              <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
+
+              <TouchableOpacity
+                onPress={() => router.push('/tasks?create=true' as any)}
+                style={styles.inlineCreateBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.blueActionText}>+ Create your first task</Text>
+              </TouchableOpacity>
             </View>
           ) : (
-            <View
-              style={[
-                styles.emptyTaskBox,
-                { backgroundColor: theme.card, borderColor: theme.cardBorder },
-              ]}
-            >
-              <Text style={{ fontSize: 13, color: theme.secondaryText, marginBottom: 8 }}>
-                No tasks scheduled for today yet.
+            /* Real task rows */
+            <View style={styles.listContainer}>
+              <Text style={styles.counterSummary}>
+                {completedTasksCount} of {totalTasksCount} completed
               </Text>
+              {todayTasksList.slice(0, 4).map((task, idx) => {
+                const isLast = idx === Math.min(todayTasksList.length, 4) - 1;
+                return (
+                  <View
+                    key={task.id}
+                    style={[styles.itemRow, !isLast && styles.itemRowBorder]}
+                  >
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticSuccess();
+                        toggleTask(task.id, task.completed);
+                      }}
+                      style={[
+                        styles.taskCheckbox,
+                        task.completed && styles.taskCheckboxCompleted,
+                      ]}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: task.completed }}
+                    >
+                      {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: '/tasks/task-detail',
+                          params: { id: task.id },
+                        } as any)
+                      }
+                      style={styles.itemTextWrap}
+                    >
+                      <Text
+                        style={[
+                          styles.taskTitleText,
+                          task.completed && styles.taskTitleCompleted,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {task.title || 'Untitled task'}
+                      </Text>
+                      {task.due_time ? (
+                        <Text style={styles.itemSubText}>Today · {task.due_time}</Text>
+                      ) : null}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: '/tasks/task-detail',
+                          params: { id: task.id },
+                        } as any)
+                      }
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <ChevronRight size={16} color="#8E8C87" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+
+              {todayTasksList.length > 4 && (
+                <TouchableOpacity
+                  onPress={() => router.push('/tasks' as any)}
+                  style={styles.viewMoreRow}
+                >
+                  <Text style={styles.viewMoreText}>
+                    View all {todayTasksList.length} tasks →
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.thinDivider} />
+
+        {/* ── Integrated Focus Section with Serif Timer ─────────────────────── */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleGroup}>
+              <Timer size={18} color="#0066FF" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Focus</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/focus' as any)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.blueActionText}>Open timer →</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.focusContainer}>
+            <View style={styles.focusTimerRow}>
+              <Text style={styles.serifTimerText}>{formattedTimer}</Text>
               <TouchableOpacity
-                onPress={() => router.push('/tasks' as any)}
-                style={[styles.planTaskBtn, { borderColor: theme.accent }]}
+                onPress={() => {
+                  hapticLight();
+                  router.push('/focus' as any);
+                }}
+                style={styles.focusStartBtn}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={focusTimerActive ? 'Resume focus session' : 'Start focus session'}
               >
-                <Text style={[styles.planTaskBtnText, { color: theme.accent }]}>
-                  + Plan your first task
+                <Play size={14} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.focusStartBtnText}>
+                  {focusTimerActive ? 'Resume focus' : 'Start focus'}
                 </Text>
               </TouchableOpacity>
             </View>
-          )}
+            <Text style={styles.focusSubline}>
+              {focusTimerActive
+                ? 'Focus session in progress. Stay in the zone.'
+                : 'Give your mind single direction. Dedicated study session.'}
+            </Text>
+          </View>
         </View>
 
-        {/* Next Milestone Row */}
-        {nextReward && (
-          <TouchableOpacity
-            testID="home-next-milestone-card"
-            accessibilityRole="button"
-            onPress={() => router.push('/rewards')}
-            style={[
-              styles.milestoneRow,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
-          >
-            <View
-              style={[styles.milestoneIconWrap, { backgroundColor: theme.accentLight }]}
+        <View style={styles.thinDivider} />
+
+        {/* ── 02 Daily rituals (Habits) ──────────────────────────────────────── */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleGroup}>
+              <Text style={styles.sectionIndex}>02</Text>
+              <Text style={styles.sectionTitle}>Daily rituals</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/habits' as any)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
             >
-              <Award size={18} color={theme.accent} />
-            </View>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text
-                style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: theme.primaryText }}
-              >
-                Next Reward: {nextReward.title}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontFamily: 'Inter_500Medium',
-                  color: theme.secondaryText,
-                  marginTop: 1,
-                }}
-              >
-                {nextReward.requirementLabel}
-              </Text>
-            </View>
-            <ChevronRight size={16} color={theme.tertiaryText} />
-          </TouchableOpacity>
-        )}
+              <Text style={styles.blueActionText}>+ Add habit</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Tool Shortcuts Grid / List (preserves test verification IDs) */}
-        <Animated.View
-          entering={FadeIn.delay(200).duration(300)}
-          style={[
-            styles.cardsWrapper,
-            !isGrid && !isDesktop
-              ? {
-                  flexDirection: 'column',
-                  flexWrap: 'nowrap',
-                  width: '100%',
-                  alignSelf: 'stretch',
-                  alignItems: 'stretch',
-                }
-              : {
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  alignSelf: 'stretch',
-                },
-          ]}
-        >
-          {isLoading ? (
-            <>
-              <AnimatedCard
-                style={[
-                  styles.cardContainer,
-                  {
-                    width: isGrid || isDesktop ? (isDesktop ? '31%' : '48%') : '100%',
-                    marginBottom: 14,
-                    padding: 14,
-                    minHeight: isGrid || isDesktop ? 120 : 70,
-                  },
-                ]}
+          {realHabits.length === 0 ? (
+            /* Honest empty state matching mockup */
+            <View style={styles.emptyContainer}>
+              <View style={styles.zeroNumeralRow}>
+                <Text style={styles.hugeZeroNumeral}>0</Text>
+                <Text style={styles.numeralUnitText}>habits yet</Text>
+              </View>
+              <Text style={styles.emptyPrimaryPrompt}>Start with something small.</Text>
+              <Text style={styles.emptySecondaryPrompt}>Choose one thing you want to repeat.</Text>
+
+              <TouchableOpacity
+                onPress={() => router.push('/habits' as any)}
+                style={styles.inlineCreateBtn}
+                activeOpacity={0.7}
               >
-                <Skeleton width={36} height={36} borderRadius={10} style={{ marginBottom: 10 }} />
-                <Skeleton width="60%" height={14} style={{ marginBottom: 4 }} />
-                <Skeleton width="30%" height={10} />
-              </AnimatedCard>
-              <AnimatedCard
-                style={[
-                  styles.cardContainer,
-                  {
-                    width: isGrid || isDesktop ? (isDesktop ? '31%' : '48%') : '100%',
-                    marginBottom: 14,
-                    padding: 14,
-                    minHeight: isGrid || isDesktop ? 120 : 70,
-                  },
-                ]}
-              >
-                <Skeleton width={36} height={36} borderRadius={10} style={{ marginBottom: 10 }} />
-                <Skeleton width="60%" height={14} style={{ marginBottom: 4 }} />
-                <Skeleton width="30%" height={10} />
-              </AnimatedCard>
-            </>
+                <Text style={styles.blueActionText}>+ Create your first habit</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
-            <>
-              {renderCard(
-                'tasks',
-                'Tasks',
-                totalTasksCount,
-                Calendar,
-                theme.accent,
-                { pathname: '/tasks', params: { date: undefined } } as any
+            /* Real habits list */
+            <View style={styles.listContainer}>
+              {realHabits.slice(0, 3).map((habit, idx) => {
+                const isCompleted = habitCompletedOnDate(habit, todayStr);
+                const isLast = idx === Math.min(realHabits.length, 3) - 1;
+
+                return (
+                  <View
+                    key={habit.id}
+                    style={[styles.itemRow, !isLast && styles.itemRowBorder]}
+                  >
+                    <View style={styles.itemTextWrap}>
+                      <Text style={styles.habitTitleText}>{habit.title}</Text>
+                      <Text style={styles.itemSubText}>
+                        {habit.streak || 0} day streak
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={async () => {
+                        await toggleHabit(habit.id, todayStr);
+                      }}
+                      style={[
+                        styles.habitCheckCircle,
+                        isCompleted && styles.habitCheckCircleActive,
+                      ]}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isCompleted }}
+                    >
+                      {isCompleted && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+
+              {realHabits.length > 3 && (
+                <TouchableOpacity
+                  onPress={() => router.push('/habits' as any)}
+                  style={styles.viewMoreRow}
+                >
+                  <Text style={styles.viewMoreText}>
+                    View all {realHabits.length} habits →
+                  </Text>
+                </TouchableOpacity>
               )}
-              {renderCard('habits', 'Habits', totalStreak, Shield, theme.accent, '/habits')}
-              {renderCard('focus', 'Focus', focusSessions.length, Clock, theme.accent, '/focus')}
-              {renderCard('notes', 'Notes', notes.length, FileText, theme.accent, '/notes')}
-              {renderCard('recap', 'Daily Recap', `${completionPercentage}%`, Award, theme.accent, '/recap')}
-            </>
+            </View>
           )}
-        </Animated.View>
-
-        {/* Daily Quote Banner positioned quietly below core tools */}
-        <View style={{ marginTop: 8 }}>
-          <DailyQuoteBanner />
         </View>
 
-        <View style={{ alignItems: 'center', marginTop: 20 }}>
-          <Text
-            style={{
-              fontSize: 11,
-              color: theme.tertiaryText,
-              fontFamily: 'Inter_500Medium',
-            }}
-          >
-            groundwork · v{Constants.expoConfig?.version || '1.3.0'}
-          </Text>
-        </View>
+        <View style={styles.thinDivider} />
 
-        <NotificationSheet
-          visible={notificationsVisible}
-          onClose={() => {
-            setNotificationsVisible(false);
-            setHasUnread(false);
-          }}
-        />
+        {/* ── Compact Milestone Progress (Real data only) ───────────────────── */}
+        <TouchableOpacity
+          onPress={() => router.push('/rewards' as any)}
+          style={styles.milestoneBox}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Milestone rewards"
+        >
+          <View style={styles.milestoneHeader}>
+            <View style={styles.milestoneTitleGroup}>
+              <Sparkles size={16} color="#0066FF" />
+              <Text style={styles.milestoneTitle}>Consistency milestone</Text>
+            </View>
+            <Text style={styles.milestoneCount}>
+              {rewardCurrent} / {rewardTarget} tasks
+            </Text>
+          </View>
 
-        <View style={{ height: 100 }} />
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${rewardPercent}%` }]} />
+          </View>
+        </TouchableOpacity>
       </ScrollView>
-    </BackgroundGradient>
+
+      {/* Notifications modal */}
+      <NotificationSheet
+        visible={notificationsVisible}
+        onClose={() => setNotificationsVisible(false)}
+      />
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  headerBlock: {
-    marginBottom: 20,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  dateText: {
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.8,
-  },
-  greetingText: {
-    fontSize: 28,
-    fontFamily: 'Inter_800ExtraBold',
-    letterSpacing: -0.5,
-    lineHeight: 34,
-  },
-  greetingSubline: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  cardsWrapper: {
-    width: '100%',
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingTop: 6,
-  },
-  cardContainer: {},
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  focusQuickPanel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  focusStartBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 10,
-  },
-  focusStartBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  sectionContainer: {
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 1,
-  },
-  smallActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  smallActionBtnText: {
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  taskListBox: {
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  taskItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150,150,150,0.12)',
-  },
-  taskItemText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-  },
-  priorityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginLeft: 8,
-  },
-  emptyTaskBox: {
-    padding: 18,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  planTaskBtn: {
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  planTaskBtnText: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  milestoneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
-  milestoneIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-});
+const createStyles = (theme: any, isDark: boolean) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    dateLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_600SemiBold',
+      letterSpacing: 2,
+      color: theme.secondaryText,
+      marginBottom: 6,
+    },
+    pageHeading: {
+      fontSize: 42,
+      fontFamily: 'Inter_800ExtraBold',
+      letterSpacing: -1,
+      color: theme.primaryText,
+      marginBottom: 4,
+    },
+    pageSubline: {
+      fontSize: 16,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginBottom: 20,
+      lineHeight: 22,
+    },
+    thinDivider: {
+      height: 1,
+      backgroundColor: theme.separator,
+      marginVertical: 20,
+    },
+    sectionWrap: {
+      width: '100%',
+    },
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 16,
+    },
+    sectionTitleGroup: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 10,
+    },
+    sectionIndex: {
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+      color: theme.accent,
+    },
+    sectionTitle: {
+      fontSize: 22,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: -0.4,
+      color: theme.primaryText,
+    },
+    blueActionText: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+
+    // Empty state matching mockups
+    emptyContainer: {
+      paddingVertical: 10,
+    },
+    zeroNumeralRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 12,
+      marginBottom: 10,
+    },
+    hugeZeroNumeral: {
+      fontSize: 54,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      lineHeight: 58,
+    },
+    numeralUnitText: {
+      fontSize: 22,
+      fontFamily: 'PlayfairDisplay_400Regular_Italic',
+      color: theme.primaryText,
+    },
+    emptyPrimaryPrompt: {
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    emptySecondaryPrompt: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginBottom: 14,
+    },
+    inlineCreateBtn: {
+      paddingVertical: 4,
+    },
+
+    // List rows
+    listContainer: {
+      width: '100%',
+    },
+    counterSummary: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+      marginBottom: 10,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+    },
+    itemRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+    },
+    itemTextWrap: {
+      flex: 1,
+      marginLeft: 14,
+    },
+    taskCheckbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 1.6,
+      borderColor: theme.checkboxBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    taskCheckboxCompleted: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    taskTitleText: {
+      fontSize: 15,
+      fontFamily: 'Inter_500Medium',
+      color: theme.primaryText,
+    },
+    taskTitleCompleted: {
+      color: theme.secondaryText,
+      textDecorationLine: 'line-through',
+    },
+    itemSubText: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginTop: 2,
+    },
+    viewMoreRow: {
+      paddingTop: 10,
+    },
+    viewMoreText: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+
+    // Focus section
+    focusContainer: {
+      width: '100%',
+      paddingVertical: 6,
+    },
+    focusTimerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    serifTimerText: {
+      fontSize: 40,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      letterSpacing: -1,
+      color: theme.primaryText,
+    },
+    focusStartBtn: {
+      backgroundColor: theme.accent,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 999,
+    },
+    focusStartBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontFamily: 'Inter_700Bold',
+    },
+    focusSubline: {
+      fontSize: 13,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+    },
+
+    // Habit circular check-in
+    habitTitleText: {
+      fontSize: 15,
+      fontFamily: 'Inter_500Medium',
+      color: theme.primaryText,
+    },
+    habitCheckCircle: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 1.8,
+      borderColor: theme.checkboxBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    habitCheckCircleActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+
+    // Milestone Progress
+    milestoneBox: {
+      width: '100%',
+      paddingVertical: 6,
+    },
+    milestoneHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    milestoneTitleGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    milestoneTitle: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
+    },
+    milestoneCount: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+    progressTrack: {
+      height: 4,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+      borderRadius: 2,
+      overflow: 'hidden',
+      width: '100%',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: theme.accent,
+      borderRadius: 2,
+    },
+  });

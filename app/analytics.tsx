@@ -5,7 +5,7 @@
  * from the centralized event-driven AnalyticsEngine — zero UI-level calculations.
  */
 import { BackgroundGradient } from "@/components/BackgroundGradient";
-import { ProPaywall } from "@/components/ProPaywall";
+import { BrandHeader } from "@/components/ui/BrandHeader";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { AppText as Text } from "@/components/ui/AppText";
 import {
@@ -87,18 +87,18 @@ const MetricCard = ({
 }: any) => (
   <Animated.View entering={FadeInDown.duration(350).delay(delay)} style={{ flex: 1 }}>
     <Pressable onPress={onPress} style={{ flex: 1 }}>
-      <AnimatedCard style={[styles.metricCard, { borderColor: theme.cardBorder }]}>
+      <AnimatedCard style={[styles.metricCard, { borderColor: theme.separator }]}>
         <View style={[styles.metricIcon, { backgroundColor: accent + "22" }]}>
           <Icon size={18} color={accent} />
         </View>
-        <Text style={[styles.metricValue, { color: theme.primaryText }]}>{value}</Text>
-        <Text style={[styles.metricTitle, { color: theme.secondaryText }]}>{title}</Text>
+        <Text style={[styles.metricValue, { color: theme.text }]}>{value}</Text>
+        <Text style={[styles.metricTitle, { color: theme.textSecondary }]}>{title}</Text>
         {subtitle && (
-          <Text style={[styles.metricSub, { color: theme.tertiaryText }]}>{subtitle}</Text>
+          <Text style={[styles.metricSub, { color: theme.textMuted }]}>{subtitle}</Text>
         )}
         {trend && (
           <View style={styles.trendRow}>
-            <TrendIcon direction={trend} size={12} color={theme.tertiaryText} />
+            <TrendIcon direction={trend} size={12} color={theme.textMuted} />
           </View>
         )}
       </AnimatedCard>
@@ -122,10 +122,10 @@ const ProGate = ({
         ]}
       >
         <Award size={28} color={theme.accent} />
-        <Text style={[styles.proGateTitle, { color: theme.primaryText }]}>
+        <Text style={[styles.proGateTitle, { color: theme.text }]}>
           Milestone Reward
         </Text>
-        <Text style={[styles.proGateText, { color: theme.secondaryText }]}>
+        <Text style={[styles.proGateText, { color: theme.textSecondary }]}>
           Unlock deep analytics, heatmaps, focus scores, and weekly reports by completing 10 focus sessions and 10 habit check-in days.
         </Text>
         <View style={[styles.proGateBtn, { backgroundColor: theme.accent }]}>
@@ -137,7 +137,7 @@ const ProGate = ({
 );
 
 const SectionTitle = ({ title, theme }: any) => (
-  <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>{title}</Text>
+  <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{title}</Text>
 );
 
 const InsightRow = ({
@@ -151,7 +151,7 @@ const InsightRow = ({
 }) => (
   <Animated.View entering={FadeInLeft.duration(300).delay(delay)}>
     <View style={[styles.insightRow, { borderLeftColor: theme.accent }]}>
-      <Text style={[styles.insightText, { color: theme.primaryText }]}>{text}</Text>
+      <Text style={[styles.insightText, { color: theme.text }]}>{text}</Text>
     </View>
   </Animated.View>
 );
@@ -204,7 +204,8 @@ export default function AnalyticsScreen() {
   }, [loadData]);
 
   return (
-    <BackgroundGradient>      <ScrollView
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: 20,
@@ -220,12 +221,15 @@ export default function AnalyticsScreen() {
           />
         }
       >
-        <View style={styles.screenHeader}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <ChevronRight size={22} color={theme.accent} style={{ transform: [{ rotate: '180deg' }] }} />
-          </Pressable>
-          <Text style={[styles.screenTitle, { color: theme.primaryText }]}>Analytics</Text>
-          <View style={{ width: 38 }} />
+        <BrandHeader title="groundwork." onBack={() => router.back()} />
+
+        <View style={{ marginBottom: 28, marginTop: 8 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Analytics.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Trends and progress insights.
+          </Text>
         </View>
 
         <SectionTitle title="PRODUCTIVITY OVERVIEW" theme={theme} />
@@ -279,38 +283,38 @@ export default function AnalyticsScreen() {
               <AnimatedCard style={styles.focusCard}>
                 <View style={styles.focusScoreRow}>
                   <View style={styles.focusScoreCircle}>
-                    <Text style={[styles.focusScoreNumber, { color: theme.primaryText }]}>
+                    <Text style={[styles.focusScoreNumber, { color: theme.text }]}>
                       {focusMetrics.focusScore ?? 0}
                     </Text>
-                    <Text style={[styles.focusScoreLabel, { color: theme.secondaryText }]}>
+                    <Text style={[styles.focusScoreLabel, { color: theme.textSecondary }]}>
                       /100
                     </Text>
                   </View>
                   <View style={styles.focusDetails}>
-                    <Text style={[styles.focusDetailLabel, { color: theme.secondaryText }]}>
+                    <Text style={[styles.focusDetailLabel, { color: theme.textSecondary }]}>
                       Focus Score
                     </Text>
                     <View style={styles.focusStatRow}>
-                      <Text style={[styles.focusStat, { color: theme.primaryText }]}>
+                      <Text style={[styles.focusStat, { color: theme.text }]}>
                         {formatMinutes(focusMetrics.totalFocusTimeThisWeek ?? 0)}
                       </Text>
-                      <Text style={[styles.focusStatSub, { color: theme.tertiaryText }]}>
+                      <Text style={[styles.focusStatSub, { color: theme.textMuted }]}>
                         {" "}this week
                       </Text>
                     </View>
                     <View style={styles.focusStatRow}>
-                      <Text style={[styles.focusStat, { color: theme.primaryText }]}>
+                      <Text style={[styles.focusStat, { color: theme.text }]}>
                         {formatMinutes(focusMetrics.averageSessionLength ?? 0)}
                       </Text>
-                      <Text style={[styles.focusStatSub, { color: theme.tertiaryText }]}>
+                      <Text style={[styles.focusStatSub, { color: theme.textMuted }]}>
                         {" "}avg session
                       </Text>
                     </View>
                     <View style={styles.focusStatRow}>
-                      <Text style={[styles.focusStat, { color: theme.primaryText }]}>
+                      <Text style={[styles.focusStat, { color: theme.text }]}>
                         {focusMetrics.distractionRate ?? 0}%
                       </Text>
-                      <Text style={[styles.focusStatSub, { color: theme.tertiaryText }]}>
+                      <Text style={[styles.focusStatSub, { color: theme.textMuted }]}>
                         {" "}distraction rate
                       </Text>
                     </View>
@@ -320,7 +324,7 @@ export default function AnalyticsScreen() {
                 {/* Best Focus Hours */}
                 {focusMetrics.bestFocusHours?.length > 0 && (
                   <View style={styles.peakHoursSection}>
-                    <Text style={[styles.peakHoursLabel, { color: theme.secondaryText }]}>
+                    <Text style={[styles.peakHoursLabel, { color: theme.textSecondary }]}>
                       PEAK FOCUS HOURS
                     </Text>
                     <View style={styles.peakHoursRow}>
@@ -334,7 +338,7 @@ export default function AnalyticsScreen() {
                               ? `${h.hour === 0 ? 12 : h.hour}AM`
                               : `${h.hour === 12 ? 12 : h.hour - 12}PM`}
                           </Text>
-                          <Text style={[styles.peakHourMins, { color: theme.tertiaryText }]}>
+                          <Text style={[styles.peakHourMins, { color: theme.textMuted }]}>
                             {formatMinutes(h.minutes)}
                           </Text>
                         </View>
@@ -377,27 +381,27 @@ export default function AnalyticsScreen() {
                     key={item.label}
                     style={[
                       styles.trendItem,
-                      idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.cardBorder },
+                      idx < 2 && { borderBottomWidth: 1, borderBottomColor: theme.separator },
                     ]}
                   >
                     <View style={styles.trendLeft}>
                       <item.icon size={16} color={item.color} />
-                      <Text style={[styles.trendLabel, { color: theme.primaryText }]}>
+                      <Text style={[styles.trendLabel, { color: theme.text }]}>
                         {item.label}
                       </Text>
                     </View>
                     <View style={styles.trendRight}>
                       <View style={styles.rollingAverages}>
-                        <Text style={[styles.rollingAvg, { color: theme.tertiaryText }]}>
+                        <Text style={[styles.rollingAvg, { color: theme.textMuted }]}>
                           7d:{" "}
-                          <Text style={{ color: theme.secondaryText }}>{item.data.rolling7Day}</Text>
+                          <Text style={{ color: theme.textSecondary }}>{item.data.rolling7Day}</Text>
                         </Text>
-                        <Text style={[styles.rollingAvg, { color: theme.tertiaryText }]}>
+                        <Text style={[styles.rollingAvg, { color: theme.textMuted }]}>
                           30d:{" "}
-                          <Text style={{ color: theme.secondaryText }}>{item.data.rolling30Day}</Text>
+                          <Text style={{ color: theme.textSecondary }}>{item.data.rolling30Day}</Text>
                         </Text>
                       </View>
-                      <TrendIcon direction={item.data.direction} size={18} color={theme.tertiaryText} />
+                      <TrendIcon direction={item.data.direction} size={18} color={theme.textMuted} />
                     </View>
                   </View>
                 ))}
@@ -419,18 +423,18 @@ export default function AnalyticsScreen() {
                       styles.habitRow,
                       idx < habitConsistency.length - 1 && {
                         borderBottomWidth: 1,
-                        borderBottomColor: theme.cardBorder,
+                        borderBottomColor: theme.separator,
                       },
                     ]}
                   >
                     <View style={styles.habitInfo}>
                       <Text
-                        style={[styles.habitTitle, { color: theme.primaryText }]}
+                        style={[styles.habitTitle, { color: theme.text }]}
                         numberOfLines={1}
                       >
                         {h.habitTitle}
                       </Text>
-                      <Text style={[styles.habitSubtext, { color: theme.tertiaryText }]}>
+                      <Text style={[styles.habitSubtext, { color: theme.textMuted }]}>
                         {h.completedDays} / {h.totalDays} days · streak {h.currentStreak}
                       </Text>
                     </View>
@@ -438,7 +442,7 @@ export default function AnalyticsScreen() {
                       <View
                         style={[
                           styles.consistencyBar,
-                          { backgroundColor: theme.cardBorder },
+                          { backgroundColor: theme.separator },
                         ]}
                       >
                         <View
@@ -456,7 +460,7 @@ export default function AnalyticsScreen() {
                           ]}
                         />
                       </View>
-                      <Text style={[styles.consistencyScore, { color: theme.primaryText }]}>
+                      <Text style={[styles.consistencyScore, { color: theme.text }]}>
                         {h.consistencyScore}%
                       </Text>
                     </View>
@@ -502,13 +506,7 @@ export default function AnalyticsScreen() {
                   label: "Reports",
                   icon: BarChart2,
                   route: "/reports",
-                  color: "#007AFF",
-                },
-                {
-                  label: "Revision",
-                  icon: Brain,
-                  route: "/revision-insights",
-                  color: "#AF52DE",
+                  color: theme.accent,
                 },
               ].map((item) => (
                 <Pressable
@@ -518,13 +516,13 @@ export default function AnalyticsScreen() {
                 >
                   <Animated.View entering={FadeInDown.duration(350).delay(250)}>
                     <AnimatedCard
-                      style={[styles.navCard, { borderColor: item.color + "44" }]}
+                      style={[styles.navCard, { borderColor: theme.separator }]}
                     >
                       <item.icon size={22} color={item.color} />
-                      <Text style={[styles.navCardText, { color: theme.primaryText }]}>
+                      <Text style={[styles.navCardText, { color: theme.text }]}>
                         {item.label}
                       </Text>
-                      <ChevronRight size={14} color={theme.tertiaryText} />
+                      <ChevronRight size={14} color={theme.textMuted} />
                     </AnimatedCard>
                   </Animated.View>
                 </Pressable>
@@ -533,15 +531,7 @@ export default function AnalyticsScreen() {
           </>
         )}
       </ScrollView>
-
-      <ProPaywall
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        featureName="Pro Analytics"
-        featureDescription="Unlock full trend analysis, habit heatmaps, focus scoring, revision insights, and weekly reports."
-        source="analytics_screen"
-      />
-    </BackgroundGradient>
+    </View>
   );
 }
 

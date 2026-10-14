@@ -3,6 +3,7 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, Switch, Platform } from 'react-native';
 import { useTheme } from '@/lib/ThemeContext';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
@@ -35,7 +36,7 @@ function SectionLabel({ label, theme }: { label: string; theme: any }) {
 
 function Card({ children, theme }: { children: React.ReactNode; theme: any }) {
   return (
-    <View style={[styles.card, { backgroundColor: theme.card }]}>
+    <View style={[styles.card, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
       {children}
     </View>
   );
@@ -57,8 +58,8 @@ function SettingRow({ icon: Icon, title, subtitle, theme, children }: SettingRow
           <Icon size={18} color={theme.accent} />
         </View>
         <View style={styles.settingInfo}>
-          <Text style={[styles.settingTitle, { color: theme.primaryText }]}>{title}</Text>
-          <Text style={[styles.settingSubtitle, { color: theme.secondaryText }]}>{subtitle}</Text>
+          <Text style={[styles.settingTitle, { color: theme.text }]}>{title}</Text>
+          <Text style={[styles.settingSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>
         </View>
       </View>
       <View style={styles.controlContainer}>
@@ -87,12 +88,12 @@ function SegmentedControl({ options, value, onChange, theme, accentColor }: Segm
             onPress={() => onChange(opt.value)}
             style={[
               styles.segmentButton,
-              active && { backgroundColor: theme.cardSolid,      },
+              active && { backgroundColor: theme.cardSolid },
             ]}
           >
             <Text style={[
               styles.segmentLabel,
-              { color: active ? accentColor : theme.secondaryText },
+              { color: active ? accentColor : theme.textSecondary },
               active && { fontFamily: 'Inter_700Bold' },
             ]}>
               {opt.label}
@@ -115,21 +116,21 @@ export default function ProductivitySettingsScreen() {
   const settings = useSettingsStore();
 
   return (
-    <BackgroundGradient>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <ChevronLeft size={24} color={accentColor} />
-          <Text style={[styles.backText, { color: accentColor }]}>Settings</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.primaryText }]}>Productivity</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Customise your workflow</Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Productivity.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Build your daily rhythm.
+          </Text>
+        </View>
         <Animated.View entering={FadeInDown.delay(100).duration(500)}>
           {/* ── TASKS ─────────────────────────────── */}
           <SectionLabel label="TASKS" theme={theme} />
@@ -316,7 +317,7 @@ export default function ProductivitySettingsScreen() {
         </Animated.View>
 
       </ScrollView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

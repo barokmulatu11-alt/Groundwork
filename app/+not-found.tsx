@@ -1,4 +1,3 @@
-import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { useRouter } from 'expo-router';
@@ -8,46 +7,44 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 export default function NotFoundScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   return (
-    <BackgroundGradient>
-      <View style={styles.container}>
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <View style={[styles.brandMark, { backgroundColor: theme.accent }]}>
-            <Text style={styles.brandMarkText}>G</Text>
-          </View>
-          <Text style={[styles.title, { color: theme.primaryText }]}>This page isn't available</Text>
-          <Text style={[styles.description, { color: theme.secondaryText }]}>
-            The link you followed may be broken or the page may have been moved.
-          </Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.card, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+        <View style={[styles.brandMark, { backgroundColor: theme.accent }]}>
+          <Text style={styles.brandMarkText}>G</Text>
+        </View>
+        <Text style={[styles.title, { color: theme.text }]}>This page isn't available</Text>
+        <Text style={[styles.description, { color: theme.textSecondary }]}>
+          The link you followed may be broken or the page may have been moved.
+        </Text>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              testID="not-found-back-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={() => router.back()}
-              style={[styles.outlineBtn, { borderColor: theme.cardBorder }]}
-            >
-              <ArrowLeft size={16} color={theme.primaryText} style={{ marginRight: 6 }} />
-              <Text style={[styles.btnText, { color: theme.primaryText }]}>Go back</Text>
-            </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            testID="not-found-back-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => router.back()}
+            style={[styles.outlineBtn, { borderColor: theme.separator }]}
+          >
+            <ArrowLeft size={16} color={theme.text} style={{ marginRight: 6 }} />
+            <Text style={[styles.btnText, { color: theme.text }]}>Go back</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              testID="not-found-home-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Go home"
-              onPress={() => router.replace('/' as any)}
-              style={[styles.primaryBtn, { backgroundColor: theme.accent }]}
-            >
-              <Home size={16} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={[styles.btnText, { color: '#ffffff' }]}>Go home</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            testID="not-found-home-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Go home"
+            onPress={() => router.replace('/' as any)}
+            style={[styles.primaryBtn, { backgroundColor: theme.accent }]}
+          >
+            <Home size={16} color="#ffffff" style={{ marginRight: 6 }} />
+            <Text style={[styles.btnText, { color: '#ffffff' }]}>Go home</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </BackgroundGradient>
+    </View>
   );
 }
 

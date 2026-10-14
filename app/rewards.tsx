@@ -6,8 +6,7 @@
  * - Distinct-day habit check-ins
  */
 
-import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { AnimatedCard } from '@/components/ui/AnimatedCard';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { AppText as Text } from '@/components/ui/AppText';
 import { hapticSuccess } from '@/lib/haptics';
 import {
@@ -23,20 +22,15 @@ import {
   UserProgress,
 } from '@/lib/rewardsService';
 import { useTheme } from '@/lib/ThemeContext';
-import { useSettingsStore } from '@/store/useSettingsStore';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import {
   Award,
   Check,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Flame,
   Lock,
-  ReceiptText,
-  Sparkles,
   Trophy,
 } from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -49,12 +43,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function RewardsScreen() {
   const { theme, isDark } = useTheme();
-  const { accentColor } = useSettingsStore();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -121,10 +114,12 @@ export default function RewardsScreen() {
       .sort((a, b) => b.percent - a.percent)[0];
   }, [rewardStatuses, unlockedCount, totalCount]);
 
+  const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
+
   return (
-    <BackgroundGradient>
+    <View style={styles.container}>
       <ScrollView
-        style={styles.container}
+        style={{ flex: 1 }}
         contentContainerStyle={{
           paddingTop: insets.top + 16,
           paddingBottom: insets.bottom + 32,
@@ -138,48 +133,21 @@ export default function RewardsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={accentColor}
+            tintColor={theme.accent}
           />
         }
       >
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-            activeOpacity={0.7}
-          >
-            <ChevronLeft size={22} color={theme.primaryText} />
-          </TouchableOpacity>
-          <View style={styles.headerTextWrap}>
-            <Text style={[styles.title, { color: theme.primaryText }]}>
-              Milestone Rewards
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-              Unlocked through daily focus and consistency
-            </Text>
-          </View>
-        </View>
+        <BrandHeader title="groundwork." onBack={() => router.back()} />
 
-        {/* Existing Paid Supporter Banner */}
-        {isPaid && (
-          <Animated.View entering={FadeIn.duration(300)}>
-            <View
-              style={[
-                styles.supporterBanner,
-                {
-                  backgroundColor: accentColor + '12',
-                  borderColor: accentColor + '30',
-                },
-              ]}
-            >
-              <Sparkles size={16} color={accentColor} />
-              <Text style={[styles.supporterBannerText, { color: theme.primaryText }]}>
-                Supporter Access: All milestones unlocked
-              </Text>
-            </View>
-          </Animated.View>
-        )}
+        <View style={{ marginBottom: 28, marginTop: 8 }}>
+          <Text style={styles.mainTitle}>
+            Milestones.
+          </Text>
+          <Text style={styles.subTitle}>
+            Features earned through consistency.
+          </Text>
+        </View>
 
         {/* Restrained Celebration Banner */}
         {celebratedReward && (
@@ -198,7 +166,7 @@ export default function RewardsScreen() {
                 <Text style={[styles.celebrationTitle, { color: '#34C759' }]}>
                   Milestone Achieved
                 </Text>
-                <Text style={[styles.celebrationSub, { color: theme.primaryText }]}>
+                <Text style={[styles.celebrationSub, { color: theme.text }]}>
                   You unlocked {celebratedReward}. Great work!
                 </Text>
               </View>
@@ -206,7 +174,7 @@ export default function RewardsScreen() {
                 onPress={() => setCelebratedReward(null)}
                 style={styles.celebrationClose}
               >
-                <Text style={{ color: theme.secondaryText, fontSize: 13 }}>✕</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 13 }}>✕</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -214,91 +182,54 @@ export default function RewardsScreen() {
 
         {/* Stat Strip */}
         <View style={styles.statsStrip}>
-          <View
-            style={[
-              styles.statBox,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-              },
-            ]}
-          >
+          <View style={styles.statBox}>
             <CheckCircle2 size={16} color="#34C759" />
-            <Text style={[styles.statNum, { color: theme.primaryText }]}>
+            <Text style={styles.statNum}>
               {progress.completedTasks}
             </Text>
-            <Text style={[styles.statLabel, { color: theme.secondaryText }]}>
+            <Text style={styles.statLabel}>
               Tasks Done
             </Text>
           </View>
 
-          <View
-            style={[
-              styles.statBox,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-              },
-            ]}
-          >
-            <Clock size={16} color={accentColor} />
-            <Text style={[styles.statNum, { color: theme.primaryText }]}>
+          <View style={styles.statBox}>
+            <Clock size={16} color={theme.accent} />
+            <Text style={styles.statNum}>
               {progress.focusSessions}
             </Text>
-            <Text style={[styles.statLabel, { color: theme.secondaryText }]}>
+            <Text style={styles.statLabel}>
               Focus Sessions
             </Text>
           </View>
 
-          <View
-            style={[
-              styles.statBox,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-              },
-            ]}
-          >
+          <View style={styles.statBox}>
             <Flame size={16} color="#FF9500" />
-            <Text style={[styles.statNum, { color: theme.primaryText }]}>
+            <Text style={styles.statNum}>
               {progress.habitDays}
             </Text>
-            <Text style={[styles.statLabel, { color: theme.secondaryText }]}>
+            <Text style={styles.statLabel}>
               Habit Days
             </Text>
           </View>
         </View>
 
         {/* Overall Completion Bar */}
-        <View
-          style={[
-            styles.overviewCard,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            },
-          ]}
-        >
+        <View style={styles.overviewCard}>
           <View style={styles.overviewHeader}>
-            <Text style={[styles.overviewTitle, { color: theme.primaryText }]}>
+            <Text style={styles.overviewTitle}>
               Total Unlocked
             </Text>
-            <Text style={[styles.overviewCount, { color: accentColor }]}>
+            <Text style={styles.overviewCount}>
               {unlockedCount} / {totalCount}
             </Text>
           </View>
-          <View
-            style={[
-              styles.overviewTrack,
-              { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
-            ]}
-          >
+          <View style={styles.overviewTrack}>
             <View
               style={[
                 styles.overviewFill,
                 {
                   width: `${(unlockedCount / totalCount) * 100}%`,
-                  backgroundColor: accentColor,
+                  backgroundColor: theme.accent,
                 },
               ]}
             />
@@ -308,52 +239,39 @@ export default function RewardsScreen() {
         {/* Next Milestone Card */}
         {nextMilestone && (
           <View style={{ marginBottom: 20 }}>
-            <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>
+            <Text style={styles.sectionTitle}>
               NEXT UNLOCK
             </Text>
-            <View
-              style={[
-                styles.nextCard,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: accentColor + '40',
-                },
-              ]}
-            >
+            <View style={styles.nextCard}>
               <View style={styles.nextHeader}>
                 <View
                   style={[
                     styles.nextIconBox,
-                    { backgroundColor: accentColor + '15' },
+                    { backgroundColor: `${theme.accent}15` },
                   ]}
                 >
-                  <Award size={18} color={accentColor} />
+                  <Award size={18} color={theme.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.nextTitle, { color: theme.primaryText }]}>
+                  <Text style={styles.nextTitle}>
                     {nextMilestone.reward.title}
                   </Text>
-                  <Text style={[styles.nextSub, { color: theme.secondaryText }]}>
+                  <Text style={styles.nextSub}>
                     {nextMilestone.reward.requirementLabel}
                   </Text>
                 </View>
-                <Text style={[styles.nextPercent, { color: accentColor }]}>
+                <Text style={styles.nextPercent}>
                   {nextMilestone.percent}%
                 </Text>
               </View>
 
-              <View
-                style={[
-                  styles.nextTrack,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
-                ]}
-              >
+              <View style={styles.nextTrack}>
                 <View
                   style={[
                     styles.nextFill,
                     {
                       width: `${Math.min(100, Math.max(4, nextMilestone.percent))}%`,
-                      backgroundColor: accentColor,
+                      backgroundColor: theme.accent,
                     },
                   ]}
                 />
@@ -363,7 +281,7 @@ export default function RewardsScreen() {
         )}
 
         {/* All Rewards List */}
-        <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>
+        <Text style={styles.sectionTitle}>
           ALL REWARDS
         </Text>
         <View style={styles.rewardList}>
@@ -376,8 +294,6 @@ export default function RewardsScreen() {
                 style={[
                   styles.rewardCard,
                   {
-                    backgroundColor: theme.card,
-                    borderColor: unlocked ? theme.cardBorder : theme.cardBorder,
                     opacity: unlocked ? 1 : 0.88,
                   },
                 ]}
@@ -398,13 +314,13 @@ export default function RewardsScreen() {
                     {unlocked ? (
                       <Check size={18} color="#34C759" strokeWidth={2.4} />
                     ) : (
-                      <Lock size={16} color={theme.tertiaryText} />
+                      <Lock size={16} color={theme.textMuted} />
                     )}
                   </View>
 
                   <View style={{ flex: 1 }}>
                     <View style={styles.rewardTitleRow}>
-                      <Text style={[styles.rewardTitle, { color: theme.primaryText }]}>
+                      <Text style={styles.rewardTitle}>
                         {reward.title}
                       </Text>
                       {unlocked ? (
@@ -412,37 +328,28 @@ export default function RewardsScreen() {
                           <Text style={styles.unlockedBadgeText}>UNLOCKED</Text>
                         </View>
                       ) : (
-                        <Text style={[styles.inProgressText, { color: accentColor }]}>
+                        <Text style={styles.inProgressText}>
                           {percent}%
                         </Text>
                       )}
                     </View>
 
-                    <Text style={[styles.rewardDesc, { color: theme.secondaryText }]}>
+                    <Text style={styles.rewardDesc}>
                       {reward.description}
                     </Text>
 
-                    <Text style={[styles.reqText, { color: theme.tertiaryText }]}>
+                    <Text style={styles.reqText}>
                       Requirement: {reward.requirementLabel}
                     </Text>
 
                     {!unlocked && (
-                      <View
-                        style={[
-                          styles.itemTrack,
-                          {
-                            backgroundColor: isDark
-                              ? 'rgba(255,255,255,0.06)'
-                              : 'rgba(0,0,0,0.05)',
-                          },
-                        ]}
-                      >
+                      <View style={styles.itemTrack}>
                         <View
                           style={[
                             styles.itemFill,
                             {
                               width: `${Math.min(100, Math.max(4, percent))}%`,
-                              backgroundColor: accentColor,
+                              backgroundColor: theme.accent,
                             },
                           ]}
                         />
@@ -454,269 +361,235 @@ export default function RewardsScreen() {
             </Animated.View>
           ))}
         </View>
-
-        {/* Payment History Preservation Row */}
-        <TouchableOpacity
-          onPress={() => router.push('/payment-history' as any)}
-          activeOpacity={0.7}
-          style={[
-            styles.paymentHistoryBtn,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            },
-          ]}
-        >
-          <ReceiptText size={16} color={theme.secondaryText} />
-          <Text style={[styles.paymentHistoryText, { color: theme.secondaryText }]}>
-            View Past Payment Records
-          </Text>
-          <ChevronRight size={16} color={theme.tertiaryText} />
-        </TouchableOpacity>
       </ScrollView>
-    </BackgroundGradient>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTextWrap: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 22,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -0.4,
-  },
-  subtitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 2,
-  },
-  supporterBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  supporterBannerText: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  celebrationBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  celebrationTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  celebrationSub: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 2,
-  },
-  celebrationClose: {
-    padding: 4,
-  },
-  statsStrip: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  statBox: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statNum: {
-    fontSize: 18,
-    fontFamily: 'Inter_800ExtraBold',
-  },
-  statLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  overviewCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  overviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  overviewTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  overviewCount: {
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-  },
-  overviewTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  overviewFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 1.2,
-    marginBottom: 10,
-  },
-  nextCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  nextHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  nextIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nextTitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  nextSub: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 2,
-  },
-  nextPercent: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-  },
-  nextTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  nextFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  rewardList: {
-    gap: 10,
-    marginBottom: 20,
-  },
-  rewardCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  rewardRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rewardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  rewardTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  rewardTitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  unlockedBadge: {
-    backgroundColor: '#34C75918',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  unlockedBadgeText: {
-    color: '#34C759',
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.6,
-  },
-  inProgressText: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  rewardDesc: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  reqText: {
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  itemTrack: {
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginTop: 10,
-  },
-  itemFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  paymentHistoryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 10,
-    marginTop: 4,
-  },
-  paymentHistoryText: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    flex: 1,
-  },
-});
+function createStyles(theme: any, isDark: boolean) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    mainTitle: {
+      fontSize: 36,
+      fontFamily: 'Inter_700Bold',
+      color: theme.text,
+      letterSpacing: -1,
+    },
+    subTitle: {
+      fontSize: 16,
+      fontFamily: 'PlayfairDisplay_600SemiBold_Italic',
+      color: theme.textSecondary,
+      marginTop: 4,
+    },
+    celebrationBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      marginBottom: 16,
+    },
+    celebrationTitle: {
+      fontSize: 13,
+      fontFamily: 'Inter_700Bold',
+    },
+    celebrationSub: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      marginTop: 2,
+    },
+    celebrationClose: {
+      padding: 4,
+    },
+    statsStrip: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 14,
+    },
+    statBox: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: theme.cardSolid,
+      alignItems: 'center',
+      gap: 4,
+    },
+    statNum: {
+      fontSize: 18,
+      fontFamily: 'Inter_800ExtraBold',
+      color: theme.text,
+    },
+    statLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textSecondary,
+    },
+    overviewCard: {
+      padding: 16,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: theme.cardSolid,
+      marginBottom: 20,
+    },
+    overviewHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    overviewTitle: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.text,
+    },
+    overviewCount: {
+      fontSize: 14,
+      fontFamily: 'Inter_700Bold',
+      color: theme.accent,
+    },
+    overviewTrack: {
+      height: 8,
+      borderRadius: 4,
+      overflow: 'hidden',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    },
+    overviewFill: {
+      height: '100%',
+      borderRadius: 4,
+    },
+    sectionTitle: {
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.2,
+      color: theme.textSecondary,
+      marginBottom: 10,
+    },
+    nextCard: {
+      padding: 16,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: theme.cardSolid,
+    },
+    nextHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 12,
+    },
+    nextIconBox: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    nextTitle: {
+      fontSize: 15,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.text,
+    },
+    nextSub: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textSecondary,
+      marginTop: 2,
+    },
+    nextPercent: {
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+      color: theme.accent,
+    },
+    nextTrack: {
+      height: 6,
+      borderRadius: 3,
+      overflow: 'hidden',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    },
+    nextFill: {
+      height: '100%',
+      borderRadius: 3,
+    },
+    rewardList: {
+      gap: 10,
+      marginBottom: 20,
+    },
+    rewardCard: {
+      padding: 16,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: theme.cardSolid,
+    },
+    rewardRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    rewardIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 2,
+    },
+    rewardTitleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 4,
+    },
+    rewardTitle: {
+      fontSize: 15,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.text,
+    },
+    unlockedBadge: {
+      backgroundColor: '#34C75918',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    unlockedBadgeText: {
+      color: '#34C759',
+      fontSize: 10,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 0.6,
+    },
+    inProgressText: {
+      fontSize: 12,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+    rewardDesc: {
+      fontSize: 13,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textSecondary,
+      lineHeight: 18,
+      marginBottom: 6,
+    },
+    reqText: {
+      fontSize: 11,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textMuted,
+    },
+    itemTrack: {
+      height: 4,
+      borderRadius: 2,
+      overflow: 'hidden',
+      marginTop: 10,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+    },
+    itemFill: {
+      height: '100%',
+      borderRadius: 2,
+    },
+  });
+}

@@ -14,23 +14,23 @@ export default function AppAchievementsScreen() {
   const router = useRouter();
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <Stack.Screen options={{ headerShown: false }} />
       
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
         <Pressable 
           onPress={() => router.back()} 
-          style={[styles.iconBoxStandard, { backgroundColor: theme.accentLight }]}
+          style={[styles.iconBoxStandard, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}
         >
-          <ChevronLeft size={20} color={theme.accent} />
+          <ChevronLeft size={20} color={theme.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Achievements</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Achievements</Text>
       </View>
 
       <View style={styles.content}>
         <AchievementsScreen />
       </View>
-    </BackgroundGradient>
+    </View>
   );
 }
 

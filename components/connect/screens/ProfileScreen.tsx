@@ -1,783 +1,677 @@
-import { AppText as Text } from "@/components/ui/AppText";
-import { useFriends } from "@/hooks/connect/useFriends";
-import { useIdentityTitle } from "@/hooks/connect/useIdentityTitle";
-import { usePrivacySettings } from "@/hooks/connect/usePrivacySettings";
-import { useProfile } from "@/hooks/connect/useProfile";
-import { useProfileStats } from "@/hooks/connect/useProfileStats";
-import { useTimeline } from "@/hooks/connect/useTimeline";
-import { useXP } from "@/hooks/connect/useXP";
-import { useTheme } from "@/lib/ThemeContext";
-import { useAuthStore } from "@/store/useAuthStore";
-import { useStore } from "@/store/useStore";
-import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View
-} from "react-native";
-
-// Custom Components
-import { AchievementsShowcase } from "@/components/connect/AchievementsShowcase";
-import { ActivityTimeline } from "@/components/connect/ActivityTimeline";
-import { ConnectionsSection } from "@/components/connect/ConnectionsSection";
-import { HabitStreak } from "@/components/connect/HabitStreak";
-import { NotesPortfolio } from "@/components/connect/NotesPortfolio";
-import { ProfileHeader } from "@/components/connect/ProfileHeader";
-import { SocialLinksSection } from "@/components/connect/SocialLinksSection";
-import { StatCard } from "@/components/connect/StatCard";
-import { XPBar } from "@/components/connect/XPBar";
-import { DesignTokens } from "@/constants/designTokens";
-import { getWeeklyHabitActivity } from "@/lib/GreetingUtils";
-import { ACHIEVEMENTS } from "@/lib/connect/achievementEngine";
-
-// Icons
-import * as Icons from "lucide-react-native";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-type TabType =
-  | "overview"
-  | "activity"
-  | "achievements"
-  | "notes"
-  | "stats"
-  | "connections";
+  View,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+  Image,
+} from 'react-native';
+import { AppText as Text } from '@/components/ui/AppText';
+import { useTheme } from '@/lib/ThemeContext';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useProfile } from '@/hooks/connect/useProfile';
+import { useXP } from '@/hooks/connect/useXP';
+import { useFriends } from '@/hooks/connect/useFriends';
+import { useProfileStats } from '@/hooks/connect/useProfileStats';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Edit3, Check, Trophy, Users, Flame, ArrowRight, Shield, Award } from 'lucide-react-native';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
+import { hapticSelection } from '@/lib/haptics';
 
 interface ProfileScreenProps {
   onSwitchToFriendsTab?: () => void;
-  setParentScrollEnabled?: (enabled: boolean) => void;
+  onSwitchToAchievementsTab?: () => void;
 }
 
 export default function ProfileScreen({
   onSwitchToFriendsTab,
-  setParentScrollEnabled,
-}: ProfileScreenProps = {}) {
-  const { theme, isDark, showAlert } = useTheme();
+  onSwitchToAchievementsTab,
+}: ProfileScreenProps) {
   const router = useRouter();
-  const { profile: authProfile } = useAuthStore();
+  const { theme, isDark } = useTheme();
+  const { session, profile: authProfile } = useAuthStore();
+  const isAuthenticated = Boolean(session?.user);
 
-  // Custom Hooks & Stores
-  const { notes, habits, loadNotes } = useStore();
   const {
     profile,
     levelTitle,
-    refresh: refreshProfile,
     followersCount,
     followingCount,
     unlockedAchievements,
     socialLinks,
-    addSocialLink,
-    deleteSocialLink,
+    refresh: refreshProfile,
   } = useProfile();
+
   const {
     xp,
     level,
-    nextLevelTitle,
-    nextLevelXp,
     progress,
     refresh: refreshXP,
   } = useXP();
-  const {
-    incomingRequests,
-    acceptFriendRequest,
-    declineFriendRequest,
-    refresh: refreshFriends,
-  } = useFriends();
-  const { stats: computedStats, refresh: refreshStats } = useProfileStats();
-  const {
-    events: timelineEvents,
-    loading: timelineLoading,
-    hasMore: timelineHasMore,
-    loadMore: loadMoreTimeline,
-    refresh: refreshTimeline,
-  } = useTimeline();
-  const {
-    privacyLevel,
-    updatePrivacyLevel,
-    refresh: refreshPrivacy,
-  } = usePrivacySettings();
-  const { title: identityTitle, refresh: refreshIdentity } = useIdentityTitle();
 
-  const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const { friends, refresh: refreshFriends } = useFriends();
+  const { stats, refresh: refreshStats } = useProfileStats();
+
   const [refreshing, setRefreshing] = useState(false);
 
-  // Sync data on tab focus
   useFocusEffect(
     useCallback(() => {
-      refreshProfile();
-      refreshXP();
-      refreshFriends();
-      refreshStats();
-      refreshTimeline();
-      refreshPrivacy();
-      refreshIdentity();
-      loadNotes();
-    }, []),
+      if (isAuthenticated) {
+        refreshProfile();
+        refreshXP();
+        refreshFriends();
+        refreshStats();
+      }
+    }, [isAuthenticated, refreshProfile, refreshXP, refreshFriends, refreshStats])
   );
 
-  const onRefresh = async () => {
+  const handleRefresh = async () => {
+    if (!isAuthenticated) return;
     setRefreshing(true);
     await Promise.all([
       refreshProfile(),
       refreshXP(),
       refreshFriends(),
       refreshStats(),
-      refreshTimeline(),
-      refreshPrivacy(),
-      refreshIdentity(),
-      loadNotes(),
     ]);
     setRefreshing(false);
   };
 
-  const handleNotePress = (noteId: string) => {
-    router.push(`/notes/${noteId}`);
-  };
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
-  const handleAcceptRequest = async (requestId: string) => {
-    const success = await acceptFriendRequest(requestId);
-    if (success) {
-      onRefresh();
-    }
-  };
-
-  const handleDeclineRequest = async (requestId: string) => {
-    const success = await declineFriendRequest(requestId);
-    if (success) {
-      onRefresh();
-    }
-  };
-
-  const cardBg = isDark
-    ? DesignTokens.colors.cardBgDark
-    : DesignTokens.colors.cardBgLight;
-  const cardBorder = isDark
-    ? DesignTokens.colors.cardBorderDark
-    : DesignTokens.colors.cardBorderLight;
-
-  // Unlocked achievement keys set
-  const unlockedKeys = new Set(unlockedAchievements.map((a) => a.key));
-
-  // Determine status classification dynamically
-  const getStatusLabel = () => {
-    if (computedStats.totalStudyHours > 0) {
-      return "Active Learner";
-    } else if (computedStats.currentStreak >= 3) {
-      return "Consistent Student";
-    } else {
-      return "Active Learner";
-    }
-  };
-
-  // Sub-Tab Rendering helpers
-  const renderOverview = () => {
-    // Determine last 7 days check-ins. If database has habit_checkins, we can map them.
-    // For visual excellence, we fallback to a mockup streak weekly activity array if empty.
-    const weeklyActivity = getWeeklyHabitActivity(habits);
-
+  // ─── Signed-Out Honest Invitation ──────────────────────────────────────────
+  if (!isAuthenticated) {
     return (
-      <View style={styles.tabContent}>
-        {/* Core Stats Grid */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statsRow}>
-            <StatCard
-              label="Total Notes"
-              value={computedStats.totalNotes}
-              icon="FileText"
-              color={theme.accent}
-            />
-            <StatCard
-              label="Tasks Done"
-              value={computedStats.totalTasksCompleted}
-              icon="CheckCircle"
-              color="#34C759"
-            />
-          </View>
-          <View style={styles.statsRow}>
-            <StatCard
-              label="Study Hours"
-              value={computedStats.totalStudyHours}
-              icon="Clock"
-              color="#8B5CF6"
-            />
-            <StatCard
-              label="Subjects"
-              value={computedStats.activeSubjectsCount}
-              icon="FolderOpen"
-              color="#FF9500"
-            />
-          </View>
-        </View>
-
-        {/* Habit & Streak Tracker */}
-        <HabitStreak
-          currentStreak={computedStats.currentStreak}
-          longestStreak={computedStats.longestStreak}
-          weeklyActivity={weeklyActivity}
-        />
-
-        <SocialLinksSection
-          links={socialLinks}
-          editable
-          onAdd={async (platform, url) => { await addSocialLink(platform, url); }}
-          onDelete={deleteSocialLink}
-          cardBg={cardBg}
-          cardBorder={cardBorder}
-        />
-
-        {/* Achievements Showcase */}
-        <AchievementsShowcase
-          unlockedKeys={unlockedKeys}
-          onViewAllPress={() => setActiveTab("achievements")}
-        />
-
-        {/* Pinned Notes Portfolio */}
-        <NotesPortfolio notes={notes} onNotePress={handleNotePress} />
-
-        {/* Study Network Panel */}
-        <ConnectionsSection
-          followersCount={followersCount}
-          followingCount={followingCount}
-          privacyLevel={privacyLevel}
-          onManagePress={
-            onSwitchToFriendsTab || (() => setActiveTab("connections"))
-          }
-        />
-      </View>
-    );
-  };
-
-  const renderTimeline = () => {
-    return (
-      <View style={styles.tabContent}>
-        <ActivityTimeline
-          events={timelineEvents}
-          loading={timelineLoading}
-          hasMore={timelineHasMore}
-          onLoadMore={loadMoreTimeline}
-        />
-      </View>
-    );
-  };
-
-  const renderAchievementsList = () => {
-    return (
-      <View
-        style={[
-          styles.fullCard,
-          { backgroundColor: cardBg, borderColor: cardBorder },
-        ]}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.signedOutContainer}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.cardTitle, { color: theme.primaryText }]}>
-          All Achievements
-        </Text>
-        <Text
-          style={[
-            styles.cardSub,
-            { color: theme.secondaryText, marginBottom: 16 },
-          ]}
-        >
-          Unlocked {unlockedAchievements.length} / {ACHIEVEMENTS.length}
+        <Text style={styles.signedOutTitle}>Your Groundwork profile.</Text>
+        <Text style={styles.signedOutSub}>
+          Sign in or create an account to track your milestones, build streaks, and connect with your circle.
         </Text>
 
-        <View style={styles.achievementsGrid}>
-          {ACHIEVEMENTS.map((ach) => {
-            const unlocked = unlockedKeys.has(ach.key);
-            const IconComponent = (Icons as any)[ach.icon] || Icons.Award;
-
-            return (
-              <TouchableOpacity
-                key={ach.key}
-                style={[
-                  styles.fullAchRow,
-                  { borderColor: cardBorder },
-                  unlocked ? { opacity: 1 } : { opacity: 0.5 },
-                ]}
-                onPress={() => {
-                  showAlert({
-                    title: ach.name,
-                    message: `${ach.description}\n\nStatus: ${unlocked ? "Unlocked" : "Locked"}\nReward: +${ach.xpReward} XP`,
-                    primaryButton: { text: "Awesome!", onPress: () => {} },
-                  });
-                }}
-              >
-                <View
-                  style={[
-                    styles.fullAchIcon,
-                    {
-                      backgroundColor: unlocked
-                        ? ach.color + "15"
-                        : "rgba(150,150,150,0.1)",
-                    },
-                  ]}
-                >
-                  <IconComponent
-                    size={20}
-                    color={unlocked ? ach.color : theme.secondaryText}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[styles.fullAchName, { color: theme.primaryText }]}
-                  >
-                    {ach.name}
-                  </Text>
-                  <Text
-                    style={[styles.fullAchDesc, { color: theme.secondaryText }]}
-                  >
-                    {ach.description}
-                  </Text>
-                </View>
-                {unlocked ? (
-                  <Icons.CheckCircle2 size={16} color="#34C759" />
-                ) : (
-                  <Icons.Lock size={14} color={theme.secondaryText} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
-
-  const renderNotesTab = () => {
-    return (
-      <View style={styles.tabContent}>
-        <NotesPortfolio notes={notes} onNotePress={handleNotePress} />
-      </View>
-    );
-  };
-
-  const renderStatsTab = () => {
-    return (
-      <View
-        style={[
-          styles.fullCard,
-          { backgroundColor: cardBg, borderColor: cardBorder },
-        ]}
-      >
-        <Text style={[styles.cardTitle, { color: theme.primaryText }]}>
-          Advanced Metrics
-        </Text>
-        <Text
-          style={[
-            styles.cardSub,
-            { color: theme.secondaryText, marginBottom: 20 },
-          ]}
-        >
-          Deep dive into your study habits.
-        </Text>
-
-        <View style={styles.analyticsList}>
-          <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
-              Focus Score
-            </Text>
-            <Text style={[styles.analyticValue, { color: theme.accent }]}>
-              {computedStats.focusScore} / 100
-            </Text>
-          </View>
-          <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
-              Daily Activity Score
-            </Text>
-            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>
-              {computedStats.averageDailyActivityScore}
-            </Text>
-          </View>
-          <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
-              Active Recall Notes
-            </Text>
-            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>
-              {computedStats.revisionSessionsCompleted}
-            </Text>
-          </View>
-          <View style={[styles.analyticRow, { borderColor: cardBorder }]}>
-            <Text style={[styles.analyticLabel, { color: theme.primaryText }]}>
-              Subjects Studied
-            </Text>
-            <Text style={[styles.analyticValue, { color: theme.primaryText }]}>
-              {computedStats.activeSubjectsCount}
-            </Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderConnectionsTab = () => {
-    return (
-      <View style={styles.tabContent}>
-        {incomingRequests.length > 0 && (
-          <View
-            style={[
-              styles.fullCard,
-              {
-                backgroundColor: cardBg,
-                borderColor: cardBorder,
-                marginBottom: 16,
-              },
-            ]}
+        <View style={styles.signedOutBtnCol}>
+          <TouchableOpacity
+            onPress={() => router.push('/login')}
+            style={styles.signInPrimaryBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
           >
-            <Text
-              style={[
-                styles.cardTitle,
-                { color: theme.primaryText, marginBottom: 12 },
-              ]}
-            >
-              Pending Connection Requests
-            </Text>
-            <View style={styles.requestsList}>
-              {incomingRequests.map((req) => (
-                <View
-                  key={req.user_id}
-                  style={[styles.requestRow, { borderColor: cardBorder }]}
-                >
-                  <View style={styles.requestLeft}>
-                    {req.avatar_url ? (
-                      <Image
-                        source={{ uri: req.avatar_url }}
-                        style={styles.reqAvatar}
-                      />
-                    ) : (
-                      <View
-                        style={[
-                          styles.reqAvatarPlaceholder,
-                          { backgroundColor: theme.accent },
-                        ]}
-                      >
-                        <Text style={styles.reqAvatarText}>
-                          {req.username
-                            ? req.username.charAt(0).toUpperCase()
-                            : "?"}
-                        </Text>
-                      </View>
-                    )}
-                    <View>
-                      <Text
-                        style={[
-                          styles.reqUsername,
-                          { color: theme.primaryText },
-                        ]}
-                      >
-                        @{req.username}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.reqLevel,
-                          { color: theme.secondaryText },
-                        ]}
-                      >
-                        Level {req.level}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.reqActions}>
-                    <TouchableOpacity
-                      style={styles.declineBtn}
-                      onPress={() => handleDeclineRequest(req.requestId!)}
-                    >
-                      <Icons.X size={14} color={theme.secondaryText} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.acceptBtn, { backgroundColor: "#34C759" }]}
-                      onPress={() => handleAcceptRequest(req.requestId!)}
-                    >
-                      <Icons.Check size={14} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
+            <Text style={styles.signInPrimaryBtnText}>Sign In</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push('/signup')}
+            style={styles.signUpSecondaryBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Create account"
+          >
+            <Text style={styles.signUpSecondaryBtnText}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.signedOutFeatures}>
+          <View style={styles.featureItem}>
+            <Trophy size={20} color={theme.accent} strokeWidth={2} />
+            <View style={styles.featureItemTextCol}>
+              <Text style={styles.featureItemTitle}>Real Milestones</Text>
+              <Text style={styles.featureItemDesc}>
+                Earn XP for consistent habits and completed work.
+              </Text>
             </View>
           </View>
-        )}
 
-        <ConnectionsSection
-          followersCount={followersCount}
-          followingCount={followingCount}
-          privacyLevel={privacyLevel}
-          onManagePress={onSwitchToFriendsTab}
-        />
-      </View>
+          <View style={styles.featureItem}>
+            <Users size={20} color={theme.accent} strokeWidth={2} />
+            <View style={styles.featureItemTextCol}>
+              <Text style={styles.featureItemTitle}>Connected Circle</Text>
+              <Text style={styles.featureItemDesc}>
+                Find friends and follow each other&rsquo;s journey.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.featureItem}>
+            <Flame size={20} color={theme.accent} strokeWidth={2} />
+            <View style={styles.featureItemTextCol}>
+              <Text style={styles.featureItemTitle}>Personal Momentum</Text>
+              <Text style={styles.featureItemDesc}>
+                Build daily streaks with clean, distractions-free focus.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     );
-  };
+  }
 
-  const renderActiveTabContent = () => {
-    switch (activeTab) {
-      case "activity":
-        return renderTimeline();
-      case "achievements":
-        return renderAchievementsList();
-      case "notes":
-        return renderNotesTab();
-      case "stats":
-        return renderStatsTab();
-      case "connections":
-        return renderConnectionsTab();
-      default:
-        return renderOverview();
-    }
-  };
+  // ─── Signed-In Real Profile ────────────────────────────────────────────────
+  const username = authProfile?.username || profile?.username || session?.user?.email?.split('@')[0] || 'User';
+  const fullName = authProfile?.full_name || (profile as any)?.full_name || username;
+  const bio = authProfile?.bio || profile?.bio || 'No bio added yet.';
+  const avatarUrl = resolveAvatarUrl(authProfile?.avatar_url || profile?.avatar_url);
+
+  const joinDate = profile?.joined_at || session?.user?.created_at
+    ? new Date(profile?.joined_at || session?.user?.created_at!).toLocaleDateString('en-US', {
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+
+  const filteredAchievements = React.useMemo(() => {
+    return unlockedAchievements.filter((ach) => {
+      const cat = (ach.category || '').toLowerCase();
+      if (cat === 'notes' || cat === 'study' || cat === 'pro') return false;
+      if (
+        ach.key.includes('note') ||
+        ach.key.includes('revision') ||
+        ach.key.includes('formula') ||
+        ach.key.includes('folder') ||
+        ach.key.includes('tag')
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [unlockedAchievements]);
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={theme.accent}
+          colors={[theme.accent]}
+        />
       }
     >
-      {/* Identity Layer */}
-      <ProfileHeader
-        profile={profile}
-        authProfile={authProfile}
-        levelTitle={levelTitle}
-        isOwnProfile={true}
-        onEditPress={() => router.push("/edit-profile")}
-        followersCount={followersCount}
-        followingCount={followingCount}
-        privacyLevel={privacyLevel}
-        onPrivacyChange={updatePrivacyLevel}
-        statusLabel={getStatusLabel()}
-        identityTitle={identityTitle}
-      />
+      {/* ── User Header ────────────────────────────────────────────────────── */}
+      <View style={styles.profileHeaderBlock}>
+        <View style={styles.avatarRow}>
+          <View style={styles.profileAvatar}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.profileAvatarImg} />
+            ) : (
+              <Text style={styles.profileAvatarInitial}>
+                {fullName.charAt(0).toUpperCase()}
+              </Text>
+            )}
+          </View>
 
-      {/* XP System */}
-      <XPBar
-        level={level}
-        xp={xp}
-        nextXp={nextLevelXp}
-        levelTitle={levelTitle}
-        nextLevelTitle={nextLevelTitle}
-        progress={progress}
-      />
+          <TouchableOpacity
+            onPress={() => router.push('/edit-profile')}
+            style={styles.editProfileBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+          >
+            <Edit3 size={15} color={theme.primaryText} strokeWidth={2} />
+            <Text style={styles.editProfileBtnText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* In-Page Navigation Bar */}
-      <View style={[styles.tabBar, { borderBottomColor: cardBorder }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBarScroll}
-          nestedScrollEnabled={true}
-          onTouchStart={() => setParentScrollEnabled?.(false)}
-          onTouchEnd={() => setParentScrollEnabled?.(true)}
-          onTouchCancel={() => setParentScrollEnabled?.(true)}
-        >
-          {(
-            [
-              "overview",
-              "activity",
-              "achievements",
-              "notes",
-              "stats",
-              "connections",
-            ] as TabType[]
-          ).map((t) => {
-            const isActive = activeTab === t;
-            return (
-              <TouchableOpacity
-                key={t}
-                style={[
-                  styles.tabItem,
-                  isActive && [
-                    styles.activeTabItem,
-                    { borderBottomColor: theme.accent },
-                  ],
-                ]}
-                onPress={() => setActiveTab(t)}
-              >
-                <Text
-                  style={[
-                    styles.tabItemText,
-                    { color: isActive ? theme.accent : theme.secondaryText },
-                  ]}
-                >
-                  {t.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <Text style={styles.profileFullName}>{fullName}</Text>
+        <Text style={styles.profileHandle}>@{username}</Text>
+
+        <Text style={styles.profileBio}>{bio}</Text>
+
+        {joinDate && (
+          <Text style={styles.joinDateText}>Member since {joinDate}</Text>
+        )}
       </View>
 
-      {/* Tab Contents */}
-      {renderActiveTabContent()}
+      {/* ── Real Stats Row ─────────────────────────────────────────────────── */}
+      <View style={styles.statsCardGrid}>
+        <View style={styles.statCell}>
+          <Text style={styles.statValue}>{level || 1}</Text>
+          <Text style={styles.statLabel}>LEVEL</Text>
+          <Text style={styles.statSub}>{levelTitle || 'Learner'}</Text>
+        </View>
+
+        <View style={styles.statCell}>
+          <Text style={styles.statValue}>{(xp || 0).toLocaleString()}</Text>
+          <Text style={styles.statLabel}>TOTAL XP</Text>
+          <Text style={styles.statSub}>Level progress {progress}%</Text>
+        </View>
+
+        <View style={styles.statCell}>
+          <Text style={styles.statValue}>{stats?.longestStreak || 0}d</Text>
+          <Text style={styles.statLabel}>STREAK</Text>
+          <Text style={styles.statSub}>Best consistency</Text>
+        </View>
+
+        <View style={styles.statCell}>
+          <Text style={styles.statValue}>{friends.length}</Text>
+          <Text style={styles.statLabel}>CIRCLE</Text>
+          <Text style={styles.statSub}>Connections</Text>
+        </View>
+      </View>
+
+      {/* ── Milestones Showcase ────────────────────────────────────────────── */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleGroup}>
+          <Text style={styles.sectionIndex}>01</Text>
+          <Text style={styles.sectionTitle}>ACHIEVEMENTS EARNED</Text>
+        </View>
+
+        {onSwitchToAchievementsTab && (
+          <TouchableOpacity
+            onPress={onSwitchToAchievementsTab}
+            style={styles.sectionActionLink}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.sectionActionText}>View all →</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {filteredAchievements.length === 0 ? (
+        <View style={styles.emptySectionBox}>
+          <Text style={styles.emptySectionTitle}>No milestones earned yet.</Text>
+          <Text style={styles.emptySectionSub}>
+            Complete tasks, build daily habits, and add friends to earn your first milestone.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.achievementsList}>
+          {filteredAchievements.slice(0, 5).map((ach) => (
+            <View key={ach.key} style={styles.achievementRow}>
+              <View style={styles.achIconCircle}>
+                <Award size={18} color={theme.accent} strokeWidth={2.2} />
+              </View>
+              <View style={styles.achTextCol}>
+                <Text style={styles.achName}>{ach.name}</Text>
+                <Text style={styles.achDesc}>{ach.description}</Text>
+              </View>
+              <View style={styles.achXpBadge}>
+                <Text style={styles.achXpText}>+{ach.xpReward} XP</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* ── Circle & Social Network ────────────────────────────────────────── */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleGroup}>
+          <Text style={styles.sectionIndex}>02</Text>
+          <Text style={styles.sectionTitle}>YOUR CIRCLE</Text>
+        </View>
+
+        {onSwitchToFriendsTab && (
+          <TouchableOpacity
+            onPress={onSwitchToFriendsTab}
+            style={styles.sectionActionLink}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.sectionActionText}>Manage →</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.networkCard}>
+        <View style={styles.networkStatsRow}>
+          <View style={styles.networkStatCol}>
+            <Text style={styles.networkStatNum}>{friends.length}</Text>
+            <Text style={styles.networkStatLabel}>Connections</Text>
+          </View>
+          <View style={styles.networkDivider} />
+          <View style={styles.networkStatCol}>
+            <Text style={styles.networkStatNum}>{followersCount || friends.length}</Text>
+            <Text style={styles.networkStatLabel}>Followers</Text>
+          </View>
+          <View style={styles.networkDivider} />
+          <View style={styles.networkStatCol}>
+            <Text style={styles.networkStatNum}>{followingCount || friends.length}</Text>
+            <Text style={styles.networkStatLabel}>Following</Text>
+          </View>
+        </View>
+      </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 110,
-  },
-  tabBar: {
-    borderBottomWidth: 1.5,
-    marginBottom: 16,
-    width: "100%",
-  },
-  tabBarScroll: {
-    paddingRight: 10,
-  },
-  tabItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  activeTabItem: {
-    borderBottomWidth: 2.5,
-  },
-  tabItemText: {
-    fontSize: 10,
-    fontFamily: DesignTokens.fonts.bold,
-    letterSpacing: 0.5,
-  },
-  tabContent: {
-    flexDirection: "column",
-  },
-  statsGrid: {
-    flexDirection: "column",
-    gap: 10,
-    marginBottom: 16,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  fullCard: {
-    borderRadius: DesignTokens.borderRadius.lg,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
-    ...DesignTokens.shadows.soft,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontFamily: DesignTokens.fonts.bold,
-    marginBottom: 4,
-  },
-  cardSub: {
-    fontSize: 11,
-    fontFamily: DesignTokens.fonts.regular,
-  },
-  achievementsGrid: {
-    flexDirection: "column",
-    gap: 8,
-  },
-  fullAchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: DesignTokens.borderRadius.md,
-    padding: 10,
-    gap: 12,
-  },
-  fullAchIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fullAchName: {
-    fontSize: 12,
-    fontFamily: DesignTokens.fonts.bold,
-    marginBottom: 2,
-  },
-  fullAchDesc: {
-    fontSize: 10,
-    fontFamily: DesignTokens.fonts.medium,
-  },
-  analyticsList: {
-    flexDirection: "column",
-    gap: 8,
-  },
-  analyticRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  analyticLabel: {
-    fontSize: 12,
-    fontFamily: DesignTokens.fonts.semiBold,
-  },
-  analyticValue: {
-    fontSize: 13,
-    fontFamily: DesignTokens.fonts.bold,
-  },
-  requestsList: {
-    gap: 8,
-  },
-  requestRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderRadius: DesignTokens.borderRadius.md,
-    padding: 10,
-  },
-  requestLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  reqAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  reqAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reqAvatarText: {
-    color: "white",
-    fontSize: 14,
-    fontFamily: DesignTokens.fonts.bold,
-  },
-  reqUsername: {
-    fontSize: 12,
-    fontFamily: DesignTokens.fonts.bold,
-  },
-  reqLevel: {
-    fontSize: 10,
-    fontFamily: DesignTokens.fonts.medium,
-  },
-  reqActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  declineBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(150,150,150,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  acceptBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+function createStyles(theme: any, isDark: boolean) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    contentContainer: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 150, // Space above bottom navigation bar
+    },
+
+    // Signed Out State
+    signedOutContainer: {
+      paddingHorizontal: 20,
+      paddingTop: 24,
+      paddingBottom: 150,
+    },
+    signedOutTitle: {
+      fontSize: 38,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      letterSpacing: -0.8,
+      lineHeight: 44,
+      marginBottom: 10,
+    },
+    signedOutSub: {
+      fontSize: 16,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      lineHeight: 24,
+      marginBottom: 32,
+    },
+    signedOutBtnCol: {
+      gap: 12,
+      marginBottom: 40,
+    },
+    signInPrimaryBtn: {
+      height: 50,
+      borderRadius: 999,
+      backgroundColor: theme.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    signInPrimaryBtnText: {
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
+      color: '#FFFFFF',
+    },
+    signUpSecondaryBtn: {
+      height: 50,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? 'transparent' : '#FFFFFF',
+    },
+    signUpSecondaryBtnText: {
+      fontSize: 16,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
+    },
+    signedOutFeatures: {
+      borderTopWidth: 1,
+      borderTopColor: theme.separator,
+      paddingTop: 28,
+      gap: 22,
+    },
+    featureItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 16,
+    },
+    featureItemTextCol: {
+      flex: 1,
+    },
+    featureItemTitle: {
+      fontSize: 16,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
+      marginBottom: 3,
+    },
+    featureItemDesc: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      lineHeight: 20,
+    },
+
+    // Signed In Profile Header
+    profileHeaderBlock: {
+      marginBottom: 24,
+      paddingBottom: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.separator,
+    },
+    avatarRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    profileAvatar: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: theme.cardSolid,
+      borderWidth: 1.5,
+      borderColor: theme.separator,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    profileAvatarImg: {
+      width: '100%',
+      height: '100%',
+    },
+    profileAvatarInitial: {
+      fontSize: 28,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+    },
+    editProfileBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: isDark ? 'transparent' : '#FFFFFF',
+    },
+    editProfileBtnText: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
+    },
+    profileFullName: {
+      fontSize: 28,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      letterSpacing: -0.5,
+      marginBottom: 3,
+    },
+    profileHandle: {
+      fontSize: 15,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginBottom: 14,
+    },
+    profileBio: {
+      fontSize: 15,
+      fontFamily: 'Inter_400Regular',
+      color: theme.primaryText,
+      lineHeight: 22,
+      marginBottom: 12,
+    },
+    joinDateText: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+
+    // Stats Grid
+    statsCardGrid: {
+      flexDirection: 'row',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#FFFFFF',
+      paddingVertical: 14,
+      marginBottom: 32,
+    },
+    statCell: {
+      flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: 4,
+    },
+    statValue: {
+      fontSize: 20,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    statLabel: {
+      fontSize: 10,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.2,
+      color: theme.secondaryText,
+      marginBottom: 2,
+    },
+    statSub: {
+      fontSize: 11,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      textAlign: 'center',
+    },
+
+    // Sections
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    sectionTitleGroup: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 8,
+    },
+    sectionIndex: {
+      fontSize: 18,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.accent,
+    },
+    sectionTitle: {
+      fontSize: 12,
+      fontFamily: 'PlayfairDisplay_600SemiBold',
+      letterSpacing: 1.5,
+      color: theme.secondaryText,
+    },
+    sectionActionLink: {
+      paddingVertical: 2,
+    },
+    sectionActionText: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+
+    // Empty section
+    emptySectionBox: {
+      paddingVertical: 18,
+      paddingHorizontal: 4,
+      marginBottom: 28,
+    },
+    emptySectionTitle: {
+      fontSize: 18,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      marginBottom: 6,
+    },
+    emptySectionSub: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      lineHeight: 20,
+    },
+
+    // Achievements list
+    achievementsList: {
+      width: '100%',
+      marginBottom: 32,
+    },
+    achievementRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+    },
+    achIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.accentLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    achTextCol: {
+      flex: 1,
+      paddingRight: 10,
+    },
+    achName: {
+      fontSize: 15,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    achDesc: {
+      fontSize: 13,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+    },
+    achXpBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: theme.accentLight,
+    },
+    achXpText: {
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
+      color: theme.accent,
+    },
+
+    // Network Card
+    networkCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#FFFFFF',
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+    },
+    networkStatsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+    },
+    networkStatCol: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    networkStatNum: {
+      fontSize: 22,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    networkStatLabel: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+    networkDivider: {
+      width: 1,
+      height: 28,
+      backgroundColor: theme.separator,
+    },
+  });
+}

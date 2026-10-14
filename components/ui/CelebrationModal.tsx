@@ -64,8 +64,8 @@ export function CelebrationModal({
             styles.card,
             {
               width: CARD_WIDTH,
-              backgroundColor: isDark ? 'rgba(24,24,28,0.98)' : theme.cardSolid,
-              borderColor: accent + '35',
+              backgroundColor: theme.cardSolid,
+              borderColor: theme.separator,
             },
             contentStyle,
           ]}
@@ -78,7 +78,7 @@ export function CelebrationModal({
             accessibilityLabel="Close"
           >
             <View style={[styles.closeCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
-              <X size={18} color={theme.secondaryText} />
+              <X size={18} color={theme.textSecondary} />
             </View>
           </Pressable>
 
@@ -88,10 +88,10 @@ export function CelebrationModal({
             </View>
 
             <Text style={[styles.eyebrow, { color: accent }]}>{eyebrow}</Text>
-            <Text style={[styles.title, { color: theme.primaryText }]}>{title}</Text>
+            <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
 
             {description ? (
-              <Text style={[styles.description, { color: theme.secondaryText }]}>{description}</Text>
+              <Text style={[styles.description, { color: theme.textSecondary }]}>{description}</Text>
             ) : null}
 
             {badge ? (

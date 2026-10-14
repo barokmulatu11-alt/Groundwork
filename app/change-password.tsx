@@ -125,24 +125,24 @@ export default function ChangePasswordScreen() {
     }
   };
 
-  const inputBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
-  const inputBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+  const inputBg = theme.cardSolid;
+  const inputBorder = theme.separator;
 
   const RequirementItem = ({ met, text }: { met: boolean; text: string }) => (
     <View style={styles.reqItem}>
       {met ? (
         <CheckCircle2 size={16} color="#34C759" />
       ) : (
-        <View style={[styles.reqDot, { backgroundColor: theme.cardBorder }]} />
+        <View style={[styles.reqDot, { backgroundColor: theme.separator }]} />
       )}
-      <Text style={[styles.reqText, { color: met ? theme.primaryText : theme.tertiaryText }]}>
+      <Text style={[styles.reqText, { color: met ? theme.text : theme.textMuted }]}>
         {text}
       </Text>
     </View>
   );
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -152,7 +152,7 @@ export default function ChangePasswordScreen() {
             <ChevronLeft size={24} color={theme.accent} />
             <Text style={[styles.backText, { color: theme.accent }]}>Settings</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Change Password</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Change Password</Text>
           <View style={{ width: 80 }} /> {/* Spacer */}
         </View>
 
@@ -163,10 +163,10 @@ export default function ChangePasswordScreen() {
         >
           
           <View style={styles.iconContainer}>
-            <View style={[styles.shieldBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-              <Lock size={32} color={theme.primaryText} />
+            <View style={[styles.shieldBadge, { backgroundColor: theme.cardSolid, borderWidth: 1, borderColor: theme.separator }]}>
+              <Lock size={32} color={theme.accent} />
             </View>
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
               Create a strong password to keep your account secure.
             </Text>
           </View>
@@ -297,7 +297,7 @@ export default function ChangePasswordScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

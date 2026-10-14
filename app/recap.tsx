@@ -3,7 +3,7 @@ import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { AppText as Text } from '@/components/ui/AppText';
 import { Confetti } from '@/components/ui/Confetti';
 import { CustomAlert } from '@/components/ui/CustomAlert';
-import { TabHeader } from '@/components/ui/TabHeader';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { WeeklyBarChart } from '@/components/WeeklyBarChart';
 import { useTheme } from '@/lib/ThemeContext';
 import { useStore } from '@/store/useStore';
@@ -184,8 +184,10 @@ const StatBox = ({ title, value, label, onPress, theme, isDark }: { title: strin
     >
       <Animated.View style={[
         {
-          backgroundColor: theme.card,
+          backgroundColor: theme.cardSolid,
           borderRadius: 20,
+          borderWidth: 1,
+          borderColor: theme.separator,
           padding: 14,
           alignItems: 'center',
           minHeight: 80,
@@ -193,8 +195,8 @@ const StatBox = ({ title, value, label, onPress, theme, isDark }: { title: strin
         },
         animatedStyle
       ]}>
-        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: isDark ? theme.primaryText : theme.secondaryText, marginBottom: 2 }}>{value}</Text>
-        <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: theme.secondaryText, letterSpacing: 0.5, textAlign: 'center' }}>{label}</Text>
+        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: theme.text, marginBottom: 2 }}>{value}</Text>
+        <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: theme.textSecondary, letterSpacing: 0.5, textAlign: 'center' }}>{label}</Text>
       </Animated.View>
     </Pressable>
   );
@@ -279,7 +281,7 @@ export default function RecapScreen() {
   };
 
   const radius = 70;
-  const strokeWidth = 14;
+  const strokeWidth = 12;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (completionPercentage / 100) * circumference;
 
@@ -294,16 +296,24 @@ export default function RecapScreen() {
   };
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       {showConfetti && <Confetti onComplete={() => setShowConfetti(false)} />}
-
 
       <ScrollView
         style={{ flex: 1, paddingHorizontal: 24 }}
         contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <TabHeader title="Daily Recap" subtitle="How did today go? • v1.3.0" />
+        <BrandHeader title="groundwork." onBack={() => router.back()} />
+
+        <View style={{ marginBottom: 28, marginTop: 8 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Daily recap.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            How did today go?
+          </Text>
+        </View>
 
         <RecapMessageCard
           completionPercentage={completionPercentage}
@@ -313,7 +323,7 @@ export default function RecapScreen() {
           theme={theme}
         />
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, gap: 8 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, gap: 10 }}>
           <StatBox
             title="Tasks"
             value={`${completedTasks}/${totalTasks}`}
@@ -332,7 +342,7 @@ export default function RecapScreen() {
           />
           <StatBox
             title="Streak"
-            value={` ${totalStreak}`}
+            value={`${totalStreak}`}
             label="STREAK"
             onPress={openStreakPopup}
             theme={theme}
@@ -354,7 +364,7 @@ export default function RecapScreen() {
                   cx="90"
                   cy="90"
                   r={radius}
-                  stroke={theme.card}
+                  stroke={theme.separator}
                   strokeWidth={strokeWidth}
                   fill="none"
                 />
@@ -362,7 +372,7 @@ export default function RecapScreen() {
                   cx="90"
                   cy="90"
                   r={radius}
-                  stroke={theme.primaryText}
+                  stroke={theme.accent}
                   strokeWidth={strokeWidth}
                   fill="none"
                   strokeDasharray={circumference}
@@ -373,44 +383,51 @@ export default function RecapScreen() {
                 />
               </Svg>
               <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 32, fontFamily: 'Inter_700Bold', color: theme.primaryText, marginBottom: 2 }}>
+                <Text style={{ fontSize: 32, fontFamily: 'Inter_700Bold', color: theme.text, marginBottom: 2 }}>
                   {completionPercentage}%
                 </Text>
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: theme.primaryText, letterSpacing: 0.8 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: theme.textSecondary, letterSpacing: 0.8 }}>
                   COMPLETE
                 </Text>
               </View>
             </View>
 
-            <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText }}>
+            <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: theme.textSecondary }}>
               {completedTasks} of {totalTasks} tasks completed
             </Text>
           </Animated.View>
         </Pressable>
 
         {tasks.filter(t => t.completed && t.date === today).length > 0 && (
-          <AnimatedCard style={{ padding: 0, paddingVertical: 8 }}>
+          <View style={{
+            backgroundColor: theme.cardSolid,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: theme.separator,
+            paddingVertical: 8,
+            marginBottom: 20,
+          }}>
             <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: theme.secondaryText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: theme.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase' }}>
                 TODAY'S WINS
               </Text>
             </View>
             {tasks.filter(t => t.completed && t.date === today).map((task, index, arr) => (
               <View key={task.id}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20 }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
-                    <CheckCircle2 size={16} color="#fff" strokeWidth={3} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20 }}>
+                  <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                    <CheckCircle2 size={14} color="#fff" strokeWidth={3} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: theme.secondaryText, textDecorationLine: 'line-through', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: theme.textSecondary, textDecorationLine: 'line-through' }}>
                       {task.title}
                     </Text>
                   </View>
                 </View>
-                {index < arr.length - 1 && <View style={{ height: 1, backgroundColor: theme.card, marginHorizontal: 20 }} />}
+                {index < arr.length - 1 && <View style={{ height: 1, backgroundColor: theme.separator, marginHorizontal: 20 }} />}
               </View>
             ))}
-          </AnimatedCard>
+          </View>
         )}
       </ScrollView>
 
@@ -421,7 +438,7 @@ export default function RecapScreen() {
         message={popup.message}
         type={popup.type}
       />
-    </BackgroundGradient>
+    </View>
   );
 }
 

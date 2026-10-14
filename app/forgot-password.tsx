@@ -62,14 +62,14 @@ export default function ForgotPasswordScreen() {
 
   if (success) {
     return (
-      <BackgroundGradient>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <Animated.View entering={FadeInUp.duration(300)} style={[isDesktop ? styles.desktopCard : { width: '100%' }, { backgroundColor: theme.card, borderColor: theme.cardBorder, borderWidth: isDesktop ? 1 : 0, padding: isDesktop ? 40 : 0, alignItems: 'center', zIndex: 1 }]}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#34C759', justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}>
-              <Text style={{ fontSize: 48,  fontFamily: 'Inter_700Bold', color: 'white' }}>✓</Text>
+          <Animated.View entering={FadeInUp.duration(300)} style={[isDesktop ? styles.desktopCard : { width: '100%' }, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: isDesktop ? 1 : 0, padding: isDesktop ? 40 : 0, alignItems: 'center', zIndex: 1 }]}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: theme.accent, justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}>
+              <Text style={{ fontSize: 40, fontFamily: 'Inter_700Bold', color: 'white' }}>✓</Text>
             </View>
-            <Text style={[styles.title, { color: theme.primaryText, marginBottom: 12 }]}>Check your email</Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText, textAlign: 'center', marginBottom: 32 }]}>
+            <Text style={[styles.title, { color: theme.text, marginBottom: 12 }]}>Check your email</Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary, textAlign: 'center', marginBottom: 32 }]}>
               We've sent password reset instructions to {email}
             </Text>
             <Pressable onPress={() => router.replace('/login' as any)} style={[styles.primaryButton, { backgroundColor: theme.accent, width: '100%' }]}>
@@ -77,37 +77,37 @@ export default function ForgotPasswordScreen() {
             </Pressable>
           </Animated.View>
         </KeyboardAvoidingView>
-      </BackgroundGradient>
+      </View>
     );
   }
 
   if (isDesktop) {
     return (
-      <BackgroundGradient>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <View style={styles.desktopContainer}>
-          <View style={[styles.desktopCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <View style={[styles.desktopCard, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
             <Pressable 
               onPress={() => router.back()} 
-              style={[styles.iconBox, { backgroundColor: theme.accentLight, marginBottom: 24 }]}
+              style={[styles.iconBox, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1, marginBottom: 24 }]}
             >
-              <ChevronLeft size={20} color={theme.accent} />
+              <ChevronLeft size={20} color={theme.text} />
             </Pressable>
 
             <View style={{ marginBottom: 28 }}>
-              <Text style={[styles.title, { color: theme.primaryText }]}>Forgot Password</Text>
-              <Text style={[styles.subtitle, { color: theme.secondaryText }]}>No worries, we'll send you reset instructions.</Text>
+              <Text style={[styles.title, { color: theme.text }]}>Forgot Password</Text>
+              <Text style={[styles.subtitle, { color: theme.textSecondary }]}>No worries, we'll send you reset instructions.</Text>
             </View>
 
             {/* Email Input */}
             <View style={{ marginBottom: 24 }}>
-              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: error ? theme.danger : theme.cardBorder }]}>
-                <Mail size={18} color={theme.secondaryText} style={{ marginRight: 12 }} />
+              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: error ? theme.danger : theme.separator }]}>
+                <Mail size={18} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText }]}
+                  style={[styles.input, { color: theme.text }]}
                   onChangeText={setEmail}
                   value={email}
                   placeholder="Email"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
@@ -126,7 +126,7 @@ export default function ForgotPasswordScreen() {
 
             {/* Sign In Link */}
             <View style={{ alignItems: 'center', marginTop: 24 }}>
-              <Text style={{ color: theme.secondaryText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
                 Remember your password?{' '}
                 <Text onPress={() => router.replace('/login' as any)} style={{ color: theme.accent, fontFamily: 'Inter_700Bold' }}>
                   Sign In
@@ -135,42 +135,42 @@ export default function ForgotPasswordScreen() {
             </View>
           </View>
         </View>
-      </BackgroundGradient>
+      </View>
     );
   }
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
           
           <Animated.View entering={FadeInUp.duration(300)} style={{ zIndex: 1, marginTop: 40, marginBottom: 24 }}>
             <Pressable 
               onPress={() => router.back()} 
-              style={[styles.iconBox, { backgroundColor: theme.accentLight }]}
+              style={[styles.iconBox, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}
             >
-              <ChevronLeft size={20} color={theme.accent} />
+              <ChevronLeft size={20} color={theme.text} />
             </Pressable>
           </Animated.View>
 
           {/* Header */}
           <Animated.View entering={FadeInUp.delay(100).duration(300)} style={{ marginBottom: 32, zIndex: 1 }}>
-            <Text style={[styles.title, { color: theme.primaryText }]}>Forgot Password</Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>No worries, we'll send you reset instructions</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Forgot Password</Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>No worries, we'll send you reset instructions</Text>
           </Animated.View>
 
           {/* Form */}
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ zIndex: 1 }}>
             {/* Email Input */}
             <View style={{ marginBottom: 24 }}>
-              <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: error ? theme.danger : theme.cardBorder }]}>
-                <Mail size={20} color={theme.secondaryText} style={{ marginRight: 12 }} />
+              <View style={[styles.inputContainer, { backgroundColor: theme.cardSolid, borderColor: error ? theme.danger : theme.separator }]}>
+                <Mail size={20} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText }]}
+                  style={[styles.input, { color: theme.text }]}
                   onChangeText={setEmail}
                   value={email}
                   placeholder="Email"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
@@ -189,7 +189,7 @@ export default function ForgotPasswordScreen() {
 
             {/* Sign In Link */}
             <View style={{ alignItems: 'center', marginTop: 24 }}>
-              <Text style={{ color: theme.secondaryText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
                 Remember your password?{' '}
                 <Text onPress={() => router.replace('/login' as any)} style={{ color: theme.accent, fontFamily: 'Inter_700Bold' }}>
                   Sign In
@@ -199,7 +199,7 @@ export default function ForgotPasswordScreen() {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

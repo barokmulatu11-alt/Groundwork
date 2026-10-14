@@ -80,25 +80,25 @@ export const useAchievements = () => {
         // --- Productivity Category ---
         else if (a.key === 'prod_activated') prog = (stats.totalTasksCompleted / 1) * 100;
         else if (a.key === 'top_priorities') prog = (stats.totalTasksCompleted / 3) * 100;
-        else if (a.key === 'perfect_workspace') prog = (stats.uniqueFoldersCount / 4) * 100;
-        else if (a.key === 'color_coder') prog = (stats.uniqueTagsCount / 3) * 100;
-        else if (a.key === 'smart_organizer') prog = ((stats.uniqueFoldersCount >= 2 ? 50 : (stats.uniqueFoldersCount / 2) * 50) + (stats.uniqueTagsCount >= 2 ? 50 : (stats.uniqueTagsCount / 2) * 50));
+        else if (a.key === 'perfect_workspace') prog = (stats.totalTasksCompleted / 15) * 100;
+        else if (a.key === 'color_coder') prog = ((stats.habitCheckinsCount || 0) / 3) * 100;
+        else if (a.key === 'smart_organizer') prog = ((stats.totalTasksCompleted >= 5 ? 50 : (stats.totalTasksCompleted / 5) * 50) + (stats.totalFocusSessions >= 2 ? 50 : (stats.totalFocusSessions / 2) * 50));
         else if (a.key === 'task_crusher') prog = (stats.totalTasksCompleted / 5) * 100;
         else if (a.key === 'deadline_manager') prog = (stats.totalTasksCompleted / 10) * 100;
         else if (a.key === 'assignment_done') prog = (stats.totalTasksCompleted / 20) * 100;
         else if (a.key === 'clean_dashboard') prog = stats.hadPerfectDay ? 100 : 0;
         else if (a.key === 'focus_setup') prog = (stats.totalFocusSessions / 3) * 100;
 
-        // --- Academic Mastery (mapped under 'leaderboard' category in engine) ---
-        else if (a.key === 'formula_collector') prog = (stats.totalFormulasCount / 1) * 100;
-        else if (a.key === 'formula_master') prog = (stats.totalFormulasCount / 5) * 100;
-        else if (a.key === 'subject_specialist') prog = (stats.uniqueFoldersCount / 3) * 100;
-        else if (a.key === 'multi_subject') prog = (stats.uniqueFoldersCount / 5) * 100;
-        else if (a.key === 'chapter_finisher') prog = (stats.totalNotesCreated / 15) * 100;
-        else if (a.key === 'semester_survivor') prog = (stats.totalStudyHours / 24) * 100;
+        // --- Discipline & Focus Milestones (mapped under 'leaderboard' category in engine) ---
+        else if (a.key === 'formula_collector') prog = (stats.totalFocusMinutes / 25) * 100;
+        else if (a.key === 'formula_master') prog = (stats.totalFocusSessions / 5) * 100;
+        else if (a.key === 'subject_specialist') prog = ((stats.habitCheckinsCount || 0) / 5) * 100;
+        else if (a.key === 'multi_subject') prog = ((stats.habitCheckinsCount || 0) / 15) * 100;
+        else if (a.key === 'chapter_finisher') prog = (stats.totalTasksCompleted / 25) * 100;
+        else if (a.key === 'semester_survivor') prog = (stats.totalFocusMinutes / 1440) * 100;
         else if (a.key === 'finals_warrior') prog = (stats.totalFocusMinutes / 300) * 100;
-        else if (a.key === 'top_performer') prog = (stats.averageRevisionScore / 75) * 100;
-        else if (a.key === 'excellence_achieved') prog = (stats.highRevisionScoreCount / 3) * 100;
+        else if (a.key === 'top_performer') prog = (stats.longestStreak / 3) * 100;
+        else if (a.key === 'excellence_achieved') prog = (stats.totalTasksCompleted / 30) * 100;
 
         // --- Social / Connect Category ---
         else if (a.key === 'first_connection') prog = (stats.followingCount / 1) * 100;

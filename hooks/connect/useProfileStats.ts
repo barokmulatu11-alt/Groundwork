@@ -13,6 +13,7 @@ export interface ProfileStats {
   activeSubjectsCount: number;
   averageDailyActivityScore: number;
   focusScore: number;
+  totalFocusSessions?: number;
 }
 
 const EMPTY_STATS: ProfileStats = {
@@ -25,6 +26,7 @@ const EMPTY_STATS: ProfileStats = {
   activeSubjectsCount: 0,
   averageDailyActivityScore: 0,
   focusScore: 0,
+  totalFocusSessions: 0,
 };
 
 // Derive stats from XP log entries (cross-device reliable source)

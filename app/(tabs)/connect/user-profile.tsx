@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
 import { AppText as Text } from '@/components/ui/AppText';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BADGE_WIDTH = (SCREEN_WIDTH - 32 - 32) / 5;
 import { useTheme } from '@/lib/ThemeContext';
 import { useProfile } from '@/hooks/connect/useProfile';
 import { useFriends } from '@/hooks/connect/useFriends';
-import { ProfileHeader } from '@/components/connect/ProfileHeader';
-import { StatChip } from '@/components/connect/StatChip';
-import { SocialLinksSection } from '@/components/connect/SocialLinksSection';
-import { AchievementCard } from '@/components/connect/AchievementCard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Icons from 'lucide-react-native';
+import { ArrowLeft, UserPlus, Check, X, Shield, Award, UserMinus } from 'lucide-react-native';
 import { useAuthStore } from '@/store/useAuthStore';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
 import { db } from '@/lib/db';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
 
 export default function UserProfileScreen() {
   const { theme, isDark, showAlert } = useTheme();
@@ -25,7 +26,18 @@ export default function UserProfileScreen() {
   const { session } = useAuthStore();
   const currentUserId = session?.user?.id;
 
-  const { profile, levelTitle, socialLinks, stats, connectionState, followersCount, unlockedAchievements, loading, refresh } = useProfile(userId);
+  const {
+    profile,
+    levelTitle,
+    stats,
+    connectionState,
+    followersCount,
+    followingCount,
+    unlockedAchievements,
+    loading,
+    refresh,
+  } = useProfile(userId);
+
   const {
     sendFriendRequest,
     acceptFriendRequest,
@@ -35,13 +47,8 @@ export default function UserProfileScreen() {
     blockUser,
     unblockUser,
   } = useFriends();
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refresh();
-    setIsRefreshing(false);
-  };
+  const [actionLoading, setActionLoading] = useState(false);
 
   const getActiveRequestId = () => {
     if (!userId || !currentUserId) return undefined;
@@ -53,293 +60,535 @@ export default function UserProfileScreen() {
   };
 
   const handleSendRequest = async () => {
-    if (userId) {
-      const res = await sendFriendRequest(userId);
-      if (res) refresh();
+    if (!userId) return;
+    setActionLoading(true);
+    hapticSuccess();
+    try {
+      const ok = await sendFriendRequest(userId);
+      if (ok) refresh();
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleAcceptRequest = async () => {
     const reqId = getActiveRequestId();
-    if (reqId) {
-      const res = await acceptFriendRequest(reqId);
-      if (res) refresh();
+    if (!reqId) return;
+    setActionLoading(true);
+    hapticSuccess();
+    try {
+      const ok = await acceptFriendRequest(reqId);
+      if (ok) refresh();
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleDeclineRequest = async () => {
     const reqId = getActiveRequestId();
-    if (reqId) {
-      const res = await declineFriendRequest(reqId);
-      if (res) refresh();
+    if (!reqId) return;
+    setActionLoading(true);
+    hapticLight();
+    try {
+      const ok = await declineFriendRequest(reqId);
+      if (ok) refresh();
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleCancelRequest = async () => {
     const reqId = getActiveRequestId();
-    if (reqId) {
-      showAlert({
-        title: "Cancel Request",
-        message: `Cancel friend request to @${profile?.username || 'user'}?`,
-        primaryButton: {
-          text: "Cancel Request",
-          destructive: true,
-          onPress: async () => {
+    if (!reqId) return;
+    showAlert({
+      title: 'Cancel Request',
+      message: `Cancel friend request to @${profile?.username || 'user'}?`,
+      primaryButton: {
+        text: 'Cancel Request',
+        destructive: true,
+        onPress: async () => {
+          setActionLoading(true);
+          try {
             await cancelFriendRequest(reqId);
             refresh();
+          } finally {
+            setActionLoading(false);
           }
         },
-        secondaryButton: {
-          text: "Back",
-          onPress: () => {}
-        }
-      });
-    }
+      },
+      secondaryButton: { text: 'Back', onPress: () => {} },
+    });
   };
 
   const handleRemoveFriend = async () => {
-    if (userId) {
-      showAlert({
-        title: "Remove Friend",
-        message: `Are you sure you want to remove @${profile?.username || 'user'} from your friends list?`,
-        primaryButton: {
-          text: "Remove Friend",
-          destructive: true,
-          onPress: async () => {
+    if (!userId) return;
+    showAlert({
+      title: 'Remove Connection',
+      message: `Remove @${profile?.username || 'user'} from your circle?`,
+      primaryButton: {
+        text: 'Remove',
+        destructive: true,
+        onPress: async () => {
+          setActionLoading(true);
+          try {
             await removeFriend(userId);
             refresh();
+          } finally {
+            setActionLoading(false);
           }
         },
-        secondaryButton: {
-          text: "Cancel",
-          onPress: () => {}
-        }
-      });
-    }
+      },
+      secondaryButton: { text: 'Cancel', onPress: () => {} },
+    });
   };
 
-  const handleBlockUser = async () => {
-    if (userId) {
-      showAlert({
-        title: "Block User",
-        message: `Are you sure you want to block @${profile?.username || 'user'}? They will not be able to find or add you in the Connect tab.`,
-        primaryButton: {
-          text: "Block User",
-          destructive: true,
-          onPress: async () => {
-            await blockUser(userId);
-            router.back();
-          }
-        },
-        secondaryButton: {
-          text: "Cancel",
-          onPress: () => {}
-        }
-      });
-    }
-  };
-
-  const handleUnblockUser = async () => {
-    if (userId) {
-      const res = await unblockUser(userId);
-      if (res) refresh();
-    }
-  };
-
-  const cardBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.65)';
-  const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.95)';
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
   if (loading && !profile) {
     return (
-      <BackgroundGradient>
-        <SafeAreaView style={styles.center}>
-          <ActivityIndicator size="large" color={theme.accent} />
-        </SafeAreaView>
-      </BackgroundGradient>
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="small" color={theme.accent} />
+      </View>
     );
   }
 
+  const username = profile?.username || 'user';
+  const fullName = (profile as any)?.full_name || username;
+  const bio = profile?.bio || 'No bio yet.';
+  const avatarUrl = resolveAvatarUrl(profile?.avatar_url);
+  const joinDate = profile?.joined_at
+    ? new Date(profile.joined_at).toLocaleDateString('en-US', {
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+
+  const filteredAchievements = React.useMemo(() => {
+    return unlockedAchievements.filter((ach) => {
+      const cat = (ach.category || '').toLowerCase();
+      if (cat === 'notes' || cat === 'study' || cat === 'pro') return false;
+      if (
+        ach.key.includes('note') ||
+        ach.key.includes('revision') ||
+        ach.key.includes('formula') ||
+        ach.key.includes('folder') ||
+        ach.key.includes('tag')
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [unlockedAchievements]);
+
   return (
-    <BackgroundGradient>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={[styles.backText, { color: theme.primaryText }]}>← Back</Text>
-          </TouchableOpacity>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      {/* Top back navigation bar */}
+      <View style={styles.navBar}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+          accessibilityLabel="Go back"
+        >
+          <ArrowLeft size={20} color={theme.accent} strokeWidth={2.2} />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Profile Identity Block */}
+        <View style={styles.identityBlock}>
+          <View style={styles.avatarRow}>
+            <View style={styles.avatarCircle}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+              ) : (
+                <Text style={styles.avatarInitial}>{fullName.charAt(0).toUpperCase()}</Text>
+              )}
+            </View>
+
+            {/* Connection action button */}
+            {actionLoading ? (
+              <ActivityIndicator size="small" color={theme.accent} />
+            ) : connectionState === 'none' ? (
+              <TouchableOpacity
+                onPress={handleSendRequest}
+                style={styles.actionBtnPrimary}
+                activeOpacity={0.8}
+              >
+                <UserPlus size={15} color="#FFFFFF" />
+                <Text style={styles.actionBtnPrimaryText}>Add Friend</Text>
+              </TouchableOpacity>
+            ) : connectionState === 'sent' ? (
+              <TouchableOpacity
+                onPress={handleCancelRequest}
+                style={styles.actionBtnSecondary}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.actionBtnSecondaryText}>Request Sent</Text>
+              </TouchableOpacity>
+            ) : connectionState === 'received' ? (
+              <View style={styles.receivedActionGroup}>
+                <TouchableOpacity
+                  onPress={handleAcceptRequest}
+                  style={styles.acceptBtn}
+                  activeOpacity={0.8}
+                >
+                  <Check size={14} color="#FFFFFF" strokeWidth={3} />
+                  <Text style={styles.acceptBtnText}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleDeclineRequest}
+                  style={styles.declineBtn}
+                  activeOpacity={0.8}
+                >
+                  <X size={14} color={theme.secondaryText} />
+                </TouchableOpacity>
+              </View>
+            ) : connectionState === 'friends' ? (
+              <TouchableOpacity
+                onPress={handleRemoveFriend}
+                style={styles.actionBtnSecondary}
+                activeOpacity={0.8}
+              >
+                <Check size={14} color={theme.accent} strokeWidth={2.5} />
+                <Text style={styles.actionBtnSecondaryText}>Friends</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <Text style={styles.fullName}>{fullName}</Text>
+          <Text style={styles.handle}>@{username}</Text>
+          <Text style={styles.bioText}>{bio}</Text>
+
+          {joinDate && <Text style={styles.joinedText}>Member since {joinDate}</Text>}
         </View>
 
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-          <ProfileHeader
-            profile={profile}
-            levelTitle={levelTitle}
-            isOwnProfile={false}
-            connectionState={connectionState}
-            followersCount={followersCount}
-            onSendRequest={handleSendRequest}
-            onAcceptRequest={handleAcceptRequest}
-            onDeclineRequest={handleDeclineRequest}
-            onCancelRequest={handleCancelRequest}
-            onRemoveFriend={handleRemoveFriend}
-            onBlockUser={handleBlockUser}
-            onUnblockUser={handleUnblockUser}
-          />
-
-          <View style={styles.statsContainer}>
-            <View style={styles.statsRow}>
-              <StatChip label="Total XP" value={profile?.xp || 0} />
-              <StatChip label="Tasks Done" value={stats?.totalTasksCompleted || 0} />
-            </View>
-            <View style={styles.statsRow}>
-              <StatChip label="Best Streak" value={stats?.longestStreak || 0} />
-              <StatChip label="Focus Hours" value={Math.round((stats?.totalFocusMinutes || 0) / 60)} />
-            </View>
+        {/* Real Stats Grid */}
+        <View style={styles.statsCardGrid}>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{profile?.level || 1}</Text>
+            <Text style={styles.statLabel}>LEVEL</Text>
+            <Text style={styles.statSub}>{levelTitle || 'Learner'}</Text>
           </View>
 
-          <SocialLinksSection
-            links={socialLinks}
-            editable={false}
-            emptyMessage={`No social links added by ${profile?.username || 'this user'}.`}
-            cardBg={cardBg}
-            cardBorder={cardBorder}
-          />
-
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Achievements</Text>
-            {unlockedAchievements.length > 0 ? (
-              <View style={styles.showcaseGrid}>
-                {unlockedAchievements.map(ach => {
-                  const IconComponent = (Icons as any)[ach.icon] || Icons.Award;
-                  return (
-                    <TouchableOpacity
-                      key={ach.key}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        showAlert({
-                          title: ach.name,
-                          message: `${ach.description}\n\nReward: +${ach.xpReward} XP`,
-                          primaryButton: {
-                            text: 'Awesome',
-                            onPress: () => {},
-                          },
-                        });
-                      }}
-                      style={styles.showcaseBadgeContainer}
-                    >
-                      <View style={[styles.showcaseBadgeCircle, { backgroundColor: ach.color + '15', borderColor: ach.color + '40' }]}>
-                        <IconComponent size={18} color={ach.color} strokeWidth={2} />
-                      </View>
-                      <Text style={[styles.showcaseBadgeLabel, { color: theme.primaryText }]} numberOfLines={1}>
-                        {ach.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : (
-              <View style={[styles.emptyBox, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
-                  No achievements unlocked yet.
-                </Text>
-              </View>
-            )}
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{(profile?.xp || 0).toLocaleString()}</Text>
+            <Text style={styles.statLabel}>TOTAL XP</Text>
+            <Text style={styles.statSub}>Overall score</Text>
           </View>
-        </ScrollView>
-      </SafeAreaView>
-    </BackgroundGradient>
+
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{stats?.longestStreak || 0}d</Text>
+            <Text style={styles.statLabel}>STREAK</Text>
+            <Text style={styles.statSub}>Best run</Text>
+          </View>
+
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{followersCount || 0}</Text>
+            <Text style={styles.statLabel}>CIRCLE</Text>
+            <Text style={styles.statSub}>Followers</Text>
+          </View>
+        </View>
+
+        {/* Achievements Showcase */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionIndex}>01</Text>
+          <Text style={styles.sectionTitle}>UNLOCKED MILESTONES</Text>
+        </View>
+
+        {filteredAchievements.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>No milestones unlocked yet.</Text>
+          </View>
+        ) : (
+          <View style={styles.achievementsList}>
+            {filteredAchievements.map((ach) => (
+              <View key={ach.key} style={styles.achRow}>
+                <View style={styles.achIconCircle}>
+                  <Award size={18} color={theme.accent} strokeWidth={2.2} />
+                </View>
+                <View style={styles.achInfoCol}>
+                  <Text style={styles.achName}>{ach.name}</Text>
+                  <Text style={styles.achDesc}>{ach.description}</Text>
+                </View>
+                <View style={styles.achXpBadge}>
+                  <Text style={styles.achXpText}>+{ach.xpReward} XP</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  navBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: {
-    paddingVertical: 8,
-    paddingRight: 16,
-  },
-  backText: {
-    fontSize: 16,
-    fontFamily: 'System',
-    fontWeight: '700',
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 110,
-  },
-  statsContainer: {
-    gap: 8,
-    marginBottom: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  section: {
-    marginBottom: 28,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'System',
-    fontWeight: '800',
-    marginBottom: 12,
-  },
-  linksContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingBottom: 8,
-  },
-  showcaseGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  showcaseBadgeContainer: {
-    alignItems: 'center',
-    width: BADGE_WIDTH,
-    marginBottom: 12,
-  },
-  showcaseBadgeCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  showcaseBadgeLabel: {
-    fontSize: 9,
-    fontFamily: 'System',
-    fontWeight: '700',
-    textAlign: 'center',
-    width: '100%',
-  },
-  emptyBox: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 24,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 13,
-    fontFamily: 'System',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-});
+function createStyles(theme: any, isDark: boolean) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    container: {
+      flex: 1,
+    },
+    navBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+    },
+    backBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 4,
+    },
+    backText: {
+      fontSize: 16,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 60,
+    },
+
+    // Identity Block
+    identityBlock: {
+      marginBottom: 24,
+      paddingBottom: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.separator,
+    },
+    avatarRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    avatarCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: theme.cardSolid,
+      borderWidth: 1.5,
+      borderColor: theme.separator,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    avatarImg: {
+      width: '100%',
+      height: '100%',
+    },
+    avatarInitial: {
+      fontSize: 28,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+    },
+    actionBtnPrimary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: theme.accent,
+      paddingHorizontal: 18,
+      paddingVertical: 9,
+      borderRadius: 999,
+    },
+    actionBtnPrimaryText: {
+      fontSize: 14,
+      fontFamily: 'Inter_700Bold',
+      color: '#FFFFFF',
+    },
+    actionBtnSecondary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: isDark ? 'transparent' : '#FFFFFF',
+    },
+    actionBtnSecondaryText: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.primaryText,
+    },
+    receivedActionGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    acceptBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.accent,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+    },
+    acceptBtnText: {
+      fontSize: 13,
+      fontFamily: 'Inter_700Bold',
+      color: '#FFFFFF',
+    },
+    declineBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullName: {
+      fontSize: 28,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      letterSpacing: -0.5,
+      marginBottom: 2,
+    },
+    handle: {
+      fontSize: 15,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginBottom: 12,
+    },
+    bioText: {
+      fontSize: 15,
+      fontFamily: 'Inter_400Regular',
+      color: theme.primaryText,
+      lineHeight: 22,
+      marginBottom: 10,
+    },
+    joinedText: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+
+    // Stats Grid
+    statsCardGrid: {
+      flexDirection: 'row',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#FFFFFF',
+      paddingVertical: 14,
+      marginBottom: 32,
+    },
+    statCell: {
+      flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: 4,
+    },
+    statValue: {
+      fontSize: 20,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    statLabel: {
+      fontSize: 10,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.2,
+      color: theme.secondaryText,
+      marginBottom: 2,
+    },
+    statSub: {
+      fontSize: 11,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      textAlign: 'center',
+    },
+
+    // Sections
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 8,
+      marginBottom: 16,
+    },
+    sectionIndex: {
+      fontSize: 18,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.accent,
+    },
+    sectionTitle: {
+      fontSize: 12,
+      fontFamily: 'PlayfairDisplay_600SemiBold',
+      letterSpacing: 1.5,
+      color: theme.secondaryText,
+    },
+    emptyBox: {
+      paddingVertical: 16,
+      paddingHorizontal: 4,
+    },
+    emptyText: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+    },
+    achievementsList: {
+      width: '100%',
+    },
+    achRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+    },
+    achIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.accentLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    achInfoCol: {
+      flex: 1,
+      paddingRight: 10,
+    },
+    achName: {
+      fontSize: 15,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    achDesc: {
+      fontSize: 13,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+    },
+    achXpBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: theme.accentLight,
+    },
+    achXpText: {
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
+      color: theme.accent,
+    },
+  });
+}

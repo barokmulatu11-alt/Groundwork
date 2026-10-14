@@ -1,25 +1,29 @@
-import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { AppText as Text } from '@/components/ui/AppText';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { TabHeader } from '@/components/ui/TabHeader';
-import { useTheme } from '@/lib/ThemeContext';
-import type { SubTask, Task } from '@/lib/db';
-import { useStore } from '@/store/useStore';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, CheckCircle2, Circle, Clock, Plus, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
+  View,
   ScrollView,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
-  View,
+  TextInput,
+  Platform,
   useWindowDimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Check, Trash2, Plus, X, Calendar, Clock, AlertCircle } from 'lucide-react-native';
+import { AppText as Text } from '@/components/ui/AppText';
+import { BrandHeader } from '@/components/ui/BrandHeader';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useTheme } from '@/lib/ThemeContext';
+import { useStore } from '@/store/useStore';
+import { hapticSuccess, hapticLight } from '@/lib/haptics';
+import {
+  getLocalDateString,
+  getTomorrowDateString,
+  getDaysAheadDateString,
+} from '@/lib/dateUtils';
+import type { SubTask } from '@/lib/db';
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,110 +34,109 @@ export default function TaskDetailScreen() {
   const isDesktop = width >= 768;
 
   const { tasks, updateTask, deleteTask, toggleTask } = useStore();
-  const task = tasks.find((t) => t.id === id);
+  
+  // Guard against malformed 'guest' ID
+  const task = id && id !== 'guest' ? tasks.find((t) => t.id === id) : null;
 
   const [title, setTitle] = useState('');
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [date, setDate] = useState('');
+  const [dueTime, setDueTime] = useState('');
   const [subtasks, setSubtasks] = useState<SubTask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (task) {
-      setTitle(task.title);
+      setTitle(task.title || '');
       setNote(task.note || '');
       setPriority(task.priority || 'medium');
       setDate(task.date || '');
+      setDueTime(task.due_time || '');
       setSubtasks(task.sub_tasks || []);
+      setTitleError(null);
     }
   }, [task]);
 
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
+
   if (!task) {
     return (
-      <BackgroundGradient>
-        <View
-          style={[
-            styles.container,
-            {
-              paddingTop: insets.top + 20,
-              paddingHorizontal: 20,
-              alignItems: 'center',
-              justifyContent: 'center',
-            },
-          ]}
-        >
-          <Text
-            style={{
-              fontSize: 20,
-              fontFamily: 'Inter_700Bold',
-              color: theme.primaryText,
-              marginBottom: 8,
-            }}
-          >
-            Task Not Found
-          </Text>
-          <Text
-            style={{
-              fontSize: 14,
-              color: theme.secondaryText,
-              textAlign: 'center',
-              marginBottom: 20,
-            }}
-          >
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <BrandHeader showBack />
+        <View style={styles.centerContainer}>
+          <Text style={styles.notFoundTitle}>Task not found</Text>
+          <Text style={styles.notFoundSubtitle}>
             This task may have been completed, deleted, or does not exist.
           </Text>
           <TouchableOpacity
-            testID="task-detail-back-btn"
+            onPress={() => router.replace('/tasks')}
+            style={styles.blueBtn}
             accessibilityRole="button"
-            onPress={() => router.back()}
-            style={[styles.primaryBtn, { backgroundColor: theme.accent }]}
           >
-            <Text style={styles.primaryBtnText}>Back to Tasks</Text>
+            <Text style={styles.blueBtnText}>Return to tasks</Text>
           </TouchableOpacity>
         </View>
-      </BackgroundGradient>
+      </View>
     );
   }
 
+  const handleTitleChange = (text: string) => {
+    setTitle(text);
+    if (titleError && text.trim().length > 0) {
+      setTitleError(null);
+    }
+  };
+
   const handleSave = () => {
-    if (!title.trim()) return;
+    const trimmed = title.trim();
+    if (!trimmed) {
+      setTitleError('Task title cannot be blank');
+      return;
+    }
+    setTitleError(null);
+    hapticSuccess();
     updateTask(task.id, {
-      title: title.trim(),
+      title: trimmed,
       note: note.trim(),
       priority,
-      date,
+      date: date.trim() || undefined,
+      due_time: dueTime.trim() || undefined,
       sub_tasks: subtasks,
     });
     setSavedFeedback(true);
     setTimeout(() => {
       setSavedFeedback(false);
       router.back();
-    }, 600);
+    }, 400);
   };
 
-  const handleDelete = () => {
+  const handleDeleteConfirmed = () => {
     deleteTask(task.id);
-    setDeleteConfirmVisible(false);
+    setShowDeleteConfirm(false);
     router.back();
   };
 
   const handleToggleSubtask = (subtaskId: string) => {
+    hapticLight();
     setSubtasks((prev) =>
       prev.map((st) => (st.id === subtaskId ? { ...st, completed: !st.completed } : st))
     );
   };
 
   const handleAddSubtask = () => {
-    if (!newSubtaskTitle.trim()) return;
+    const stTitle = newSubtaskTitle.trim();
+    if (!stTitle) return;
+    hapticLight();
     setSubtasks((prev) => [
       ...prev,
       {
         id: 'st_' + Date.now(),
         task_id: task.id,
-        title: newSubtaskTitle.trim(),
+        title: stTitle,
         completed: false,
         order_index: prev.length,
         created_at: new Date().toISOString(),
@@ -143,342 +146,603 @@ export default function TaskDetailScreen() {
   };
 
   const handleRemoveSubtask = (subtaskId: string) => {
+    hapticLight();
     setSubtasks((prev) => prev.filter((st) => st.id !== subtaskId));
   };
 
+  const todayStr = getLocalDateString();
+  const tomorrowStr = getTomorrowDateString();
+  const nextWeekStr = getDaysAheadDateString(7);
+
   return (
-    <BackgroundGradient>
+    <View style={styles.root}>
+      <View style={{ paddingTop: insets.top }}>
+        <BrandHeader showBack />
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={{
-            paddingHorizontal: isDesktop ? 32 : 18,
-            paddingTop: insets.top + 16,
-            paddingBottom: Math.max(insets.bottom, 24) + 120,
-            maxWidth: isDesktop ? 760 : undefined,
+            paddingHorizontal: isDesktop ? 32 : 20,
+            paddingTop: 20,
+            paddingBottom: Math.max(insets.bottom, 24) + 80,
+            maxWidth: isDesktop ? 640 : undefined,
             alignSelf: isDesktop ? 'center' : undefined,
             width: '100%',
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <TabHeader title="Task Details" subtitle={date ? `Due ${date}` : 'Manage your task'} showBack />
+          {/* Status Indicator */}
+          <View style={styles.topStatusRow}>
+            <TouchableOpacity
+              onPress={() => {
+                hapticSuccess();
+                toggleTask(task.id, task.completed);
+              }}
+              style={[
+                styles.taskCheckbox,
+                task.completed && styles.taskCheckboxCompleted,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: task.completed }}
+            >
+              {task.completed && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+            </TouchableOpacity>
+            <Text style={styles.statusLabel}>
+              {task.completed ? 'COMPLETED' : 'IN PROGRESS'}
+            </Text>
+          </View>
 
-          {/* Completion & Title Banner */}
-          <View
+          {/* 1. Title Input & Inline Validation */}
+          <TextInput
+            value={title}
+            onChangeText={handleTitleChange}
+            placeholder="Task title"
+            placeholderTextColor={theme.textMuted}
             style={[
-              styles.card,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              styles.titleInput,
+              titleError ? { borderColor: '#EF4444' } : null,
             ]}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-              <TouchableOpacity
-                testID="task-detail-toggle-completed"
-                accessibilityRole="checkbox"
-                accessibilityLabel="Toggle task completion"
-                onPress={() => toggleTask(task.id, task.completed)}
-                style={{ marginRight: 12 }}
-              >
-                {task.completed ? (
-                  <CheckCircle2 size={24} color={theme.success} />
-                ) : (
-                  <Circle size={24} color={theme.tertiaryText} />
-                )}
-              </TouchableOpacity>
-              <TextInput
-                testID="task-detail-title-input"
-                accessibilityLabel="Task title input"
-                style={[
-                  styles.titleInput,
-                  { color: theme.primaryText },
-                  task.completed && { textDecorationLine: 'line-through', opacity: 0.7 },
-                ]}
-                placeholder="Task title"
-                placeholderTextColor={theme.secondaryText}
-                value={title}
-                onChangeText={setTitle}
-                maxLength={140}
-              />
+            multiline
+            accessibilityLabel="Task title"
+          />
+          {titleError ? (
+            <View style={styles.errorRow}>
+              <AlertCircle size={14} color="#EF4444" />
+              <Text style={styles.errorText}>{titleError}</Text>
             </View>
+          ) : null}
 
-            {/* Priority Selector */}
-            <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>PRIORITY</Text>
-            <View style={styles.priorityRow}>
-              {(['high', 'medium', 'low'] as const).map((p) => (
-                <Pressable
+          <View style={styles.thinDivider} />
+
+          {/* 2. Priority Selector */}
+          <Text style={styles.fieldLabel}>PRIORITY</Text>
+          <View style={styles.priorityRow}>
+            {(['low', 'medium', 'high'] as const).map((p) => {
+              const active = priority === p;
+              return (
+                <TouchableOpacity
                   key={p}
-                  testID={`task-detail-priority-${p}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Set priority ${p}`}
-                  onPress={() => setPriority(p)}
+                  onPress={() => {
+                    hapticLight();
+                    setPriority(p);
+                  }}
                   style={[
                     styles.priorityPill,
-                    priority === p
-                      ? {
-                          backgroundColor:
-                            p === 'high' ? '#FF3B30' : p === 'medium' ? '#FF9500' : '#34C759',
-                        }
-                      : {
-                          backgroundColor: isDark
-                            ? 'rgba(255,255,255,0.06)'
-                            : 'rgba(0,0,0,0.04)',
-                        },
+                    active && styles.priorityPillActive,
                   ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${p} priority`}
                 >
                   <Text
                     style={[
-                      styles.priorityText,
-                      priority === p ? { color: '#ffffff' } : { color: theme.secondaryText },
+                      styles.priorityPillText,
+                      active && styles.priorityPillTextActive,
                     ]}
                   >
-                    {p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low'}
+                    {p.toUpperCase()}
                   </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Notes Section */}
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 14 },
-            ]}
-          >
-            <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>NOTES</Text>
-            <TextInput
-              testID="task-detail-notes-input"
-              accessibilityLabel="Task notes input"
-              style={[
-                styles.notesInput,
-                {
-                  color: theme.primaryText,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-                  borderColor: theme.cardBorder,
-                },
-              ]}
-              placeholder="Add extra context, links, or instructions..."
-              placeholderTextColor={theme.secondaryText}
-              multiline
-              value={note}
-              onChangeText={setNote}
-            />
-          </View>
-
-          {/* Subtasks Section */}
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 14 },
-            ]}
-          >
-            <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>
-              SUBTASKS ({subtasks.filter((s) => s.completed).length}/{subtasks.length})
-            </Text>
-
-            {subtasks.map((st) => (
-              <View key={st.id} style={styles.subtaskRow}>
-                <TouchableOpacity
-                  onPress={() => handleToggleSubtask(st.id)}
-                  accessibilityRole="checkbox"
-                  style={{ marginRight: 10 }}
-                >
-                  {st.completed ? (
-                    <CheckCircle2 size={18} color={theme.success} />
-                  ) : (
-                    <Circle size={18} color={theme.tertiaryText} />
-                  )}
                 </TouchableOpacity>
-                <Text
-                  style={[
-                    styles.subtaskTitle,
-                    { color: theme.primaryText },
-                    st.completed && { textDecorationLine: 'line-through', opacity: 0.6 },
-                  ]}
-                >
-                  {st.title}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => handleRemoveSubtask(st.id)}
-                  accessibilityLabel="Remove subtask"
-                  style={{ padding: 4 }}
-                >
-                  <Trash2 size={14} color={theme.tertiaryText} />
-                </TouchableOpacity>
-              </View>
-            ))}
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
-              <TextInput
-                testID="task-detail-new-subtask-input"
-                accessibilityLabel="New subtask input"
-                style={[
-                  styles.subtaskInput,
-                  {
-                    color: theme.primaryText,
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-                    borderColor: theme.cardBorder,
-                  },
-                ]}
-                placeholder="Add subtask..."
-                placeholderTextColor={theme.secondaryText}
-                value={newSubtaskTitle}
-                onChangeText={setNewSubtaskTitle}
-                onSubmitEditing={handleAddSubtask}
-              />
-              <TouchableOpacity
-                testID="task-detail-add-subtask-btn"
-                accessibilityRole="button"
-                onPress={handleAddSubtask}
-                style={[styles.addSubtaskBtn, { backgroundColor: theme.accent }]}
-              >
-                <Plus size={16} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
+              );
+            })}
           </View>
 
-          {/* Action Buttons */}
-          <View style={{ marginTop: 24, gap: 12 }}>
+          <View style={styles.thinDivider} />
+
+          {/* 3. Scheduling (Quick pills + inputs) */}
+          <Text style={styles.fieldLabel}>SCHEDULE</Text>
+          
+          {/* Quick Date Pills */}
+          <View style={styles.quickDateRow}>
             <TouchableOpacity
-              testID="task-detail-save-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Save Task Details"
-              onPress={handleSave}
-              disabled={!title.trim()}
+              onPress={() => {
+                hapticLight();
+                setDate(todayStr);
+              }}
               style={[
-                styles.primaryBtn,
-                { backgroundColor: theme.accent },
-                !title.trim() && { opacity: 0.5 },
+                styles.quickPill,
+                date === todayStr && styles.quickPillActive,
               ]}
             >
-              <Text style={styles.primaryBtnText}>
-                {savedFeedback ? 'Saved!' : 'Save Task'}
+              <Text style={[styles.quickPillText, date === todayStr && styles.quickPillTextActive]}>
+                Today
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              testID="task-detail-delete-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Delete Task"
-              onPress={() => setDeleteConfirmVisible(true)}
+              onPress={() => {
+                hapticLight();
+                setDate(tomorrowStr);
+              }}
               style={[
-                styles.deleteBtn,
-                { borderColor: theme.danger + '40' },
+                styles.quickPill,
+                date === tomorrowStr && styles.quickPillActive,
               ]}
             >
-              <Trash2 size={16} color={theme.danger} style={{ marginRight: 6 }} />
-              <Text style={[styles.deleteBtnText, { color: theme.danger }]}>Delete Task</Text>
+              <Text style={[styles.quickPillText, date === tomorrowStr && styles.quickPillTextActive]}>
+                Tomorrow
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                setDate(nextWeekStr);
+              }}
+              style={[
+                styles.quickPill,
+                date === nextWeekStr && styles.quickPillActive,
+              ]}
+            >
+              <Text style={[styles.quickPillText, date === nextWeekStr && styles.quickPillTextActive]}>
+                Next Week
+              </Text>
+            </TouchableOpacity>
+
+            {date ? (
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLight();
+                  setDate('');
+                }}
+                style={styles.quickPillClear}
+              >
+                <Text style={styles.quickPillClearText}>Clear date</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <View style={styles.scheduleRow}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.fieldHeaderRow}>
+                <Calendar size={13} color={theme.textSecondary} />
+                <Text style={styles.subFieldLabel}>Due date (YYYY-MM-DD)</Text>
+              </View>
+              <TextInput
+                value={date}
+                onChangeText={setDate}
+                placeholder="e.g. 2026-10-15"
+                placeholderTextColor={theme.textMuted}
+                style={styles.textInput}
+                autoCorrect={false}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.fieldHeaderRow}>
+                <Clock size={13} color={theme.textSecondary} />
+                <Text style={styles.subFieldLabel}>Due time (HH:MM)</Text>
+              </View>
+              <TextInput
+                value={dueTime}
+                onChangeText={setDueTime}
+                placeholder="e.g. 14:00"
+                placeholderTextColor={theme.textMuted}
+                style={styles.textInput}
+                autoCorrect={false}
+              />
+            </View>
+          </View>
+
+          <View style={styles.thinDivider} />
+
+          {/* 4. Checklist Items */}
+          <Text style={styles.fieldLabel}>CHECKLIST ITEMS</Text>
+          {subtasks.map((st) => (
+            <View key={st.id} style={styles.subtaskRow}>
+              <TouchableOpacity
+                onPress={() => handleToggleSubtask(st.id)}
+                style={[
+                  styles.smallCheckbox,
+                  st.completed && styles.smallCheckboxCompleted,
+                ]}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: st.completed }}
+              >
+                {st.completed && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
+              </TouchableOpacity>
+              <Text
+                style={[
+                  styles.subtaskTitle,
+                  st.completed && styles.subtaskTitleCompleted,
+                ]}
+              >
+                {st.title}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleRemoveSubtask(st.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Remove checklist item"
+              >
+                <X size={15} color={theme.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          {/* Add checklist item */}
+          <View style={styles.addSubtaskRow}>
+            <TextInput
+              value={newSubtaskTitle}
+              onChangeText={setNewSubtaskTitle}
+              onSubmitEditing={handleAddSubtask}
+              placeholder="Add checklist item"
+              placeholderTextColor={theme.textMuted}
+              style={styles.addSubtaskInput}
+            />
+            {newSubtaskTitle.trim().length > 0 && (
+              <TouchableOpacity
+                onPress={handleAddSubtask}
+                style={styles.addSmallBtn}
+                accessibilityLabel="Add item"
+              >
+                <Plus size={16} color={theme.accent} strokeWidth={2.4} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.thinDivider} />
+
+          {/* 5. Task Notes */}
+          <Text style={styles.fieldLabel}>TASK NOTES</Text>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder="Add relevant notes, links, or context..."
+            placeholderTextColor={theme.textMuted}
+            style={styles.notesInput}
+            multiline
+            numberOfLines={4}
+          />
+
+          <View style={styles.thinDivider} />
+
+          {/* 6. Primary Action: Save Changes */}
+          <View style={styles.saveActionWrap}>
+            <TouchableOpacity
+              onPress={handleSave}
+              style={styles.saveBtn}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Text style={styles.saveBtnText}>
+                {savedFeedback ? 'Saved' : 'Save changes'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 7. Visually Separated Danger Zone for Delete */}
+          <View style={styles.dangerZoneWrap}>
+            <TouchableOpacity
+              onPress={() => setShowDeleteConfirm(true)}
+              style={styles.deleteBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Delete task"
+            >
+              <Trash2 size={15} color="#EF4444" />
+              <Text style={styles.deleteBtnText}>Delete task</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
       <ConfirmDialog
-        visible={deleteConfirmVisible}
+        visible={showDeleteConfirm}
         title="Delete Task"
-        message={`Are you sure you want to delete "${task.title}"?`}
+        message="Are you sure you want to delete this task? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteConfirmVisible(false)}
+        confirmButtonColor="#EF4444"
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
-    </BackgroundGradient>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  card: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  titleInput: {
-    flex: 1,
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    paddingVertical: 4,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  priorityRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  priorityPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  priorityText: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  notesInput: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-  },
-  subtaskRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150,150,150,0.15)',
-  },
-  subtaskTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-  },
-  subtaskInput: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-  },
-  addSubtaskBtn: {
-    marginLeft: 8,
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtn: {
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    paddingVertical: 13,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteBtnText: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-  },
-});
+function createStyles(theme: any, isDark: boolean) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    centerContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 30,
+    },
+    notFoundTitle: {
+      fontSize: 22,
+      fontFamily: 'Inter_700Bold',
+      color: theme.text,
+      marginBottom: 8,
+    },
+    notFoundSubtitle: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.textSecondary,
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    blueBtn: {
+      backgroundColor: theme.accent,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 999,
+    },
+    blueBtnText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontFamily: 'Inter_700Bold',
+    },
+
+    topStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 16,
+    },
+    taskCheckbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 1.8,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.22)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    taskCheckboxCompleted: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    statusLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.5,
+      color: theme.textSecondary,
+    },
+
+    titleInput: {
+      fontSize: 24,
+      fontFamily: 'Inter_700Bold',
+      color: theme.text,
+      padding: 0,
+      lineHeight: 30,
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8,
+    },
+    errorText: {
+      color: '#EF4444',
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+    },
+    thinDivider: {
+      height: 1,
+      backgroundColor: theme.separator,
+      marginVertical: 18,
+    },
+    fieldLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.5,
+      color: theme.textSecondary,
+      marginBottom: 10,
+    },
+    fieldHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 6,
+    },
+    subFieldLabel: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textSecondary,
+    },
+
+    // Priority selector
+    priorityRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    priorityPill: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: isDark ? 'transparent' : '#FFFFFF',
+    },
+    priorityPillActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    priorityPillText: {
+      fontSize: 12,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.textSecondary,
+    },
+    priorityPillTextActive: {
+      color: '#FFFFFF',
+    },
+
+    // Quick Date Selector
+    quickDateRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 12,
+    },
+    quickPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: isDark ? '#0A0A0A' : '#F5F5F5',
+    },
+    quickPillActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    quickPillText: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textSecondary,
+    },
+    quickPillTextActive: {
+      color: '#FFFFFF',
+      fontFamily: 'Inter_600SemiBold',
+    },
+    quickPillClear: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    quickPillClearText: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textMuted,
+    },
+
+    // Schedule row
+    scheduleRow: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    textInput: {
+      fontSize: 14,
+      fontFamily: 'Inter_500Medium',
+      color: theme.text,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF',
+    },
+
+    // Subtasks
+    subtaskRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+      gap: 12,
+    },
+    smallCheckbox: {
+      width: 18,
+      height: 18,
+      borderRadius: 4,
+      borderWidth: 1.4,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.22)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    smallCheckboxCompleted: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    subtaskTitle: {
+      fontSize: 14,
+      fontFamily: 'Inter_500Medium',
+      color: theme.text,
+      flex: 1,
+    },
+    subtaskTitleCompleted: {
+      color: theme.textMuted,
+      textDecorationLine: 'line-through',
+    },
+    addSubtaskRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    addSubtaskInput: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: 'Inter_500Medium',
+      color: theme.text,
+      padding: 0,
+    },
+    addSmallBtn: {
+      padding: 6,
+    },
+
+    // Notes
+    notesInput: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.text,
+      lineHeight: 22,
+      minHeight: 80,
+      padding: 0,
+      textAlignVertical: 'top',
+    },
+
+    // Save Action
+    saveActionWrap: {
+      marginTop: 8,
+    },
+    saveBtn: {
+      backgroundColor: theme.accent,
+      paddingVertical: 14,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    saveBtnText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+    },
+
+    // Separated Danger Zone
+    dangerZoneWrap: {
+      marginTop: 28,
+      alignItems: 'center',
+    },
+    deleteBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.05)' : 'rgba(239, 68, 68, 0.04)',
+    },
+    deleteBtnText: {
+      color: '#EF4444',
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+    },
+  });
+}

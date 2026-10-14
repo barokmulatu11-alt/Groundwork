@@ -1,6 +1,6 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import React from 'react';
-import { View, StyleSheet, Modal, Pressable, Animated, Dimensions, Platform, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, Animated, Dimensions, TouchableOpacity } from 'react-native';
 import { X } from 'lucide-react-native';
 import { Theme } from '@/lib/ThemeContext';
 
@@ -39,12 +39,12 @@ function PopupButton({ title, onPress, variant, theme, destructive, flex, testID
         flex ? { flex: 1 } : { width: '100%' },
         variant === 'primary'
           ? { backgroundColor: destructive ? theme.danger : theme.accent }
-          : { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder }
+          : { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.separator }
       ]}
     >
       <Text style={[
         styles.buttonText,
-        { color: variant === 'primary' ? '#FFFFFF' : (destructive ? theme.danger : theme.accent) }
+        { color: variant === 'primary' ? '#FFFFFF' : (destructive ? theme.danger : theme.text) }
       ]}>
         {title}
       </Text>
@@ -110,7 +110,7 @@ export function NativePopup({
       animationType="none"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.45)' }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         
         <Animated.View
@@ -120,7 +120,7 @@ export function NativePopup({
               backgroundColor: theme.cardSolid,
               opacity: fadeAnim,
               transform: [{ scale: scaleAnim }],
-              borderColor: theme.cardBorder,
+              borderColor: theme.separator,
               borderWidth: 1,
             },
           ]}
@@ -128,12 +128,12 @@ export function NativePopup({
           <View style={styles.content}>
             {showCloseButton && (
               <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
-                <X size={20} color={theme.tertiaryText} />
+                <X size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             )}
             
-            <Text style={[styles.title, { color: theme.primaryText }]}>{title}</Text>
-            <Text style={[styles.message, { color: theme.secondaryText }]}>{message}</Text>
+            <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+            <Text style={[styles.message, { color: theme.textSecondary }]}>{message}</Text>
             
             {(primaryButton || secondaryButton) && (
               <View style={[
@@ -171,7 +171,6 @@ export function NativePopup({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -179,14 +178,9 @@ const styles = StyleSheet.create({
   container: {
     width: width * 0.85,
     maxWidth: 400,
-    borderRadius: 32,
+    borderRadius: 24,
     borderWidth: 1,
     overflow: 'hidden',
-    
-    
-    
-    
-    
   },
   content: {
     padding: 24,
@@ -220,14 +214,13 @@ const styles = StyleSheet.create({
   },
   button: {
     paddingVertical: 14,
-    borderRadius: 100,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
-    fontWeight: '600',
   },
   closeButton: {
     position: 'absolute',

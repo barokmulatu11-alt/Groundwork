@@ -86,16 +86,16 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
             ref={inputRef}
             testID="add-task-title-input"
             accessibilityLabel="Task title input"
-            style={[styles.titleInput, { color: theme.primaryText }]}
+            style={[styles.titleInput, { color: theme.text }]}
             placeholder="What needs to get done?"
-            placeholderTextColor={theme.secondaryText}
+            placeholderTextColor={theme.textSecondary}
             value={title}
             onChangeText={setTitle}
             maxLength={120}
           />
           <View style={[styles.borderBottom, { backgroundColor: theme.accent }]} />
 
-          <Text style={[styles.label, { color: theme.secondaryText }]}>DATE</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>DATE</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRow}>
             {dateOptions.map(opt => {
               const isSelected = date === opt.value;
@@ -108,10 +108,12 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
                   onPress={() => setDate(opt.value)}
                   style={[
                     styles.datePill,
-                    isSelected ? { backgroundColor: theme.accent } : { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }
+                    isSelected 
+                      ? { backgroundColor: theme.accent } 
+                      : { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }
                   ]}
                 >
-                  <Text style={[styles.datePillText, isSelected ? { color: 'white' } : { color: theme.secondaryText }]}>{opt.label}</Text>
+                  <Text style={[styles.datePillText, isSelected ? { color: 'white' } : { color: theme.textSecondary }]}>{opt.label}</Text>
                 </Pressable>
               );
             })}
@@ -123,11 +125,11 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
           </ScrollView>
 
           <View style={styles.toggleRow}>
-            <Text style={[styles.label, { color: theme.secondaryText, marginBottom: 0 }]}>TIME</Text>
+            <Text style={[styles.label, { color: theme.textSecondary, marginBottom: 0 }]}>TIME</Text>
             <Switch value={hasTime} onValueChange={setHasTime} />
           </View>
 
-          <Text style={[styles.label, { color: theme.secondaryText }]}>PRIORITY</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>PRIORITY</Text>
           <View style={styles.priorityRow}>
             {(['High', 'Medium', 'Low'] as const).map(p => (
               <Pressable 
@@ -138,10 +140,12 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
                 onPress={() => setPriority(p)}
                 style={[
                   styles.priorityPill, 
-                  priority === p && { backgroundColor: theme.accent }
+                  priority === p 
+                    ? { backgroundColor: theme.accent } 
+                    : { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }
                 ]}
               >
-                <Text style={[styles.priorityText, priority === p ? { color: 'white' } : { color: theme.secondaryText }]}>
+                <Text style={[styles.priorityText, priority === p ? { color: 'white' } : { color: theme.textSecondary }]}>
                   {p}
                 </Text>
               </Pressable>
@@ -149,22 +153,22 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
           </View>
 
           <View style={styles.toggleRow}>
-            <Text style={[styles.label, { color: theme.secondaryText, marginBottom: 0 }]}>REMIND ME</Text>
+            <Text style={[styles.label, { color: theme.textSecondary, marginBottom: 0 }]}>REMIND ME</Text>
             <Switch value={hasReminder} onValueChange={setHasReminder} disabled={!hasTime} />
           </View>
 
-          <Text style={[styles.label, { color: theme.secondaryText }]}>NOTE</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>NOTE</Text>
           <TextInput
-            style={[styles.noteInput, { color: theme.primaryText, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }]}
+            style={[styles.noteInput, { color: theme.text, backgroundColor: theme.background, borderColor: theme.separator, borderWidth: 1 }]}
             placeholder="Add a note (optional)"
-            placeholderTextColor={theme.secondaryText}
+            placeholderTextColor={theme.textSecondary}
             multiline
             value={note}
             onChangeText={setNote}
           />
 
           <View style={styles.toggleRow}>
-            <Text style={[styles.label, { color: theme.secondaryText, marginBottom: 0 }]}>SUB-TASKS</Text>
+            <Text style={[styles.label, { color: theme.textSecondary, marginBottom: 0 }]}>SUB-TASKS</Text>
             <Pressable onPress={() => setSubTasks([...subTasks, ''])} style={styles.addBtn}>
               <Plus size={20} color={theme.accent} />
             </Pressable>
@@ -174,7 +178,7 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
             <View key={i} style={styles.subRow}>
               <View style={[styles.circle, { borderColor: theme.accent }]} />
               <TextInput
-                style={[styles.subInput, { color: theme.primaryText }]}
+                style={[styles.subInput, { color: theme.text }]}
                 value={sub}
                 onChangeText={t => {
                   const newSubs = [...subTasks];
@@ -192,16 +196,16 @@ export const AddTaskSheet = forwardRef<AddTaskSheetRef, Props>(({ onAdd }, ref) 
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        <View style={[styles.footer, { backgroundColor: theme.card }]}>
+        <View style={[styles.footer, { backgroundColor: theme.cardSolid, borderTopColor: theme.separator }]}>
           <Pressable 
             testID="add-task-submit-button"
             accessibilityRole="button"
             accessibilityLabel="Add Task"
-            style={[styles.submitBtn, { backgroundColor: theme.accent }, !title.trim() && { backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }]} 
+            style={[styles.submitBtn, { backgroundColor: theme.accent }, !title.trim() && { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]} 
             onPress={handleAdd}
             disabled={!title.trim()}
           >
-            <Text style={[styles.submitText, !title.trim() && { color: theme.secondaryText }]}>Add Task</Text>
+            <Text style={[styles.submitText, !title.trim() && { color: theme.textSecondary }]}>Add Task</Text>
           </Pressable>
         </View>
       </View>

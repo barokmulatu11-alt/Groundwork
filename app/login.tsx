@@ -183,29 +183,22 @@ export default function LoginScreen() {
   // Desktop layout: side-by-side brand panel and auth card
   if (isDesktop) {
     return (
-      <BackgroundGradient>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <View style={styles.desktopContainer}>
           {/* Left Panel: App Intro / Brand Identity */}
           <View
             style={[
               styles.desktopBrandingPanel,
-              { backgroundColor: theme.accentLight },
+              { backgroundColor: theme.cardSolid, borderRightWidth: 1, borderRightColor: theme.separator },
             ]}
           >
-            <LinearGradient
-              colors={[
-                theme.accentLight,
-                theme.backgroundGradientStart || theme.card,
-              ]}
-              style={StyleSheet.absoluteFillObject}
-            />
             <View style={styles.brandingContent}>
               <Text
                 style={[
                   styles.brandingLogo,
                   {
                     fontFamily: "Inter_800ExtraBold",
-                    color: theme.primaryText,
+                    color: theme.text,
                   },
                 ]}
               >
@@ -213,15 +206,15 @@ export default function LoginScreen() {
                 <Text style={{ color: theme.accent }}>.</Text>
               </Text>
               <Text
-                style={[styles.brandingTagline, { color: theme.primaryText }]}
+                style={[styles.brandingTagline, { color: theme.text, fontFamily: 'PlayfairDisplay_600SemiBold_Italic' }]}
               >
                 Master your day, own your progress.
               </Text>
               <Text
-                style={[styles.brandingDesc, { color: theme.secondaryText }]}
+                style={[styles.brandingDesc, { color: theme.textSecondary }]}
               >
                 A clean, minimal, and premium workspace designed to help you
-                construct habits, manage tasks, record notes, and concentrate on
+                construct habits, manage tasks, and concentrate on
                 what matters most.
               </Text>
             </View>
@@ -232,14 +225,14 @@ export default function LoginScreen() {
             <View
               style={[
                 styles.desktopCard,
-                { backgroundColor: theme.card, borderColor: theme.cardBorder },
+                { backgroundColor: theme.cardSolid, borderColor: theme.separator },
               ]}
             >
               <View style={{ marginBottom: 28 }}>
-                <Text style={[styles.title, { color: theme.primaryText }]}>
+                <Text style={[styles.title, { color: theme.text }]}>
                   Sign In
                 </Text>
-                <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
                   Welcome back to groundwork.
                 </Text>
               </View>
@@ -469,12 +462,12 @@ export default function LoginScreen() {
             />
           )}
         </Modal>
-      </BackgroundGradient>
+      </View>
     );
   }
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -490,9 +483,9 @@ export default function LoginScreen() {
           >
             <Pressable
               onPress={() => router.back()}
-              style={[styles.backButton, { borderColor: theme.cardBorder }]}
+              style={[styles.backButton, { borderColor: theme.separator }]}
             >
-              <ChevronLeft color={theme.primaryText} size={24} />
+              <ChevronLeft color={theme.text} size={24} />
             </Pressable>
           </Animated.View>
 
@@ -501,10 +494,10 @@ export default function LoginScreen() {
             entering={FadeInUp.delay(100).duration(300)}
             style={{ marginBottom: 32, zIndex: 1 }}
           >
-            <Text style={[styles.title, { color: theme.primaryText }]}>
+            <Text style={[styles.title, { color: theme.text }]}>
               Sign In
             </Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+            <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'PlayfairDisplay_600SemiBold_Italic' }]}>
               Welcome back
             </Text>
           </Animated.View>
@@ -520,22 +513,22 @@ export default function LoginScreen() {
                 style={[
                   styles.inputContainer,
                   {
-                    backgroundColor: theme.card,
-                    borderColor: errors.email ? theme.danger : theme.cardBorder,
+                    backgroundColor: theme.cardSolid,
+                    borderColor: errors.email ? theme.danger : theme.separator,
                   },
                 ]}
               >
                 <Mail
                   size={20}
-                  color={theme.secondaryText}
+                  color={theme.textSecondary}
                   style={{ marginRight: 12 }}
                 />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText }]}
+                  style={[styles.input, { color: theme.text }]}
                   onChangeText={setEmail}
                   value={email}
                   placeholder="Email"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
@@ -553,24 +546,24 @@ export default function LoginScreen() {
                 style={[
                   styles.inputContainer,
                   {
-                    backgroundColor: theme.card,
+                    backgroundColor: theme.cardSolid,
                     borderColor: errors.password
                       ? theme.danger
-                      : theme.cardBorder,
+                      : theme.separator,
                   },
                 ]}
               >
                 <Lock
                   size={20}
-                  color={theme.secondaryText}
+                  color={theme.textSecondary}
                   style={{ marginRight: 12 }}
                 />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText }]}
+                  style={[styles.input, { color: theme.text }]}
                   onChangeText={setPassword}
                   value={password}
                   placeholder="Password"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
@@ -729,7 +722,7 @@ export default function LoginScreen() {
           />
         )}
       </Modal>
-    </BackgroundGradient>
+    </View>
   );
 }
 

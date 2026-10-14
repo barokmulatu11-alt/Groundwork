@@ -101,7 +101,7 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={
@@ -116,8 +116,8 @@ export default function WelcomeScreen() {
               ? [
                   styles.desktopCard,
                   {
-                    backgroundColor: theme.card,
-                    borderColor: theme.cardBorder,
+                    backgroundColor: theme.cardSolid,
+                    borderColor: theme.separator,
                   },
                 ]
               : { alignItems: "center", zIndex: 1 }
@@ -132,16 +132,16 @@ export default function WelcomeScreen() {
 
           <Animated.Text
             entering={FadeInUp.delay(100).duration(300)}
-            style={[styles.tagline, { color: theme.primaryText }]}
+            style={[styles.tagline, { color: theme.text }]}
           >
             Your daily focus companion.
           </Animated.Text>
 
           <Animated.Text
             entering={FadeInUp.delay(200).duration(300)}
-            style={[styles.subtitle, { color: theme.secondaryText }]}
+            style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'PlayfairDisplay_600SemiBold_Italic' }]}
           >
-            Tasks, habits, notes, and timers built for deep work.
+            Tasks, habits, and timers built for deep work.
           </Animated.Text>
 
           <Animated.View
@@ -160,15 +160,15 @@ export default function WelcomeScreen() {
               style={[
                 styles.secondaryButton,
                 {
-                  backgroundColor: isDesktop ? "transparent" : theme.card,
-                  borderColor: theme.cardBorder,
+                  backgroundColor: theme.cardSolid,
+                  borderColor: theme.separator,
                 },
               ]}
             >
               <Text
                 style={[
                   styles.secondaryButtonText,
-                  { color: theme.primaryText },
+                  { color: theme.text },
                 ]}
               >
                 {"Sign In"}
@@ -181,8 +181,8 @@ export default function WelcomeScreen() {
               style={[
                 styles.secondaryButton,
                 {
-                  backgroundColor: theme.accentLight,
-                  borderColor: theme.accentBorder,
+                  backgroundColor: theme.cardSolid,
+                  borderColor: theme.separator,
                   marginTop: 12,
                   opacity: googleLoading ? 0.7 : 1,
                 },
@@ -208,7 +208,7 @@ export default function WelcomeScreen() {
                     <Text
                       style={[
                         styles.secondaryButtonText,
-                        { color: theme.accent },
+                        { color: theme.text },
                       ]}
                     >
                       Continue with Google
@@ -227,25 +227,25 @@ export default function WelcomeScreen() {
               onPress={handleContinueWithoutAccount}
               style={{ backgroundColor: "transparent", paddingVertical: 6 }}
             >
-              <Text style={[styles.skipText, { color: theme.primaryText }]}>
+              <Text style={[styles.skipText, { color: theme.textSecondary }]}>
                 {"Continue without account"}
               </Text>
             </Pressable>
             <Text
               style={{
                 fontSize: 12,
-                color: theme.tertiaryText,
+                color: theme.textMuted,
                 fontFamily: "Inter_400Regular",
                 marginTop: 4,
                 textAlign: "center",
               }}
             >
-              Your tasks and notes stay on this device unless connected.
+              Your tasks, habits, and focus stay on this device unless connected.
             </Text>
           </Animated.View>
         </View>
       </KeyboardAvoidingView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

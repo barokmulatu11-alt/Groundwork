@@ -1,5 +1,6 @@
 import { AppText as Text } from '@/components/ui/AppText';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -197,33 +198,36 @@ export default function AccountSettingsScreen() {
   };
 
   return (
-    <BackgroundGradient>
-      <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <ChevronLeft size={24} color={theme.accent} />
-          <Text style={[styles.backText, { color: theme.accent }]}>Settings</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Account</Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Account.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Profile and sign-in.
+          </Text>
+        </View>
+
         {/* Guest Mode Honest Identifier Banner */}
         {(isGuest || !session) && (
-          <View style={[styles.guestBanner, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <View style={[styles.guestBanner, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
             <View style={styles.guestBannerTop}>
               <View style={[styles.guestBadge, { backgroundColor: theme.accent + '20' }]}>
                 <Sparkles size={16} color={theme.accent} />
                 <Text style={[styles.guestBadgeText, { color: theme.accent }]}>Guest Mode</Text>
               </View>
             </View>
-            <Text style={[styles.guestTitle, { color: theme.primaryText }]}>
+            <Text style={[styles.guestTitle, { color: theme.text }]}>
               Local Device Account
             </Text>
-            <Text style={[styles.guestDescription, { color: theme.secondaryText }]}>
-              You are exploring Groundwork without a signed-in cloud account. All tasks, habits, and notes are saved locally on this device.
+            <Text style={[styles.guestDescription, { color: theme.textSecondary }]}>
+              You are exploring Groundwork without a signed-in cloud account. All tasks, habits, and focus sessions are saved locally on this device.
             </Text>
             <TouchableOpacity
               style={[styles.createAccountBtn, { backgroundColor: theme.accent }]}
@@ -236,8 +240,8 @@ export default function AccountSettingsScreen() {
           </View>
         )}
 
-        <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>PERSONAL INFO</Text>
-        <View style={styles.group}>
+        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>PERSONAL INFO</Text>
+        <View style={[styles.group, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
           <ActionRow
             Icon={User}
             title="Change Name"
@@ -269,8 +273,8 @@ export default function AccountSettingsScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionTitle, { color: theme.secondaryText, marginTop: 24 }]}>SECURITY</Text>
-        <View style={styles.group}>
+        <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: 24 }]}>SECURITY</Text>
+        <View style={[styles.group, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
           <ActionRow
             Icon={Lock}
             title="Change Password"
@@ -472,7 +476,7 @@ export default function AccountSettingsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </BackgroundGradient>
+    </View>
   );
 }
 

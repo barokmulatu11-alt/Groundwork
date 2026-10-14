@@ -33,9 +33,9 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
 
   const { theme, isDark } = useTheme();
   
-  const textColor = theme.primaryText;
-  const labelColor = theme.secondaryText;
-  const inputBorder = theme.cardBorder;
+  const textColor = theme.text;
+  const labelColor = theme.textSecondary;
+  const inputBorder = theme.separator;
 
   const handleSave = () => {
     if (title.trim()) {
@@ -83,9 +83,9 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
             <Pressable
               key={t.title}
               onPress={() => applyTemplate(t)}
-              style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginRight: 8, borderWidth: 1, borderColor: theme.cardBorder }}
+              style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: theme.cardSolid, marginRight: 8, borderWidth: 1, borderColor: theme.separator }}
             >
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: theme.primaryText }}>{t.title}</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: theme.text }}>{t.title}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -99,8 +99,8 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
             value={title}
             onChangeText={setTitle}
             placeholder="e.g. Drink 2L of water"
-            placeholderTextColor="#AEAEB2"
-            style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', color: textColor, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: inputBorder, fontSize: 15, fontFamily: 'Inter_500Medium' }}
+            placeholderTextColor={theme.textSecondary}
+            style={{ backgroundColor: theme.background, color: textColor, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: inputBorder, fontSize: 15, fontFamily: 'Inter_500Medium' }}
           />
         </View>
 
@@ -115,9 +115,9 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
                 accessibilityRole="button"
                 accessibilityLabel={`Category ${c}`}
                 onPress={() => setCategory(c)}
-                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: category === c ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), borderWidth: 1, borderColor: category === c ? theme.accent : theme.cardBorder }}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: category === c ? theme.accent : theme.cardSolid, borderWidth: 1, borderColor: category === c ? theme.accent : theme.separator }}
               >
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: category === c ? 'white' : theme.primaryText }}>{c}</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: category === c ? 'white' : theme.text }}>{c}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -131,9 +131,9 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
               <Pressable
                 key={d}
                 onPress={() => setDifficulty(d)}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: difficulty === d ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', borderWidth: 1, borderColor: difficulty === d ? theme.accent : theme.cardBorder }}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: difficulty === d ? theme.accent : theme.cardSolid, alignItems: 'center', borderWidth: 1, borderColor: difficulty === d ? theme.accent : theme.separator }}
               >
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: difficulty === d ? 'white' : theme.primaryText }}>{d}</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: difficulty === d ? 'white' : theme.text }}>{d}</Text>
               </Pressable>
             ))}
           </View>
@@ -147,9 +147,9 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
               <Pressable
                 key={f}
                 onPress={() => setFrequency(f)}
-                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: frequency === f ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), borderWidth: 1, borderColor: frequency === f ? theme.accent : theme.cardBorder }}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: frequency === f ? theme.accent : theme.cardSolid, borderWidth: 1, borderColor: frequency === f ? theme.accent : theme.separator }}
               >
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: frequency === f ? 'white' : theme.primaryText }}>{f}</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: frequency === f ? 'white' : theme.text }}>{f}</Text>
               </Pressable>
             ))}
           </View>
@@ -160,9 +160,9 @@ export function AddHabitSheet({ visible, onClose, onAddHabit }: AddHabitSheetPro
                 <Pressable
                   key={i}
                   onPress={() => toggleDay(i)}
-                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: customDays.includes(i) ? theme.accent : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: customDays.includes(i) ? theme.accent : theme.cardBorder }}
+                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: customDays.includes(i) ? theme.accent : theme.cardSolid, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: customDays.includes(i) ? theme.accent : theme.separator }}
                 >
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: customDays.includes(i) ? 'white' : theme.primaryText }}>{d}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: customDays.includes(i) ? 'white' : theme.text }}>{d}</Text>
                 </Pressable>
               ))}
             </View>

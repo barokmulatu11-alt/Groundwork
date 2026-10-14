@@ -3,7 +3,7 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Switch, Platform } from 'react-native';
 import { useTheme } from '@/lib/ThemeContext';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { TabHeader } from '@/components/ui/TabHeader';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
@@ -34,7 +34,7 @@ function SectionLabel({ label, theme }: { label: string; theme: any }) {
 
 function Card({ children, theme }: { children: React.ReactNode; theme: any }) {
   return (
-    <View style={[styles.card, { backgroundColor: theme.card }]}>
+    <View style={[styles.card, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
       {children}
     </View>
   );
@@ -57,8 +57,8 @@ function SettingRow({ icon: Icon, title, subtitle, theme, children, onPress }: S
           <Icon size={18} color={theme.accent} />
         </View>
         <View style={styles.settingInfo}>
-          <Text style={[styles.settingTitle, { color: theme.primaryText }]}>{title}</Text>
-          {subtitle && <Text style={[styles.settingSubtitle, { color: theme.secondaryText }]}>{subtitle}</Text>}
+          <Text style={[styles.settingTitle, { color: theme.text }]}>{title}</Text>
+          {subtitle && <Text style={[styles.settingSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
         </View>
         {children}
       </View>
@@ -86,19 +86,29 @@ export default function NotificationSettingsScreen() {
 
   const { 
     notificationsEnabled, setNotificationsEnabled,
-    defaultReminderTime, setDefaultReminderTime 
+    defaultReminderTime, setDefaultReminderTime,
+    quietHoursEnabled, setQuietHoursEnabled,
+    taskRemindersEnabled, setTaskRemindersEnabled,
+    habitRemindersEnabled, setHabitRemindersEnabled,
+    appUpdatesEnabled, setAppUpdatesEnabled,
   } = useSettingsStore();
 
   return (
-    <BackgroundGradient>
-      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 24 }}>
-        <TabHeader title="Notifications" subtitle="Manage how you stay updated" />
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Notifications.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Choose when to be interrupted.
+          </Text>
+        </View>
         <Animated.View entering={FadeInDown.delay(100).duration(500)}>
           {/* ── ALERTS ─────────────────────────────── */}
           <SectionLabel label="ALERTS" theme={theme} />
@@ -168,8 +178,8 @@ export default function NotificationSettingsScreen() {
                   theme={theme}
                 >
                    <Switch
-                    value={true}
-                    onValueChange={() => {}}
+                    value={quietHoursEnabled}
+                    onValueChange={setQuietHoursEnabled}
                     trackColor={{ true: accentColor, false: theme.switchTrackFalse }}
                     thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                   />
@@ -186,7 +196,12 @@ export default function NotificationSettingsScreen() {
                   title="Task Reminders" 
                   theme={theme}
                 >
-                  <Switch value={true} onValueChange={() => {}} trackColor={{ true: accentColor }} />
+                  <Switch
+                    value={taskRemindersEnabled}
+                    onValueChange={setTaskRemindersEnabled}
+                    trackColor={{ true: accentColor, false: theme.switchTrackFalse }}
+                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                  />
                 </SettingRow>
                 <View style={[styles.separator, { backgroundColor: theme.separator }]} />
                 <SettingRow 
@@ -194,7 +209,12 @@ export default function NotificationSettingsScreen() {
                   title="Habit Streaks" 
                   theme={theme}
                 >
-                  <Switch value={true} onValueChange={() => {}} trackColor={{ true: accentColor }} />
+                  <Switch
+                    value={habitRemindersEnabled}
+                    onValueChange={setHabitRemindersEnabled}
+                    trackColor={{ true: accentColor, false: theme.switchTrackFalse }}
+                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                  />
                 </SettingRow>
                 <View style={[styles.separator, { backgroundColor: theme.separator }]} />
                 <SettingRow 
@@ -202,11 +222,24 @@ export default function NotificationSettingsScreen() {
                   title="App Updates" 
                   theme={theme}
                 >
-                  <Switch value={false} onValueChange={() => {}} trackColor={{ true: accentColor }} />
+                  <Switch
+                    value={appUpdatesEnabled}
+                    onValueChange={setAppUpdatesEnabled}
+                    trackColor={{ true: accentColor, false: theme.switchTrackFalse }}
+                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                  />
                 </SettingRow>
               </Card>
             </Animated.View>
           </>
+        )}
+
+        {Platform.OS === 'web' && (
+          <View style={[styles.card, { backgroundColor: isDark ? 'rgba(0,102,255,0.08)' : 'rgba(0,102,255,0.05)', borderColor: theme.separator, borderWidth: 1, padding: 14, marginTop: 16 }]}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.textSecondary, lineHeight: 18 }}>
+              Web browser notifications require permission from your browser. Check your browser site settings if you do not receive alert banners.
+            </Text>
+          </View>
         )}
 
         <View style={styles.footerNote}>
@@ -216,7 +249,7 @@ export default function NotificationSettingsScreen() {
         </View>
 
       </ScrollView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

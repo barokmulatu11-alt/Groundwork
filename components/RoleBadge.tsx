@@ -37,11 +37,11 @@ const ROLE_CONFIG: Record<string, any> = {
   },
 };
 
-export function RoleBadge({ role = 'user', isPro = false }: RoleBadgeProps) {
+export function RoleBadge({ role = 'user' }: RoleBadgeProps) {
   const { theme, showAlert } = useTheme();
 
-  // If user is a special role, show that. Otherwise show Pro if they have it.
-  const configKey = role !== 'user' ? role.toLowerCase() : isPro ? 'pro' : null;
+  // Only display team roles (owner, admin, moderator) - never paid badges
+  const configKey = role && role !== 'user' && role !== 'pro' ? role.toLowerCase() : null;
   
   if (!configKey || !ROLE_CONFIG[configKey]) return null;
   

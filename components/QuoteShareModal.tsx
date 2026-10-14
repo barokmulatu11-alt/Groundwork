@@ -1,6 +1,6 @@
 import { CustomAlert } from "@/components/ui/CustomAlert";
 import { useTheme } from "@/lib/ThemeContext";
-import { hapticLight, hapticSuccess } from "@/lib/haptics";
+import { hapticLight, hapticSuccess, hapticSelection } from "@/lib/haptics";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
@@ -219,38 +219,17 @@ export function QuoteShareModal({
     return `${header ? `${header}\n` : ""}“${quote.text}”\n\n— ${quote.author}${branding}`;
   };
 
-  // Launch Simulated Sharing Card pipeline
-  const handlePlatformShare = (platform: SocialMediaDef) => {
-    hapticLight();
-    setSimPlatform(platform);
-    setSimulatingShare(true);
-    setSimStep(0);
-
-    // Dynamic steps simulation
-    setTimeout(() => {
-      hapticLight();
-      setSimStep(1); // Generating card layout
-      setTimeout(() => {
-        hapticLight();
-        setSimStep(2); // Optimizing filters and aspect ratio
-        setTimeout(() => {
-          hapticSuccess();
-          setSimStep(3); // Complete
-          // Fire native Share utility in background so they can actualize sharing text if supported
-          setTimeout(async () => {
-            setSimulatingShare(false);
-            try {
-              await Share.share({
-                message: getShareableText(),
-                title: `Post to ${platform.name}`,
-              });
-            } catch {
-              // ignore sharing cancel/abort
-            }
-          }, 1500);
-        }, 1200);
-      }, 1000);
-    }, 800);
+  // Direct real native share
+  const handlePlatformShare = async (platform: SocialMediaDef) => {
+    hapticSelection();
+    try {
+      await Share.share({
+        message: getShareableText(),
+        title: `Post to ${platform.name}`,
+      });
+    } catch {
+      // ignore sharing cancel/abort
+    }
   };
 
   // Handle Copy Quote Text
@@ -269,12 +248,7 @@ export function QuoteShareModal({
 
   const handleBrandingToggle = () => {
     hapticLight();
-    if (showBranding) {
-      // Trigger Groundwork Pro paywall dialog
-      setShowProAlert(true);
-    } else {
-      setShowBranding(true);
-    }
+    setShowBranding(!showBranding);
   };
 
   return (

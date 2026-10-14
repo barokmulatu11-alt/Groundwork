@@ -91,7 +91,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             username: "Guest",
             full_name: "Guest User",
             bio: "On a mission to stay productive.",
-            avatar_url: `https://api.dicebear.com/7.x/avataaars/png?seed=guest`,
+            avatar_url: null,
             role: "member",
             pro_status: false,
           };
@@ -242,7 +242,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             username: "Guest",
             full_name: "Guest User",
             bio: "On a mission to stay productive.",
-            avatar_url: `https://api.dicebear.com/7.x/avataaars/png?seed=guest`,
+            avatar_url: null,
             role: "member",
             pro_status: false,
           };

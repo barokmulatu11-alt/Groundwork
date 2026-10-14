@@ -15,7 +15,7 @@ export function CenterModal({
   children,
   maxWidth = 340,
 }: CenterModalProps) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   return (
     <Modal
@@ -26,15 +26,14 @@ export function CenterModal({
       statusBarTranslucent
     >
       <View style={styles.overlay}>
-        {/* Backdrop - simplified to ensure it never gets stuck */}
+        {/* Backdrop */}
         <Pressable 
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} 
+          style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.45)' }]} 
           onPress={onClose} 
         />
         
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          // Ensure the modal content stays centered across platforms (incl. web)
           style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}
           pointerEvents="box-none"
         >
@@ -42,9 +41,8 @@ export function CenterModal({
             style={[
               styles.modalBox, 
               { 
-                backgroundColor: theme.background,
-                borderColor: theme.cardBorder,
-                
+                backgroundColor: theme.cardSolid,
+                borderColor: theme.separator,
                 maxWidth: maxWidth,
               }
             ]}
@@ -70,12 +68,8 @@ const styles = StyleSheet.create({
   },
   modalBox: {
     width: '100%',
-    borderRadius: 32,
+    borderRadius: 24,
     borderWidth: 1,
-    
-    
-    
-    
     overflow: 'hidden',
   },
 });

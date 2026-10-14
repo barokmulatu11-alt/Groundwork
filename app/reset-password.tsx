@@ -153,7 +153,7 @@ export default function ResetPasswordScreen() {
   // Missing token view
   if (!token && !isSupabaseMode) {
     return (
-      <BackgroundGradient>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.centerContainer}
@@ -162,16 +162,16 @@ export default function ResetPasswordScreen() {
             entering={FadeInUp.duration(300)}
             style={[
               isDesktop ? styles.desktopCard : styles.mobileCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              { backgroundColor: theme.cardSolid, borderColor: theme.separator },
             ]}
           >
             <View style={[styles.iconCircle, { backgroundColor: '#FF3B3020' }]}>
               <AlertCircle size={40} color="#FF3B30" />
             </View>
-            <Text style={[styles.title, { color: theme.primaryText, textAlign: 'center', marginBottom: 12 }]}>
+            <Text style={[styles.title, { color: theme.text, textAlign: 'center', marginBottom: 12 }]}>
               Invalid Reset Link
             </Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText, textAlign: 'center', marginBottom: 32 }]}>
+            <Text style={[styles.subtitle, { color: theme.textSecondary, textAlign: 'center', marginBottom: 32 }]}>
               This password reset link is missing a valid verification token or is malformed. Please request a fresh reset link.
             </Text>
             <Pressable
@@ -184,20 +184,20 @@ export default function ResetPasswordScreen() {
               onPress={() => router.replace('/login' as any)}
               style={{ marginTop: 16 }}
             >
-              <Text style={{ color: theme.secondaryText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
                 Back to Sign In
               </Text>
             </Pressable>
           </Animated.View>
         </KeyboardAvoidingView>
-      </BackgroundGradient>
+      </View>
     );
   }
 
   // Success view
   if (success) {
     return (
-      <BackgroundGradient>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.centerContainer}
@@ -206,16 +206,16 @@ export default function ResetPasswordScreen() {
             entering={FadeInUp.duration(300)}
             style={[
               isDesktop ? styles.desktopCard : styles.mobileCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              { backgroundColor: theme.cardSolid, borderColor: theme.separator },
             ]}
           >
             <View style={[styles.iconCircle, { backgroundColor: '#34C75920' }]}>
               <CheckCircle2 size={48} color="#34C759" />
             </View>
-            <Text style={[styles.title, { color: theme.primaryText, textAlign: 'center', marginBottom: 12 }]}>
+            <Text style={[styles.title, { color: theme.text, textAlign: 'center', marginBottom: 12 }]}>
               Password Reset!
             </Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText, textAlign: 'center', marginBottom: 32 }]}>
+            <Text style={[styles.subtitle, { color: theme.textSecondary, textAlign: 'center', marginBottom: 32 }]}>
               Your password has been successfully updated. You can now sign in with your new credentials.
             </Text>
             <Pressable
@@ -226,12 +226,12 @@ export default function ResetPasswordScreen() {
             </Pressable>
           </Animated.View>
         </KeyboardAvoidingView>
-      </BackgroundGradient>
+      </View>
     );
   }
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -240,17 +240,17 @@ export default function ResetPasswordScreen() {
           contentContainerStyle={isDesktop ? styles.desktopContainer : styles.scrollContainer}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[isDesktop ? styles.desktopCard : styles.mobileCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <View style={[isDesktop ? styles.desktopCard : styles.mobileCard, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
             <Pressable
               onPress={() => router.replace('/login' as any)}
-              style={[styles.iconBox, { backgroundColor: theme.accentLight, marginBottom: 24 }]}
+              style={[styles.iconBox, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1, marginBottom: 24 }]}
             >
-              <ChevronLeft size={20} color={theme.accent} />
+              <ChevronLeft size={20} color={theme.text} />
             </Pressable>
 
             <View style={{ marginBottom: 28 }}>
-              <Text style={[styles.title, { color: theme.primaryText }]}>Reset Password</Text>
-              <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+              <Text style={[styles.title, { color: theme.text }]}>Reset Password</Text>
+              <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
                 Choose a strong new password for your account.
               </Text>
             </View>
@@ -274,20 +274,20 @@ export default function ResetPasswordScreen() {
 
             {/* New Password Input */}
             <View style={{ marginBottom: 16 }}>
-              <Text style={[styles.label, { color: theme.primaryText }]}>New Password</Text>
-              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: error ? theme.danger : theme.cardBorder }]}>
-                <Lock size={18} color={theme.secondaryText} style={{ marginRight: 12 }} />
+              <Text style={[styles.label, { color: theme.text }]}>New Password</Text>
+              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: error ? theme.danger : theme.separator }]}>
+                <Lock size={18} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText }]}
+                  style={[styles.input, { color: theme.text }]}
                   onChangeText={setNewPassword}
                   value={newPassword}
                   placeholder="At least 8 characters"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showNew}
                   autoCapitalize="none"
                 />
                 <Pressable onPress={() => setShowNew(!showNew)} hitSlop={10}>
-                  {showNew ? <EyeOff size={18} color={theme.secondaryText} /> : <Eye size={18} color={theme.secondaryText} />}
+                  {showNew ? <EyeOff size={18} color={theme.textSecondary} /> : <Eye size={18} color={theme.textSecondary} />}
                 </Pressable>
               </View>
 
@@ -295,10 +295,10 @@ export default function ResetPasswordScreen() {
               {newPassword.length > 0 && (
                 <View style={{ marginTop: 8 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, color: theme.secondaryText, fontFamily: 'Inter_600SemiBold' }}>Strength</Text>
+                    <Text style={{ fontSize: 12, color: theme.textSecondary, fontFamily: 'Inter_600SemiBold' }}>Strength</Text>
                     <Text style={{ fontSize: 12, color: getStrengthColor(), fontFamily: 'Inter_700Bold' }}>{getStrengthLabel()}</Text>
                   </View>
-                  <View style={styles.strengthBarBg}>
+                  <View style={[styles.strengthBarBg, { backgroundColor: theme.separator }]}>
                     <View style={[styles.strengthBarFill, { width: `${(strengthScore / 4) * 100}%`, backgroundColor: getStrengthColor() }]} />
                   </View>
                 </View>
@@ -307,20 +307,20 @@ export default function ResetPasswordScreen() {
 
             {/* Confirm Password Input */}
             <View style={{ marginBottom: 24 }}>
-              <Text style={[styles.label, { color: theme.primaryText }]}>Confirm Password</Text>
-              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: error ? theme.danger : theme.cardBorder }]}>
-                <Lock size={18} color={theme.secondaryText} style={{ marginRight: 12 }} />
+              <Text style={[styles.label, { color: theme.text }]}>Confirm Password</Text>
+              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: error ? theme.danger : theme.separator }]}>
+                <Lock size={18} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText }]}
+                  style={[styles.input, { color: theme.text }]}
                   onChangeText={setConfirmPassword}
                   value={confirmPassword}
                   placeholder="Re-enter password"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showConfirm}
                   autoCapitalize="none"
                 />
                 <Pressable onPress={() => setShowConfirm(!showConfirm)} hitSlop={10}>
-                  {showConfirm ? <EyeOff size={18} color={theme.secondaryText} /> : <Eye size={18} color={theme.secondaryText} />}
+                  {showConfirm ? <EyeOff size={18} color={theme.textSecondary} /> : <Eye size={18} color={theme.textSecondary} />}
                 </Pressable>
               </View>
             </View>
@@ -350,7 +350,7 @@ export default function ResetPasswordScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

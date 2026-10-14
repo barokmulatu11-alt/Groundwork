@@ -39,10 +39,18 @@ export interface SettingsState {
   isLocked: boolean;
   lastActive: number | null;
   twoFactorEnabled: boolean;
+  quietHoursEnabled: boolean;
+  taskRemindersEnabled: boolean;
+  habitRemindersEnabled: boolean;
+  appUpdatesEnabled: boolean;
   
   setLocked: (locked: boolean) => void;
   setLastActive: (time: number | null) => void;
   setTwoFactorEnabled: (enabled: boolean) => void;
+  setQuietHoursEnabled: (enabled: boolean) => void;
+  setTaskRemindersEnabled: (enabled: boolean) => void;
+  setHabitRemindersEnabled: (enabled: boolean) => void;
+  setAppUpdatesEnabled: (enabled: boolean) => void;
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -111,6 +119,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   isLocked: false,
   lastActive: null,
   twoFactorEnabled: false,
+  quietHoursEnabled: true,
+  taskRemindersEnabled: true,
+  habitRemindersEnabled: true,
+  appUpdatesEnabled: false,
   
   setTheme: (theme) => {
     set({ theme });
@@ -230,6 +242,22 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ twoFactorEnabled });
     get().saveSettings();
   },
+  setQuietHoursEnabled: (quietHoursEnabled) => {
+    set({ quietHoursEnabled });
+    get().saveSettings();
+  },
+  setTaskRemindersEnabled: (taskRemindersEnabled) => {
+    set({ taskRemindersEnabled });
+    get().saveSettings();
+  },
+  setHabitRemindersEnabled: (habitRemindersEnabled) => {
+    set({ habitRemindersEnabled });
+    get().saveSettings();
+  },
+  setAppUpdatesEnabled: (appUpdatesEnabled) => {
+    set({ appUpdatesEnabled });
+    get().saveSettings();
+  },
   
   loadSettings: async () => {
     const userId = useAuthStore.getState().getUserId();
@@ -329,7 +357,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         setPomodoroLongBreakDuration, setPomodoroAutoStartBreaks,
         setSmartSuggestionsEnabled, setOfflineMode, setFaceIdEnabled,
         setAppPin, setAutoLockTimeout, setLocked, setLastActive,
-        setTwoFactorEnabled, ...serializableSettings 
+        setTwoFactorEnabled, setQuietHoursEnabled, setTaskRemindersEnabled,
+        setHabitRemindersEnabled, setAppUpdatesEnabled, ...serializableSettings 
       } = updatedState as any;
       
       try {

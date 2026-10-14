@@ -1,472 +1,602 @@
-import { BackgroundGradient } from '@/components/BackgroundGradient';
-import { AddTaskSheet, AddTaskSheetRef } from '@/components/tasks/AddTaskSheet';
-import { EditTaskSheet, EditTaskSheetRef } from '@/components/tasks/EditTaskSheet';
-import { EmptyTaskState } from '@/components/tasks/EmptyTaskState';
-import { SwipeableTaskCard } from '@/components/tasks/SwipeableTaskCard';
-import { TaskCard } from '@/components/tasks/TaskCard';
-import { TaskProgressBar } from '@/components/tasks/TaskProgressBar';
-import { AnimatedCard } from '@/components/ui/AnimatedCard';
-import { AppText as Text } from '@/components/ui/AppText';
-import { TabHeader } from '@/components/ui/TabHeader';
-import { useTasks } from '@/hooks/useTasks';
-import { useTaskStats } from '@/hooks/useTaskStats';
-import { useTheme } from '@/lib/ThemeContext';
-import { useSettingsStore } from '@/store/useSettingsStore';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Activity, CheckCircle2, Clock, Plus } from 'lucide-react-native';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import ConfettiCannon from 'react-native-confetti-cannon';
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Platform,
+  useWindowDimensions,
+  KeyboardAvoidingView,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Check, ChevronDown, ChevronRight, ChevronUp, CornerDownLeft, Plus, Timer } from 'lucide-react-native';
+import { AppText as Text } from '@/components/ui/AppText';
+import { BrandHeader } from '@/components/ui/BrandHeader';
+import { useTheme } from '@/lib/ThemeContext';
+import { useStore } from '@/store/useStore';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { getLocalDateString, getTomorrowDateString, formatHeaderDate } from '@/lib/dateUtils';
 
-const { width } = Dimensions.get('window');
-
-type ViewType = 'Today' | 'Upcoming' | 'All';
+type TabView = 'Today' | 'Upcoming' | 'All';
 
 export default function TasksScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { theme, isDark, showAlert } = useTheme();
-  const { date: queryDate } = useLocalSearchParams<{ date?: string }>();
-  
-  const todayDate = new Date().toISOString().split('T')[0];
-  const tomorrowDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
 
-  const { 
-    tasks, pendingTasks, completedTasks, completionRate, 
-    addTask, updateTask, deleteTask, toggleComplete, 
-    reorderTasks, duplicateTask, getOverdue,
-    loadTasks, loadUpcomingTasks, loadAllTasks, loading, error 
-  } = useTasks(todayDate);
-  const { stats } = useTaskStats(todayDate);
-  const [overdueTasks, setOverdueTasks] = useState<any[]>([]);
-  const { tasksLayout } = useSettingsStore();
-  const isGrid = tasksLayout === 'grid';
+  const { tasks, loadAllTasks, addTask, toggleTask } = useStore();
 
-  const [activeView, setActiveView] = useState<ViewType>('Today');
-  
-  const addTaskRef = useRef<AddTaskSheetRef>(null);
-  const editTaskRef = useRef<EditTaskSheetRef>(null);
-  const confettiRef = useRef<any>(null);
+  const { create } = useLocalSearchParams<{ create?: string }>();
+  const [activeTab, setActiveTab] = useState<TabView>('Today');
+  const [quickTitle, setQuickTitle] = useState('');
+  const [completedExpanded, setCompletedExpanded] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const quickInputRef = useRef<TextInput>(null);
 
-  const [completedCount, setCompletedCount] = useState(completedTasks.length);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [paywallVisible, setPaywallVisible] = useState(false);
-  const hasMountedRef = useRef(false);
-
+  // Focus quick-add input if navigated with create=true
   useEffect(() => {
-    if (queryDate) {
-      if (queryDate > todayDate) {
-        setActiveView('Upcoming');
-      } else if (queryDate === todayDate) {
-        setActiveView('Today');
-      }
-      setTimeout(() => {
-        addTaskRef.current?.open(queryDate);
-      }, 400);
+    if (create === 'true') {
+      const timer = setTimeout(() => {
+        quickInputRef.current?.focus();
+      }, 200);
+      return () => clearTimeout(timer);
     }
-  }, [queryDate]);
+  }, [create]);
 
-  useEffect(() => {
-    setOverdueTasks(getOverdue());
-  }, [tasks, getOverdue]);
+  // Sync tasks on focus
+  useFocusEffect(
+    useCallback(() => {
+      loadAllTasks();
+    }, [loadAllTasks])
+  );
 
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      setCompletedCount(completedTasks.length);
+  const todayStr = getLocalDateString();
+  const todayFormatted = formatHeaderDate();
+
+  // Filter tasks honestly
+  const activeAllTasks = (tasks || []).filter((t) => !t.deleted_at);
+
+  let currentPendingTasks = activeAllTasks.filter((t) => !t.completed);
+  let currentCompletedTasks = activeAllTasks.filter((t) => t.completed);
+
+  if (activeTab === 'Today') {
+    currentPendingTasks = currentPendingTasks.filter((t) => t.date === todayStr || !t.date);
+    currentCompletedTasks = currentCompletedTasks.filter((t) => t.date === todayStr || !t.date);
+  } else if (activeTab === 'Upcoming') {
+    currentPendingTasks = currentPendingTasks.filter((t) => t.date && t.date > todayStr);
+    currentCompletedTasks = currentCompletedTasks.filter((t) => t.date && t.date > todayStr);
+  }
+
+  const handleQuickAdd = async () => {
+    const trimmed = quickTitle.trim();
+    if (!trimmed) {
+      quickInputRef.current?.focus();
       return;
     }
-    const allDone = tasks.length > 0 && completedTasks.length === tasks.length;
-    if (allDone && completedCount < tasks.length) {
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 5000);
-    }
-    setCompletedCount(completedTasks.length);
-  }, [completedTasks.length, tasks.length, completedCount]);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    hapticSuccess();
+    setQuickTitle('');
+    // For Upcoming tab, default to tomorrow's date so task immediately satisfies t.date > todayStr
+    const taskDate = activeTab === 'Today'
+      ? todayStr
+      : activeTab === 'Upcoming'
+      ? getTomorrowDateString()
+      : todayStr;
 
-  useEffect(() => {
-    if (error) {
-      showAlert({
-        title: 'Task error',
-        message: error,
-        primaryButton: { text: 'OK', onPress: () => {} },
+    try {
+      await addTask({
+        title: trimmed,
+        date: taskDate,
+        completed: false,
+        priority: 'medium',
       });
-    }
-  }, [error, showAlert]);
-
-  const handleAddTask = async (task: any, view?: any) => {
-    const result = await addTask(task, view);
-    if (result && !result.allowed) {
-      setPaywallVisible(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    if (activeView === 'Today') loadTasks();
-    else if (activeView === 'Upcoming') loadUpcomingTasks();
-    else loadAllTasks();
-    setRefreshing(false);
+  const getSectionTitle = () => {
+    if (activeTab === 'Today') return 'Your day';
+    if (activeTab === 'Upcoming') return 'Upcoming';
+    return 'All tasks';
   };
 
-  const renderTaskItem = (t: (typeof tasks)[0], options?: { showDate?: boolean; swipeable?: boolean }) => {
-    const showDate = options?.showDate ?? false;
-    const swipeable = options?.swipeable ?? false;
-    const card = (
-      <TaskCard
-        task={t as any}
-        onToggleComplete={() => toggleComplete(t.id)}
-        onUpdate={(u) => updateTask(t.id, u)}
-        onDelete={() => handleDeleteTask(t.id)}
-        onDuplicate={() => duplicateTask(t.id)}
-        onEdit={() => editTaskRef.current?.open(t as any)}
-        showDate={showDate}
-      />
-    );
-    if (swipeable && !t.completed) {
-      return (
-        <SwipeableTaskCard
-          key={t.id}
-          task={t as any}
-          onComplete={() => toggleComplete(t.id)}
-          onUpdate={(u) => updateTask(t.id, u)}
-          onDelete={() => handleDeleteTask(t.id)}
-          onDuplicate={() => duplicateTask(t.id)}
-          onEdit={() => editTaskRef.current?.open(t as any)}
-        />
-      );
-    }
-    return <View key={t.id}>{card}</View>;
-  };
-
-  const handleDeleteTask = (id: string) => {
-    showAlert({
-      title: "Delete Task",
-      message: "Are you sure? This cannot be undone and will permanently remove this task.",
-      primaryButton: { 
-        text: "Delete", 
-        destructive: true, 
-        onPress: () => deleteTask(id) 
-      },
-      secondaryButton: { 
-        text: "Cancel", 
-        onPress: () => {} 
-      }
-    });
-  };
-
-  const viewIndicatorX = useSharedValue(0);
-  const tabWidth = (width - 48) / 3;
-
-  useEffect(() => {
-    viewIndicatorX.value = withSpring(
-      activeView === 'Today' ? 0 : activeView === 'Upcoming' ? tabWidth : tabWidth * 2,
-      { damping: 30, stiffness: 150, mass: 1 }
-    );
-  }, [activeView, viewIndicatorX, tabWidth]);
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: viewIndicatorX.value }]
-  }));
-
-  const getGreeting = () => {
-    if (tasks.length === 0) return "Let's get it done";
-    if (completionRate === 0) return "Let's get it done";
-    if (completionRate < 50) return "You're on a roll";
-    if (completionRate < 80) return "Almost there, finish strong";
-    if (completionRate < 100) return "So close! One more";
-    return "You crushed it today";
-  };
-
-  const renderToday = () => {
-    if (tasks.length === 0) {
-      return (
-        <EmptyTaskState 
-          onQuickAdd={(title) => addTask({ title, date: todayDate })}
-          yesterdayTasks={overdueTasks}
-          onAddYesterdayTasks={() => {
-            overdueTasks.forEach(t => updateTask(t.id, { date: todayDate }));
-            setOverdueTasks([]);
-          }}
-        />
-      );
-    }
-
-    return (
-      <View style={{ flex: 1, paddingHorizontal: 24 }}>
-        <DraggableFlatList
-          data={pendingTasks}
-          onDragEnd={({ data }) => reorderTasks(data)}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, drag, isActive }) => (
-            <ScaleDecorator>
-              <Pressable onLongPress={drag} disabled={isActive} style={{ backgroundColor: 'transparent' }}>
-                <SwipeableTaskCard 
-                  task={item as any}
-                  onComplete={() => toggleComplete(item.id)}
-                  onUpdate={(u) => updateTask(item.id, u)}
-                  onDelete={() => handleDeleteTask(item.id)}
-                  onDuplicate={() => duplicateTask(item.id)}
-                  onEdit={() => editTaskRef.current?.open(item as any)}
-                />
-              </Pressable>
-            </ScaleDecorator>
-          )}
-          contentContainerStyle={{ paddingBottom: 160 }}
-          ListHeaderComponent={
-            <>
-              {overdueTasks.length > 0 && (
-                <View style={styles.overdueSection}>
-                  <Text style={[styles.overdueHeader, { color: theme.accent }]}>OVERDUE ({overdueTasks.length})</Text>
-                  {overdueTasks.map(t => (
-                    <Animated.View key={t.id} style={styles.overdueCard}>
-                      <TaskCard 
-                        task={t as any}
-                        onToggleComplete={() => toggleComplete(t.id)}
-                        onUpdate={(u) => updateTask(t.id, u)}
-                        onDelete={() => handleDeleteTask(t.id)}
-                        onDuplicate={() => duplicateTask(t.id)}
-                        onEdit={() => editTaskRef.current?.open(t as any)}
-                      />
-                      <Pressable style={[styles.moveToTodayBtn, { backgroundColor: theme.accent, }]} onPress={() => updateTask(t.id, { date: todayDate })}>
-                        <Text style={styles.moveToTodayText}>Add to Today</Text>
-                      </Pressable>
-                    </Animated.View>
-                  ))}
-                </View>
-              )}
-              {pendingTasks.length > 0 && (
-                <Text style={[styles.sectionHeader, { color: theme.secondaryText }]}>PENDING ({pendingTasks.length})</Text>
-              )}
-            </>
-          }
-          ListFooterComponent={
-            <>
-              {completedTasks.length > 0 && (
-                <View style={styles.completedSection}>
-                  <Text style={[styles.sectionHeader, { color: theme.secondaryText }]}>COMPLETED ({completedTasks.length})</Text>
-                  {completedTasks.map(t => (
-                    <TaskCard 
-                      key={t.id}
-                      task={t as any}
-                      onToggleComplete={() => toggleComplete(t.id)}
-                      onUpdate={(u) => updateTask(t.id, u)}
-                      onDelete={() => deleteTask(t.id)}
-                      onDuplicate={() => duplicateTask(t.id)}
-                      onEdit={() => editTaskRef.current?.open(t as any)}
-                    />
-                  ))}
-                </View>
-              )}
-
-              {stats.total > 0 && (
-                <AnimatedCard style={styles.statsCard}>
-                  <Text style={[styles.sectionHeader, { color: theme.secondaryText, marginTop: 0 }]}>TODAY'S STATS</Text>
-                  <View style={styles.statsGrid}>
-                    <View style={styles.statBox}>
-                      <View style={[styles.statIconBox, { backgroundColor: 'transparent' }]}>
-                        <CheckCircle2 size={18} color={theme.accent} />
-                      </View>
-                      <Text style={[styles.statValue, { color: theme.primaryText }]}>{stats.completed}/{stats.total}</Text>
-                      <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Completed</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <View style={[styles.statIconBox, { backgroundColor: 'transparent' }]}>
-                        <Clock size={18} color={theme.accent} />
-                      </View>
-                      <Text style={[styles.statValue, { color: theme.primaryText }]}>{stats.avgTimeMinutes}m</Text>
-                      <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Avg Time</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <View style={[styles.statIconBox, { backgroundColor: 'transparent' }]}>
-                        <Activity size={18} color={theme.accent} />
-                      </View>
-                      <Text style={[styles.statValue, { color: theme.primaryText }]}>{stats.streak}</Text>
-                      <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Day Streak</Text>
-                    </View>
-                  </View>
-                </AnimatedCard>
-              )}
-            </>
-          }
-        />
-      </View>
-    );
-  };
-
-  useEffect(() => {
-    if (activeView === 'Today') loadTasks();
-    else if (activeView === 'Upcoming') loadUpcomingTasks();
-    else if (activeView === 'All') loadAllTasks();
-  }, [activeView, loadTasks, loadUpcomingTasks, loadAllTasks]);
-
-  const groupedUpcoming = React.useMemo(() => {
-    const groups: { [dateStr: string]: any[] } = {};
-    tasks.forEach(t => {
-      const d = t.date || 'Unscheduled';
-      if (!groups[d]) groups[d] = [];
-      groups[d].push(t);
-    });
-    return Object.keys(groups).sort().map(dateStr => ({
-      dateStr,
-      tasks: groups[dateStr]
-    }));
-  }, [tasks]);
-
-  const formatDateHeader = (dateStr: string) => {
-    if (dateStr === 'Unscheduled') return 'UNSCHEDULED';
-    if (dateStr === tomorrowDateStr) {
-      const parts = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
-      return `TOMORROW, ${parts}`;
-    }
-    const d = new Date(dateStr + 'T12:00:00');
-    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
-  };
-
-  const renderUpcoming = () => {
-    return (
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 24 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
-      >
-        {tasks.length === 0 ? (
-          <EmptyTaskState
-            onQuickAdd={(title) => addTask({ title, date: tomorrowDateStr })}
-            yesterdayTasks={[]}
-            onAddYesterdayTasks={() => {}}
-          />
-        ) : (
-          groupedUpcoming.map((group) => (
-            <View key={group.dateStr} style={{ marginBottom: 16 }}>
-              <Text style={[styles.sectionHeader, { color: theme.secondaryText, marginTop: 12, marginBottom: 12 }]}>
-                {formatDateHeader(group.dateStr)}
-              </Text>
-              {group.tasks.map(t => renderTaskItem(t, { showDate: true, swipeable: true }))}
-            </View>
-          ))
-        )}
-      </ScrollView>
-    );
-  };
-
-  const renderAll = () => {
-    return (
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 24 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
-      >
-        {tasks.length === 0 ? (
-          <EmptyTaskState
-            onQuickAdd={(title) => addTask({ title, date: todayDate })}
-            yesterdayTasks={[]}
-            onAddYesterdayTasks={() => {}}
-          />
-        ) : (
-          tasks.map(t => renderTaskItem(t, { showDate: true, swipeable: !t.completed }))
-        )}
-      </ScrollView>
-    );
-  };
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
   return (
-    <BackgroundGradient>
-      <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
-        <TabHeader 
-          title={getGreeting()}
-          subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}
-          showBack={true}
-        />
-        <TaskProgressBar percentage={completionRate} />
-        <View style={[styles.viewToggle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-          <Animated.View style={[styles.viewIndicator, indicatorStyle, { width: tabWidth, backgroundColor: theme.accent, }]} />
-          {(['Today', 'Upcoming', 'All'] as ViewType[]).map(v => (
-            <Pressable 
-              key={v} 
-              testID={`tasks-view-tab-${v.toLowerCase()}`}
-              accessibilityRole="tab"
-              accessibilityLabel={`${v} tasks tab`}
-              style={styles.viewBtn} 
-              onPress={() => setActiveView(v)}
-            >
-              <Text style={[styles.viewText, activeView === v ? { color: 'white', fontFamily: 'Inter_700Bold' } : { color: theme.secondaryText }]}>{v}</Text>
-            </Pressable>
-          ))}
-        </View>
+    <View style={styles.root}>
+      <View style={{ paddingTop: insets.top }}>
+        <BrandHeader showBack showMoreMenu onRightPress={() => router.push('/settings' as any)} />
       </View>
-      <View style={styles.content}>
-        {(loading || refreshing) && (
-          <View style={styles.loadingBar}>
-            <ActivityIndicator size="small" color={theme.accent} />
-          </View>
-        )}
-        {activeView === 'Today' && renderToday()}
-        {activeView === 'Upcoming' && renderUpcoming()}
-        {activeView === 'All' && renderAll()}
-      </View>
-      <Pressable 
-        testID="tasks-fab-button"
-        accessibilityRole="button"
-        accessibilityLabel="Create new task"
-        style={[styles.fab, { backgroundColor: theme.accent }]} 
-        onPress={() => {
-          const defaultD = activeView === 'Upcoming' ? tomorrowDateStr : todayDate;
-          addTaskRef.current?.open(defaultD);
-        }}
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Plus size={26} color="#FFF" />
-      </Pressable>
-      <AddTaskSheet 
-        ref={addTaskRef} 
-        onAdd={(task) => handleAddTask(task as any, activeView)} 
-      />
-      <EditTaskSheet
-        ref={editTaskRef}
-        onUpdate={(id, updates) => updateTask(id, updates as any)}
-      />
-      {showConfetti && (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <ConfettiCannon
-            count={50}
-            origin={{ x: width / 2, y: -20 }}
-            autoStart={true}
-            fadeOut={true}
-            colors={[theme.accent, theme.accent + 'CC', theme.accent + '99', '#FFFFFF']}
-          />
-        </View>
-      )}
-    </BackgroundGradient>
+        <ScrollView
+          style={{ flex: 1, width: '100%' }}
+          contentContainerStyle={{
+            paddingHorizontal: isDesktop ? 32 : 20,
+            paddingTop: 24,
+            paddingBottom: Math.max(insets.bottom, 16) + 80,
+            maxWidth: isDesktop ? 640 : undefined,
+            alignSelf: isDesktop ? 'center' : undefined,
+            width: '100%',
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Date Stamp */}
+          <Text style={styles.dateLabel}>{todayFormatted}</Text>
+
+          {/* Heading */}
+          <Text style={styles.pageHeading}>Tasks.</Text>
+          <Text style={styles.pageSubline}>One thing at a time.</Text>
+
+          {/* Tabs: Today / Upcoming / All */}
+          <View style={styles.tabsRow}>
+            {(['Today', 'Upcoming', 'All'] as TabView[]).map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  onPress={() => {
+                    hapticLight();
+                    setActiveTab(tab);
+                  }}
+                  style={styles.tabItem}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                    {tab}
+                  </Text>
+                  {isActive && <View style={styles.tabUnderline} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={styles.tabsBottomLine} />
+
+          {/* Section: 01 Your day */}
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleGroup}>
+              <Text style={styles.sectionIndex}>01</Text>
+              <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                quickInputRef.current?.focus();
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Add task"
+            >
+              <Text style={styles.blueActionText}>+ Add task</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Zero tasks planned empty state */}
+          {currentPendingTasks.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View style={styles.zeroNumeralRow}>
+                <Text style={styles.hugeZeroNumeral}>0</Text>
+                <Text style={styles.numeralUnitText}>tasks planned</Text>
+              </View>
+              <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
+              <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
+            </View>
+          ) : (
+            /* Populated task rows */
+            <View style={styles.tasksListWrap}>
+              {currentPendingTasks.map((task, idx) => {
+                const isLast = idx === currentPendingTasks.length - 1;
+                return (
+                  <View
+                    key={task.id}
+                    style={[styles.taskItemRow, !isLast && styles.taskItemRowBorder]}
+                  >
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticSuccess();
+                        toggleTask(task.id, task.completed);
+                      }}
+                      style={styles.taskCheckbox}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: false }}
+                    >
+                      {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: '/tasks/task-detail',
+                          params: { id: task.id },
+                        } as any)
+                      }
+                      style={styles.taskTitleWrap}
+                    >
+                      <Text style={styles.taskTitleText} numberOfLines={2}>
+                        {task.title || 'Untitled task'}
+                      </Text>
+                      <View style={styles.taskMetaRow}>
+                        {task.due_time ? (
+                          <Text style={styles.taskMetaText}>
+                            {task.date === todayStr ? 'Today' : task.date || 'Today'} · {task.due_time}
+                          </Text>
+                        ) : null}
+                        {task.priority && task.priority !== 'medium' && (
+                          <Text
+                            style={[
+                              styles.priorityBadgeText,
+                              { color: task.priority === 'high' ? '#EF4444' : '#8E8C87' },
+                            ]}
+                          >
+                            {task.priority.toUpperCase()}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: '/tasks/task-detail',
+                          params: { id: task.id },
+                        } as any)
+                      }
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <ChevronRight size={16} color="#8E8C87" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          <View style={styles.thinDivider} />
+
+          {/* Quick Add Input matching mockup: + What needs to get done? ↵ */}
+          <View style={styles.quickAddRow}>
+            <Plus size={18} color="#0066FF" strokeWidth={2.4} style={styles.plusIcon} />
+            <TextInput
+              ref={quickInputRef}
+              value={quickTitle}
+              onChangeText={setQuickTitle}
+              onSubmitEditing={handleQuickAdd}
+              placeholder="What needs to get done?"
+              placeholderTextColor="#0066FF"
+              style={styles.quickAddInput}
+              returnKeyType="done"
+              editable={!isSubmitting}
+            />
+            {quickTitle.trim().length > 0 && (
+              <TouchableOpacity
+                onPress={handleQuickAdd}
+                style={styles.returnBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Submit task"
+              >
+                <CornerDownLeft size={16} color="#0066FF" strokeWidth={2.4} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.thinDivider} />
+
+          {/* Completed collapsible section matching mockup: 0 Completed v */}
+          <TouchableOpacity
+            onPress={() => setCompletedExpanded(!completedExpanded)}
+            style={styles.completedHeaderRow}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <Text style={styles.completedHeaderText}>
+              {currentCompletedTasks.length} Completed
+            </Text>
+            {completedExpanded ? (
+              <ChevronUp size={18} color="#8E8C87" />
+            ) : (
+              <ChevronDown size={18} color="#8E8C87" />
+            )}
+          </TouchableOpacity>
+
+          {completedExpanded && currentCompletedTasks.length > 0 && (
+            <View style={styles.completedListWrap}>
+              {currentCompletedTasks.map((task) => (
+                <View key={task.id} style={styles.completedItemRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticSuccess();
+                      toggleTask(task.id, task.completed);
+                    }}
+                    style={[styles.taskCheckbox, styles.taskCheckboxCompleted]}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Check size={13} color="#FFFFFF" strokeWidth={3} />
+                  </TouchableOpacity>
+                  <Text style={styles.completedTitleText} numberOfLines={1}>
+                    {task.title || 'Untitled task'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.thinDivider} />
+
+          {/* Action linking to Focus: Make time for a task -> */}
+          <TouchableOpacity
+            onPress={() => router.push('/focus' as any)}
+            style={styles.makeTimeRow}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <View style={styles.makeTimeLeft}>
+              <Timer size={19} color="#0066FF" strokeWidth={2} />
+              <Text style={styles.makeTimeText}>Make time for a task</Text>
+            </View>
+            <ChevronRight size={18} color="#0066FF" strokeWidth={2} />
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  header: { paddingHorizontal: 24, paddingBottom: 16 },
-  loadingBar: { paddingVertical: 8, alignItems: 'center' },
-  statIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  viewToggle: { flexDirection: 'row', borderRadius: 14, padding: 4, marginTop: 16, position: 'relative' },
-  viewIndicator: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: 10 },
-  viewBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, zIndex: 1 },
-  viewText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  content: { flex: 1 },
-  sectionHeader: { fontSize: 12, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 12, marginTop: 24 },
-  overdueSection: { marginBottom: 16 },
-  overdueHeader: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 1, marginBottom: 12 },
-  overdueCard: { marginBottom: 8 },
-  moveToTodayBtn: { alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 12, marginBottom: 12 },
-  moveToTodayText: { color: 'white', fontSize: 12, fontFamily: 'Inter_700Bold' },
-  completedSection: { opacity: 0.8 },
-  statsCard: { marginTop: 24, marginBottom: 40, padding: 16 },
-  statsGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  statBox: { alignItems: 'center', flex: 1 },
-  statValue: { fontSize: 18, fontFamily: 'Inter_700Bold', marginVertical: 4 },
-  statLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  fabContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24 },
-  fab: { position: 'absolute', right: 20, bottom: 96, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', elevation: 8 },
-  fabText: { color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' },
-  emptyView: { flex: 1, alignItems: 'center', justifyContent: 'center' }
-});
+const createStyles = (theme: any, isDark: boolean) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    dateLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_600SemiBold',
+      letterSpacing: 2,
+      color: theme.secondaryText,
+      marginBottom: 6,
+    },
+    pageHeading: {
+      fontSize: 44,
+      fontFamily: 'Inter_800ExtraBold',
+      letterSpacing: -1,
+      color: theme.primaryText,
+      marginBottom: 4,
+    },
+    pageSubline: {
+      fontSize: 16,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginBottom: 20,
+    },
+
+    // Tabs
+    tabsRow: {
+      flexDirection: 'row',
+      gap: 28,
+    },
+    tabItem: {
+      paddingBottom: 10,
+      position: 'relative',
+    },
+    tabText: {
+      fontSize: 16,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.secondaryText,
+    },
+    tabTextActive: {
+      color: theme.accent,
+      fontFamily: 'Inter_700Bold',
+    },
+    tabUnderline: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 2.5,
+      backgroundColor: theme.accent,
+    },
+    tabsBottomLine: {
+      height: 1,
+      backgroundColor: theme.separator,
+      marginBottom: 24,
+    },
+
+    // Section 01
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 16,
+    },
+    sectionTitleGroup: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 10,
+    },
+    sectionIndex: {
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+      color: theme.accent,
+    },
+    sectionTitle: {
+      fontSize: 22,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: -0.4,
+      color: theme.primaryText,
+    },
+    blueActionText: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+
+    // Empty state
+    emptyContainer: {
+      paddingVertical: 10,
+    },
+    zeroNumeralRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 12,
+      marginBottom: 10,
+    },
+    hugeZeroNumeral: {
+      fontSize: 58,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      color: theme.primaryText,
+      lineHeight: 62,
+    },
+    numeralUnitText: {
+      fontSize: 22,
+      fontFamily: 'PlayfairDisplay_400Regular_Italic',
+      color: theme.primaryText,
+    },
+    emptyPrimaryPrompt: {
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      marginBottom: 2,
+    },
+    emptySecondaryPrompt: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginBottom: 16,
+    },
+
+    // Populated task list
+    tasksListWrap: {
+      width: '100%',
+    },
+    taskItemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 13,
+    },
+    taskItemRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+    },
+    taskCheckbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 1.6,
+      borderColor: theme.checkboxBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    taskCheckboxCompleted: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    taskTitleWrap: {
+      flex: 1,
+      marginLeft: 14,
+    },
+    taskTitleText: {
+      fontSize: 15,
+      fontFamily: 'Inter_500Medium',
+      color: theme.primaryText,
+    },
+    taskMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 2,
+    },
+    taskMetaText: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+    },
+    priorityBadgeText: {
+      fontSize: 10,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 0.5,
+    },
+
+    thinDivider: {
+      height: 1,
+      backgroundColor: theme.separator,
+      marginVertical: 18,
+    },
+
+    // Quick add input: + What needs to get done? ↵
+    quickAddRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    plusIcon: {
+      marginRight: 10,
+    },
+    quickAddInput: {
+      flex: 1,
+      fontSize: 15,
+      fontFamily: 'Inter_500Medium',
+      color: theme.accent,
+      padding: 0,
+    },
+    returnBtn: {
+      padding: 4,
+    },
+
+    // Completed Section: 0 Completed v
+    completedHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    completedHeaderText: {
+      fontSize: 15,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+    },
+    completedListWrap: {
+      paddingTop: 8,
+      gap: 10,
+    },
+    completedItemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    completedTitleText: {
+      fontSize: 14,
+      fontFamily: 'Inter_500Medium',
+      color: theme.secondaryText,
+      textDecorationLine: 'line-through',
+      marginLeft: 12,
+      flex: 1,
+    },
+
+    // Make time for a task ->
+    makeTimeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 10,
+    },
+    makeTimeLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    makeTimeText: {
+      fontSize: 15,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+  });

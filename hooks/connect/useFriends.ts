@@ -14,6 +14,10 @@ export interface FriendUser {
   xp: number;
   connectionState: 'none' | 'sent' | 'received' | 'friends' | 'blocked';
   requestId?: string;
+  full_name?: string;
+  display_name?: string;
+  streak_count?: number;
+  streak?: number;
 }
 
 export const useFriends = () => {

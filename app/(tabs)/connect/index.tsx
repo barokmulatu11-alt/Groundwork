@@ -1,181 +1,275 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Dimensions, useWindowDimensions, Platform } from 'react-native';
-import { AppText as Text } from '@/components/ui/AppText';
-import { useTheme } from '@/lib/ThemeContext';
-import { BackgroundGradient } from '@/components/BackgroundGradient';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  useWindowDimensions,
+  Platform,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { AppText as Text } from '@/components/ui/AppText';
+import { BrandHeader } from '@/components/ui/BrandHeader';
+import { useTheme } from '@/lib/ThemeContext';
+import { hapticLight, hapticSelection } from '@/lib/haptics';
+
+// Subscreen imports
 import LeaderboardScreen from '@/components/connect/screens/LeaderboardScreen';
 import AchievementsScreen from '@/components/connect/screens/AchievementsScreen';
 import FriendsScreen from '@/components/connect/screens/FriendsScreen';
 import ProfileScreen from '@/components/connect/screens/ProfileScreen';
-import { Sparkles, Trophy, Award, Users, UserCircle } from 'lucide-react-native';
-import { useLocalSearchParams } from 'expo-router';
-import { hapticSelection } from '@/lib/haptics';
 
-const TABS = [
-  { name: 'Leaderboard', Icon: Trophy },
-  { name: 'Achievements', Icon: Award },
-  { name: 'Friends', Icon: Users },
-  { name: 'Profile', Icon: UserCircle }
-];
+type ConnectTab = 'Leaderboard' | 'Achievements' | 'Friends' | 'Profile';
 
 export default function ConnectRootScreen() {
-  const { theme } = useTheme();
+  const router = useRouter();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && windowWidth >= 768;
-  const contentWidth = isDesktop ? 800 : windowWidth;
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
 
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [tabBarWidth, setTabBarWidth] = useState(contentWidth - 32);
-  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
-  const scrollRef = useRef<ScrollView>(null);
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-
-  const indicatorPos = useSharedValue(0);
-
-  useEffect(() => {
-    const tabWidth = tabBarWidth / TABS.length;
-    indicatorPos.value = withTiming(activeIndex * tabWidth, { duration: 250 });
-  }, [activeIndex, tabBarWidth]);
+  const [activeTab, setActiveTab] = useState<ConnectTab>('Friends');
 
   useEffect(() => {
     if (tab) {
-      const tabIndex = parseInt(tab, 10);
-      if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < TABS.length) {
-        handleTabPress(tabIndex);
-      } else if (tab === 'leaderboard') {
-        handleTabPress(0);
-      } else if (tab === 'achievements') {
-        handleTabPress(1);
-      } else if (tab === 'friends') {
-        handleTabPress(2);
-      } else if (tab === 'profile') {
-        handleTabPress(3);
-      }
+      const lower = tab.toLowerCase();
+      if (lower === 'leaderboard') setActiveTab('Leaderboard');
+      else if (lower === 'achievements') setActiveTab('Achievements');
+      else if (lower === 'friends') setActiveTab('Friends');
+      else if (lower === 'profile') setActiveTab('Profile');
     }
   }, [tab]);
 
-  const indicatorStyle = useAnimatedStyle(() => ({
-    width: tabBarWidth / TABS.length,
-    transform: [{ translateX: indicatorPos.value }],
-  }));
-
-  const handleTabPress = (index: number) => {
+  const handleTabPress = (tabName: ConnectTab) => {
     hapticSelection();
-    setActiveIndex(index);
-    scrollRef.current?.scrollTo({ x: index * contentWidth, animated: false });
+    setActiveTab(tabName);
   };
 
-  const handleScrollEnd = (e: any) => {
-    const x = e.nativeEvent.contentOffset.x;
-    const index = Math.round(x / contentWidth);
-    if (index !== activeIndex && index >= 0 && index < TABS.length) {
-      setActiveIndex(index);
-    }
-  };
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
   return (
-    <BackgroundGradient>
-      <View style={[styles.container, { 
-        paddingTop: insets.top,
-        maxWidth: isDesktop ? 800 : undefined,
-        alignSelf: isDesktop ? 'center' : undefined,
-        width: '100%',
-      }]}>
-        <View style={styles.header}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <Text style={[styles.title, { color: theme.primaryText }]}>Connect</Text>
-            <Sparkles size={24} color={theme.accent} />
-          </View>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Find your squad & climb the ranks</Text>
-        </View>
-
-        <View style={styles.tabBarContainer} onLayout={(e) => setTabBarWidth(e.nativeEvent.layout.width)}>
-          <Animated.View style={[styles.indicator, { backgroundColor: theme.accent, shadowColor: theme.accent }, indicatorStyle]} />
-          {TABS.map((tabItem, i) => {
-            const isActive = activeIndex === i;
-            const IconComponent = tabItem.Icon;
-            return (
-              <TouchableOpacity
-                key={tabItem.name}
-                testID={`connect-tab-${tabItem.name.toLowerCase()}`}
-                accessibilityRole="tab"
-                accessibilityLabel={`${tabItem.name} tab`}
-                style={styles.tabBtn}
-                activeOpacity={0.7}
-                onPress={() => handleTabPress(i)}
-              >
-                <Animated.View style={[styles.iconWrapper, isActive ? { transform: [{ scale: 1.1 }] } : { transform: [{ scale: 1.0 }] }]}>
-                  <IconComponent
-                    size={24}
-                    color={isActive ? theme.accent : theme.secondaryText}
-                    strokeWidth={isActive ? 2.5 : 2}
-                  />
-                </Animated.View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          pagingEnabled
-          scrollEnabled={parentScrollEnabled}
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={16}
-          style={styles.screenScroll}
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={{ width: contentWidth, flex: 1 }}>
-            <LeaderboardScreen key={`leaderboard-${activeIndex}`} onSwitchToFriendsTab={() => handleTabPress(2)} setParentScrollEnabled={setParentScrollEnabled} />
-          </View>
-          <View style={{ width: contentWidth, flex: 1 }}>
-            <AchievementsScreen key={`achievements-${activeIndex}`} />
-          </View>
-          <View style={{ width: contentWidth, flex: 1 }}>
-            <FriendsScreen key={`friends-${activeIndex}`} />
-          </View>
-          <View style={{ width: contentWidth, flex: 1 }}>
-            <ProfileScreen key={`profile-${activeIndex}`} onSwitchToFriendsTab={() => handleTabPress(2)} setParentScrollEnabled={setParentScrollEnabled} />
-          </View>
-        </ScrollView>
+    <View style={styles.root}>
+      {/* Brand Header with wordmark and blue accent line */}
+      <View style={{ paddingTop: insets.top }}>
+        <BrandHeader showBack={false} showMoreMenu={false} showAvatar={false} />
       </View>
-    </BackgroundGradient>
+
+      <View
+        style={[
+          styles.container,
+          {
+            maxWidth: isDesktop ? 680 : undefined,
+            alignSelf: isDesktop ? 'center' : undefined,
+            width: '100%',
+          },
+        ]}
+      >
+        {/* Page Heading & Subtitle */}
+        <View style={styles.headingBlock}>
+          <Text style={styles.pageHeading}>Connect.</Text>
+          <Text style={styles.pageSubline}>Progress feels better together.</Text>
+
+          {/* Two-row navigation matching latest spacious reference */}
+          <View style={styles.navGrid}>
+            {/* Row 1: Friends | Leaderboard */}
+            <View style={styles.navRow}>
+              <TouchableOpacity
+                testID="connect-tab-friends"
+                onPress={() => handleTabPress('Friends')}
+                style={styles.navCell}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === 'Friends' }}
+              >
+                <Text
+                  style={[
+                    styles.navText,
+                    activeTab === 'Friends' ? styles.navTextActive : styles.navTextInactive,
+                  ]}
+                >
+                  Friends
+                </Text>
+                <View
+                  style={[
+                    styles.navUnderline,
+                    activeTab === 'Friends' ? styles.navUnderlineActive : styles.navUnderlineInactive,
+                  ]}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                testID="connect-tab-leaderboard"
+                onPress={() => handleTabPress('Leaderboard')}
+                style={styles.navCell}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === 'Leaderboard' }}
+              >
+                <Text
+                  style={[
+                    styles.navText,
+                    activeTab === 'Leaderboard' ? styles.navTextActive : styles.navTextInactive,
+                  ]}
+                >
+                  Leaderboard
+                </Text>
+                <View
+                  style={[
+                    styles.navUnderline,
+                    activeTab === 'Leaderboard' ? styles.navUnderlineActive : styles.navUnderlineInactive,
+                  ]}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Row 2: Achievements | Profile */}
+            <View style={styles.navRow}>
+              <TouchableOpacity
+                testID="connect-tab-achievements"
+                onPress={() => handleTabPress('Achievements')}
+                style={styles.navCell}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === 'Achievements' }}
+              >
+                <Text
+                  style={[
+                    styles.navText,
+                    activeTab === 'Achievements' ? styles.navTextActive : styles.navTextInactive,
+                  ]}
+                >
+                  Achievements
+                </Text>
+                <View
+                  style={[
+                    styles.navUnderline,
+                    activeTab === 'Achievements' ? styles.navUnderlineActive : styles.navUnderlineInactive,
+                  ]}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                testID="connect-tab-profile"
+                onPress={() => handleTabPress('Profile')}
+                style={styles.navCell}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === 'Profile' }}
+              >
+                <Text
+                  style={[
+                    styles.navText,
+                    activeTab === 'Profile' ? styles.navTextActive : styles.navTextInactive,
+                  ]}
+                >
+                  Profile
+                </Text>
+                <View
+                  style={[
+                    styles.navUnderline,
+                    activeTab === 'Profile' ? styles.navUnderlineActive : styles.navUnderlineInactive,
+                  ]}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Tab Content */}
+        <View style={styles.contentWrap}>
+          {activeTab === 'Leaderboard' && (
+            <LeaderboardScreen
+              onSwitchToFriendsTab={() => handleTabPress('Friends')}
+            />
+          )}
+
+          {activeTab === 'Achievements' && <AchievementsScreen />}
+
+          {activeTab === 'Friends' && (
+            <FriendsScreen
+              onNavigateLeaderboard={() => handleTabPress('Leaderboard')}
+              onNavigateAchievements={() => handleTabPress('Achievements')}
+            />
+          )}
+
+          {activeTab === 'Profile' && (
+            <ProfileScreen
+              onSwitchToFriendsTab={() => handleTabPress('Friends')}
+            />
+          )}
+        </View>
+      </View>
+    </View>
   );
 }
 
+function createStyles(theme: any, isDark: boolean) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    container: {
+      flex: 1,
+    },
+    headingBlock: {
+      paddingHorizontal: 20,
+      paddingTop: 18,
+      paddingBottom: 4,
+    },
+    pageHeading: {
+      fontSize: 42,
+      fontFamily: 'Inter_800ExtraBold',
+      letterSpacing: -1.2,
+      color: theme.primaryText,
+      marginBottom: 4,
+    },
+    pageSubline: {
+      fontSize: 15,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      marginBottom: 20,
+    },
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
-  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 },
-  title: { fontSize: 34, fontFamily: 'Inter_800ExtraBold', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  tabBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(150,150,150,0.15)',
-  },
-  indicator: {
-    position: 'absolute',
-    left: 0,
-    bottom: -1,
-    height: 3,
-    borderRadius: 3,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  tabBtn: { flex: 1, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  iconWrapper: { alignItems: 'center', justifyContent: 'center' },
-  screenScroll: { flex: 1 },
-});
+    // Two-row Navigation
+    navGrid: {
+      gap: 16,
+      marginBottom: 16,
+    },
+    navRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 24,
+    },
+    navCell: {
+      flex: 1,
+    },
+    navText: {
+      fontSize: 16,
+      letterSpacing: -0.2,
+      paddingBottom: 8,
+    },
+    navTextActive: {
+      color: theme.accent,
+      fontFamily: 'Inter_700Bold',
+    },
+    navTextInactive: {
+      color: theme.primaryText,
+      fontFamily: 'Inter_500Medium',
+    },
+    navUnderline: {
+      width: '100%',
+    },
+    navUnderlineActive: {
+      height: 2.5,
+      backgroundColor: theme.accent,
+      borderRadius: 1,
+    },
+    navUnderlineInactive: {
+      height: 1,
+      backgroundColor: theme.separator,
+    },
+
+    contentWrap: {
+      flex: 1,
+    },
+  });
+}

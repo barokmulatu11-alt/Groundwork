@@ -1,5 +1,5 @@
 import { BackgroundGradient } from "@/components/BackgroundGradient";
-import { ProPaywall } from "@/components/ProPaywall";
+import { BrandHeader } from "@/components/ui/BrandHeader";
 import { AppText as Text } from "@/components/ui/AppText";
 import { hapticLight, hapticSelection, hapticSuccess } from "@/lib/haptics";
 import { LOGO_VARIANTS, LogoVariant, LogoVariantId, useLogoStore } from "@/lib/logoStore";
@@ -134,7 +134,7 @@ function SegmentedControl({
 // A rounded container card used to group related settings
 function Card({ children, theme }: { children: React.ReactNode; theme: any }) {
   return (
-    <View style={[styles.card, { backgroundColor: theme.card }]}>
+    <View style={[styles.card, { backgroundColor: theme.cardSolid, borderWidth: 1, borderColor: theme.separator }]}>
       {children}
     </View>
   );
@@ -658,15 +658,12 @@ export default function AppearanceSettingsScreen() {
   const isPro =
     profile?.pro_status || session?.user?.user_metadata?.is_pro || isRewardUnlocked('premium_themes') || false;
 
-  const [paywallVisible, setPaywallVisible] = React.useState(false);
-
   const handlePremiumThemeSelect = (themeId: string) => {
     const themeItem = PREMIUM_THEMES.find(t => t.id === themeId);
     if (themeItem?.isPro) {
       const gate = canUsePremiumTheme();
       if (!gate.allowed) {
-        trackProEvent('feature_lock_encounter', { feature: 'premium_theme', source: 'appearance_settings' });
-        setPaywallVisible(true);
+        handleLockedThemePress();
         return;
       }
     }
@@ -678,31 +675,23 @@ export default function AppearanceSettingsScreen() {
   };
 
   const handleLockedThemePress = () => {
-    trackProEvent('feature_lock_encounter', { feature: 'premium_theme', source: 'appearance_settings' });
-    setPaywallVisible(true);
+    showAlert({
+      title: "Milestone Reward",
+      message: "Unlock cinematic themes by completing milestones in daily focus and consistency.",
+      primaryButton: {
+        text: "View Milestones",
+        onPress: () => router.push('/rewards' as any),
+      },
+      secondaryButton: {
+        text: "Cancel",
+        onPress: () => {},
+      },
+    });
   };
 
   return (
-    <BackgroundGradient>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <ChevronLeft size={24} color={accentColor} />
-          <Text style={[styles.backText, { color: accentColor }]}>
-            Settings
-          </Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.primaryText }]}>
-          Appearance
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-          Personalise your experience
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[
@@ -711,6 +700,14 @@ export default function AppearanceSettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28, marginTop: 8 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Appearance.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Type, colour, atmosphere.
+          </Text>
+        </View>
         {/* ── THEME ─────────────────────────────── */}
         <SectionLabel label="THEME" theme={theme} />
         <Card theme={theme}>
@@ -741,17 +738,17 @@ export default function AppearanceSettingsScreen() {
           <View
             style={[
               styles.previewStrip,
-              { backgroundColor: theme.cardBorder + "30" },
+              { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: theme.separator, borderWidth: 1 },
             ]}
           >
-            <View style={[styles.previewDot, { backgroundColor: "#FDFBD4" }]} />
-            <Text style={[styles.previewLabel, { color: theme.secondaryText }]}>
+            <View style={[styles.previewDot, { backgroundColor: "#FAF9F6", borderWidth: 1, borderColor: "rgba(0,0,0,0.1)" }]} />
+            <Text style={[styles.previewLabel, { color: theme.textSecondary }]}>
               Currently:{" "}
-              <Text style={{ color: accentColor, fontFamily: "Inter_700Bold" }}>
+              <Text style={{ color: theme.accent, fontFamily: "Inter_700Bold" }}>
                 {themeMode.charAt(0).toUpperCase() + themeMode.slice(1)}
               </Text>
             </Text>
-            <View style={[styles.previewDot, { backgroundColor: "#080C14" }]} />
+            <View style={[styles.previewDot, { backgroundColor: "#000000", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }]} />
           </View>
         </Card>
 
@@ -903,15 +900,7 @@ export default function AppearanceSettingsScreen() {
         <SectionLabel label="APP ICON & BRANDING" theme={theme} />
         <LogoCenterInline theme={theme} isDark={isDark} accentColor={accentColor} isPro={isPro} router={router} />
       </ScrollView>
-
-      <ProPaywall
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        featureName="Premium Themes"
-        featureDescription="Transform every surface of Groundwork with cinematic themes."
-        source="appearance_settings"
-      />
-    </BackgroundGradient>
+    </View>
   );
 }
 

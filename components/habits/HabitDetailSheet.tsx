@@ -58,29 +58,29 @@ export function HabitDetailSheet({
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.headerText}>
-                <Text style={[styles.title, { color: theme.primaryText }]} numberOfLines={3}>
+                <Text style={[styles.title, { color: theme.text }]} numberOfLines={3}>
                   {habit.title}
                 </Text>
-                <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
                   {habit.category} · {habit.frequency}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable
                   onPress={() => { hapticLight(); setShareOpen(true); }}
-                  style={[styles.iconBtn, { backgroundColor: theme.accentLight, borderColor: theme.accentBorder }]}
+                  style={[styles.iconBtn, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}
                   hitSlop={8}
                   accessibilityLabel="Share Habit"
                 >
-                  <Share2 size={20} color={theme.accent} />
+                  <Share2 size={20} color={theme.text} />
                 </Pressable>
                 <Pressable
                   onPress={onClose}
-                  style={[styles.iconBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+                  style={[styles.iconBtn, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}
                   hitSlop={8}
                   accessibilityLabel="Close"
                 >
-                  <X size={20} color={theme.primaryText} />
+                  <X size={20} color={theme.text} />
                 </Pressable>
               </View>
             </View>
@@ -91,7 +91,7 @@ export function HabitDetailSheet({
               accessibilityRole="button"
               accessibilityLabel="Delete habit"
               onPress={() => onRequestDelete(habit)}
-              style={[styles.deleteRow, { borderColor: theme.cardBorder }]}
+              style={[styles.deleteRow, { borderColor: theme.separator }]}
             >
               <Trash2 size={16} color={theme.danger} />
               <Text style={[styles.deleteText, { color: theme.danger }]}>Delete habit</Text>
@@ -101,21 +101,21 @@ export function HabitDetailSheet({
             <View style={styles.statsRow}>
               <AnimatedCard style={styles.statCard}>
                 <Flame size={20} color={theme.accent} />
-                <Text style={[styles.statVal, { color: theme.primaryText }]}>{habit.streak}</Text>
-                <Text style={[styles.statLbl, { color: theme.secondaryText }]}>Current streak</Text>
+                <Text style={[styles.statVal, { color: theme.text }]}>{habit.streak}</Text>
+                <Text style={[styles.statLbl, { color: theme.textSecondary }]}>Current streak</Text>
               </AnimatedCard>
               <AnimatedCard style={styles.statCard}>
                 <Star size={20} color={theme.accent} />
-                <Text style={[styles.statVal, { color: theme.primaryText }]}>{habit.best_streak}</Text>
-                <Text style={[styles.statLbl, { color: theme.secondaryText }]}>Best streak</Text>
+                <Text style={[styles.statVal, { color: theme.text }]}>{habit.best_streak}</Text>
+                <Text style={[styles.statLbl, { color: theme.textSecondary }]}>Best streak</Text>
               </AnimatedCard>
             </View>
 
             {/* Personal best banner */}
             {isPersonalBest && (
-              <View style={[styles.pbBanner, { backgroundColor: theme.accentLight, borderColor: theme.accentBorder }]}>
+              <View style={[styles.pbBanner, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
                 <Trophy size={16} color={theme.accent} />
-                <Text style={[styles.pbText, { color: theme.accent }]}>Personal best — you're on fire!</Text>
+                <Text style={[styles.pbText, { color: theme.text }]}>Personal best — you're on fire!</Text>
               </View>
             )}
 
@@ -132,7 +132,7 @@ export function HabitDetailSheet({
               styles.footer,
               {
                 paddingBottom: Math.max(insets.bottom, 16),
-                borderTopColor: theme.cardBorder,
+                borderTopColor: theme.separator,
                 backgroundColor: theme.background,
               },
             ]}

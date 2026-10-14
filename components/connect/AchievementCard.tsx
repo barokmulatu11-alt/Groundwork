@@ -39,14 +39,14 @@ export const AchievementCard: React.FC<Props> = ({ item, newlyUnlocked = false, 
 
   // Visual states: Fully greyed out and muted if locked
   const cardBg = item.unlocked 
-    ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.65)')
-    : (isDark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.015)');
+    ? (isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF')
+    : (isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)');
   
   const cardBorder = item.unlocked 
-    ? (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)') 
-    : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)');
+    ? theme.separator 
+    : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)');
 
-  const accentColor = item.unlocked ? item.color : '#8E8E93';
+  const accentColor = item.unlocked ? item.color : theme.secondaryText;
 
   return (
     <Animated.View
@@ -55,7 +55,7 @@ export const AchievementCard: React.FC<Props> = ({ item, newlyUnlocked = false, 
         { 
           backgroundColor: cardBg, 
           borderColor: cardBorder,
-          opacity: item.unlocked ? 1 : 0.45
+          opacity: item.unlocked ? 1 : 0.65
         },
         item.unlocked && styles.unlockedCard,
         animStyle,
@@ -64,7 +64,7 @@ export const AchievementCard: React.FC<Props> = ({ item, newlyUnlocked = false, 
       <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={styles.touchable}>
         {/* Left Section: Icon Container */}
         <View style={styles.leftSection}>
-          <View style={[styles.iconCircle, { backgroundColor: item.unlocked ? item.color + '15' : 'rgba(142,142,147,0.08)' }]}>
+          <View style={[styles.iconCircle, { backgroundColor: item.unlocked ? item.color + '15' : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)') }]}>
             <IconComponent size={22} color={accentColor} strokeWidth={2} />
           </View>
         </View>
@@ -74,7 +74,7 @@ export const AchievementCard: React.FC<Props> = ({ item, newlyUnlocked = false, 
           <Text style={[styles.name, { color: item.unlocked ? theme.primaryText : theme.secondaryText }]} numberOfLines={1}>
             {displayTitle}
           </Text>
-          <Text style={[styles.desc, { color: theme.tertiaryText }]} numberOfLines={2}>
+          <Text style={[styles.desc, { color: theme.secondaryText }]} numberOfLines={2}>
             {displayDesc}
           </Text>
           
@@ -82,9 +82,9 @@ export const AchievementCard: React.FC<Props> = ({ item, newlyUnlocked = false, 
           {!item.unlocked && item.progress > 0 && !isSecretLocked && (
             <View style={styles.progressContainer}>
               <View style={[styles.progressBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
-                <View style={[styles.progressFill, { width: `${item.progress}%`, backgroundColor: '#8E8E93' }]} />
+                <View style={[styles.progressFill, { width: `${item.progress}%`, backgroundColor: theme.accent }]} />
               </View>
-              <Text style={[styles.progressText, { color: theme.tertiaryText }]}>{item.progress}%</Text>
+              <Text style={[styles.progressText, { color: theme.secondaryText }]}>{item.progress}%</Text>
             </View>
           )}
         </View>
@@ -96,8 +96,8 @@ export const AchievementCard: React.FC<Props> = ({ item, newlyUnlocked = false, 
               <Icons.Check size={14} color={item.color} strokeWidth={3} />
             </View>
           ) : (
-            <View style={[styles.badgeCircle, { backgroundColor: 'rgba(142,142,147,0.06)' }]}>
-              <Icons.Lock size={12} color="#8E8E93" strokeWidth={2.5} />
+            <View style={[styles.badgeCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
+              <Icons.Lock size={12} color={theme.secondaryText} strokeWidth={2.5} />
             </View>
           )}
         </View>

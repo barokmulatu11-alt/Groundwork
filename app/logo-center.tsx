@@ -7,6 +7,7 @@
  */
 
 import { BackgroundGradient } from '@/components/BackgroundGradient';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { AppText as Text } from '@/components/ui/AppText';
 import { hapticSelection, hapticSuccess } from '@/lib/haptics';
 import {
@@ -387,19 +388,8 @@ export default function LogoCenterScreen() {
   const isApplyDisabled = previewId === selectedLogoId;
 
   return (
-    <BackgroundGradient>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <ChevronLeft size={24} color={theme.accent} />
-          <Text style={[styles.backText, { color: theme.accent }]}>Appearance</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.primaryText }]}>Logo Center</Text>
-        <View style={styles.headerBadge}>
-          <Sparkles size={11} color={theme.accent} />
-          <Text style={[styles.headerBadgeText, { color: theme.accent }]}>PRO</Text>
-        </View>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[
@@ -408,14 +398,22 @@ export default function LogoCenterScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28, marginTop: 8 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Logo & Icon.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Distinctive marks for your workspace.
+          </Text>
+        </View>
         {/* ── Current Logo ── */}
         <View style={styles.currentSection}>
-          <Text style={[styles.sectionLabel, { color: theme.tertiaryText }]}>CURRENT LOGO</Text>
-          <View style={[styles.currentCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>CURRENT LOGO</Text>
+          <View style={[styles.currentCard, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
             <LogoMark variant={selectedVariant} size="sm" />
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={[styles.currentName, { color: theme.primaryText }]}>{selectedVariant.name}</Text>
-              <Text style={[styles.currentTagline, { color: theme.secondaryText }]}>{selectedVariant.tagline}</Text>
+              <Text style={[styles.currentName, { color: theme.text }]}>{selectedVariant.name}</Text>
+              <Text style={[styles.currentTagline, { color: theme.textSecondary }]}>{selectedVariant.tagline}</Text>
             </View>
             <View style={[styles.activeBadge, { backgroundColor: theme.accent + '18', borderColor: theme.accent + '40' }]}>
               <Text style={[styles.activeBadgeText, { color: theme.accent }]}>Active</Text>
@@ -431,9 +429,9 @@ export default function LogoCenterScreen() {
         <Text style={[styles.sectionLabel, { color: theme.tertiaryText }]}>LOGO GALLERY</Text>
         {!isPro && (
           <View style={[styles.proHint, { backgroundColor: theme.accentLight, borderColor: theme.accentBorder }]}>
-            <Crown size={13} color={theme.accent} />
+            <Award size={13} color={theme.accent} />
             <Text style={[styles.proHintText, { color: theme.accent }]}>
-              Pro variants are available with Groundwork Pro. Tap to preview.
+              Special variants are unlocked through Milestone Rewards. Tap to preview.
             </Text>
           </View>
         )}
@@ -493,7 +491,7 @@ export default function LogoCenterScreen() {
           </Text>
         </View>
       </ScrollView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

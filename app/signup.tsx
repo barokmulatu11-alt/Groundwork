@@ -180,20 +180,36 @@ export default function SignUpScreen() {
 
   if (isDesktop) {
     return (
-      <BackgroundGradient>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <View style={styles.desktopContainer}>
           {/* Left Panel: App Intro / Brand Identity */}
-          <View style={[styles.desktopBrandingPanel, { backgroundColor: theme.accentLight }]}>
-            <LinearGradient
-              colors={[theme.accentLight, theme.backgroundGradientStart || theme.card]}
-              style={StyleSheet.absoluteFillObject}
-            />
+          <View
+            style={[
+              styles.desktopBrandingPanel,
+              { backgroundColor: theme.cardSolid, borderRightWidth: 1, borderRightColor: theme.separator },
+            ]}
+          >
             <View style={styles.brandingContent}>
-              <Text style={[styles.brandingLogo, { fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }]}>
-                <Text style={{ color: theme.accent }}>g</Text>roundwork<Text style={{ color: theme.accent }}>.</Text>
+              <Text
+                style={[
+                  styles.brandingLogo,
+                  {
+                    fontFamily: "Inter_800ExtraBold",
+                    color: theme.text,
+                  },
+                ]}
+              >
+                <Text style={{ color: theme.accent }}>g</Text>roundwork
+                <Text style={{ color: theme.accent }}>.</Text>
               </Text>
-              <Text style={[styles.brandingTagline, { color: theme.primaryText }]}>Start your productivity journey today.</Text>
-              <Text style={[styles.brandingDesc, { color: theme.secondaryText }]}>
+              <Text
+                style={[styles.brandingTagline, { color: theme.text, fontFamily: 'PlayfairDisplay_600SemiBold_Italic' }]}
+              >
+                Construct the foundation of your success.
+              </Text>
+              <Text
+                style={[styles.brandingDesc, { color: theme.textSecondary }]}
+              >
                 Create an account to synchronize your habits, tasks, focus sessions, and daily recaps across all of your devices.
               </Text>
             </View>
@@ -201,39 +217,60 @@ export default function SignUpScreen() {
 
           {/* Right Panel: Auth Card */}
           <View style={styles.desktopFormPanel}>
-            <View style={[styles.desktopCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-              <View style={{ marginBottom: 24 }}>
-                <Text style={[styles.title, { color: theme.primaryText }]}>Create Account</Text>
-                <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Construct the foundation of your success.</Text>
+            <View
+              style={[
+                styles.desktopCard,
+                { backgroundColor: theme.cardSolid, borderColor: theme.separator },
+              ]}
+            >
+              <View style={{ marginBottom: 28 }}>
+                <Text style={[styles.title, { color: theme.text }]}>Create Account</Text>
+                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Start your productivity journey today.</Text>
               </View>
 
               {/* Form Content */}
               <View>
                 {/* Name Input */}
-                <View style={{ marginBottom: 12 }}>
-                  <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: errors.name ? theme.danger : theme.cardBorder }]}>
-                    <User size={18} color={theme.secondaryText} style={{ marginRight: 12 }} />
+                <View style={{ marginBottom: 16 }}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        backgroundColor: theme.background,
+                        borderColor: errors.name ? theme.danger : theme.separator,
+                      },
+                    ]}
+                  >
+                    <User size={18} color={theme.textSecondary} style={{ marginRight: 12 }} />
                     <TextInput
-                      style={[styles.input, { color: theme.primaryText }]}
+                      style={[styles.input, { color: theme.text }]}
                       onChangeText={setName}
                       value={name}
                       placeholder="Full Name"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={theme.textSecondary}
                     />
                   </View>
                   {errors.name && <Text style={[styles.errorText, { color: theme.danger }]}>{errors.name}</Text>}
                 </View>
 
                 {/* Email Input */}
-                <View style={{ marginBottom: 12 }}>
-                  <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: errors.email ? theme.danger : theme.cardBorder }]}>
-                    <Mail size={18} color={theme.secondaryText} style={{ marginRight: 12 }} />
+                <View style={{ marginBottom: 16 }}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        backgroundColor: theme.background,
+                        borderColor: errors.email ? theme.danger : theme.separator,
+                      },
+                    ]}
+                  >
+                    <Mail size={18} color={theme.textSecondary} style={{ marginRight: 12 }} />
                     <TextInput
-                      style={[styles.input, { color: theme.primaryText }]}
+                      style={[styles.input, { color: theme.text }]}
                       onChangeText={setEmail}
                       value={email}
                       placeholder="Email"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={theme.textSecondary}
                       autoCapitalize="none"
                       keyboardType="email-address"
                     />
@@ -242,40 +279,56 @@ export default function SignUpScreen() {
                 </View>
 
                 {/* Password Input */}
-                <View style={{ marginBottom: 12 }}>
-                  <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: errors.password ? theme.danger : theme.cardBorder }]}>
-                    <Lock size={18} color={theme.secondaryText} style={{ marginRight: 12 }} />
+                <View style={{ marginBottom: 16 }}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        backgroundColor: theme.background,
+                        borderColor: errors.password ? theme.danger : theme.separator,
+                      },
+                    ]}
+                  >
+                    <Lock size={18} color={theme.textSecondary} style={{ marginRight: 12 }} />
                     <TextInput
-                      style={[styles.input, { color: theme.primaryText }]}
+                      style={[styles.input, { color: theme.text }]}
                       onChangeText={setPassword}
                       value={password}
                       placeholder="Password (min 8 chars)"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={theme.textSecondary}
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
                     />
                     <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                      {showPassword ? <EyeOff size={18} color={theme.secondaryText} /> : <Eye size={18} color={theme.secondaryText} />}
+                      {showPassword ? <EyeOff size={18} color={theme.textSecondary} /> : <Eye size={18} color={theme.textSecondary} />}
                     </Pressable>
                   </View>
                   {errors.password && <Text style={[styles.errorText, { color: theme.danger }]}>{errors.password}</Text>}
                 </View>
 
                 {/* Confirm Password Input */}
-                <View style={{ marginBottom: 20 }}>
-                  <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: errors.confirmPassword ? theme.danger : theme.cardBorder }]}>
-                    <Lock size={18} color={theme.secondaryText} style={{ marginRight: 12 }} />
+                <View style={{ marginBottom: 24 }}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        backgroundColor: theme.background,
+                        borderColor: errors.confirmPassword ? theme.danger : theme.separator,
+                      },
+                    ]}
+                  >
+                    <Lock size={18} color={theme.textSecondary} style={{ marginRight: 12 }} />
                     <TextInput
-                      style={[styles.input, { color: theme.primaryText }]}
+                      style={[styles.input, { color: theme.text }]}
                       onChangeText={setConfirmPassword}
                       value={confirmPassword}
                       placeholder="Confirm Password"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={theme.textSecondary}
                       secureTextEntry={!showConfirmPassword}
                       autoCapitalize="none"
                     />
                     <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ padding: 4 }}>
-                      {showConfirmPassword ? <EyeOff size={18} color={theme.secondaryText} /> : <Eye size={18} color={theme.secondaryText} />}
+                      {showConfirmPassword ? <EyeOff size={18} color={theme.textSecondary} /> : <Eye size={18} color={theme.textSecondary} />}
                     </Pressable>
                   </View>
                   {errors.confirmPassword && <Text style={[styles.errorText, { color: theme.danger }]}>{errors.confirmPassword}</Text>}
@@ -290,33 +343,40 @@ export default function SignUpScreen() {
                 </Pressable>
 
                 {/* Divider */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 16 }}>
-                  <View style={{ flex: 1, height: 1, backgroundColor: theme.cardBorder }} />
-                  <Text style={{ marginHorizontal: 16, color: theme.secondaryText, fontSize: 13, fontFamily: 'System' }}>or</Text>
-                  <View style={{ flex: 1, height: 1, backgroundColor: theme.cardBorder }} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 20 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: theme.separator }} />
+                  <Text style={{ marginHorizontal: 16, color: theme.textSecondary, fontSize: 13, fontFamily: 'Inter_500Medium' }}>or</Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: theme.separator }} />
                 </View>
 
                 {/* Continue with Google */}
                 <Pressable
                   onPress={signInWithGoogle}
                   disabled={googleLoading || loading}
-                  style={[styles.secondaryButton, { backgroundColor: theme.accentLight, borderColor: theme.accentBorder, opacity: googleLoading ? 0.7 : 1 }]}
+                  style={[
+                    styles.secondaryButton,
+                    {
+                      backgroundColor: theme.background,
+                      borderColor: theme.separator,
+                      opacity: googleLoading ? 0.7 : 1,
+                    },
+                  ]}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                     {googleLoading ? (
                       <ActivityIndicator size="small" color={theme.accent} />
                     ) : (
                       <>
-                        <FontAwesome name="google" size={18} color={theme.accent} style={{ marginRight: 10 }} />
-                        <Text style={[styles.secondaryButtonText, { color: theme.accent }]}>Continue with Google</Text>
+                        <FontAwesome name="google" size={18} color={theme.text} style={{ marginRight: 10 }} />
+                        <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Continue with Google</Text>
                       </>
                     )}
                   </View>
                 </Pressable>
 
                 {/* Sign In Link */}
-                <View style={{ alignItems: 'center', marginTop: 20 }}>
-                  <Text style={{ color: theme.secondaryText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+                <View style={{ alignItems: 'center', marginTop: 24 }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
                     Already have an account?{' '}
                     <Text onPress={() => router.push('/login' as any)} style={{ color: theme.accent, fontFamily: 'Inter_700Bold' }}>
                       Sign In
@@ -327,57 +387,57 @@ export default function SignUpScreen() {
             </View>
           </View>
         </View>
-      </BackgroundGradient>
+      </View>
     );
   }
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
           
           <Animated.View entering={FadeInUp.duration(300)} style={{ zIndex: 1, marginTop: 40, marginBottom: 24 }}>
             <Pressable 
               onPress={() => router.back()} 
-              style={[styles.iconBox, { backgroundColor: theme.accentLight }]}
+              style={[styles.iconBox, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}
             >
-              <ChevronLeft size={20} color={theme.accent} />
+              <ChevronLeft size={20} color={theme.text} />
             </Pressable>
           </Animated.View>
 
           {/* Header */}
           <Animated.View entering={FadeInUp.delay(100).duration(300)} style={{ marginBottom: 32, zIndex: 1 }}>
-            <Text style={[styles.title, { color: theme.primaryText }]}>Create Account</Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Start your productivity journey</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Create Account</Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Start your productivity journey</Text>
           </Animated.View>
 
           {/* Form */}
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ zIndex: 1 }}>
             {/* Name Input */}
-            <View style={{ marginBottom: 10 }}>
-              <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: errors.name ? theme.danger : theme.cardBorder }]}>
-                <User size={20} color={theme.secondaryText} style={{ marginRight: 12 }} />
+            <View style={{ marginBottom: 12 }}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.cardSolid, borderColor: errors.name ? theme.danger : theme.separator }]}>
+                <User size={20} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }]}
+                  style={[styles.input, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}
                   onChangeText={setName}
                   value={name}
                   placeholder="Full Name"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                 />
               </View>
               {errors.name && <Text style={[styles.errorText, { color: theme.danger }]}>{errors.name}</Text>}
             </View>
 
             {/* Email Input */}
-            <View style={{ marginBottom: 10 }}>
-              <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: errors.email ? theme.danger : theme.cardBorder }]}>
-                <Mail size={20} color={theme.secondaryText} style={{ marginRight: 12 }} />
+            <View style={{ marginBottom: 12 }}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.cardSolid, borderColor: errors.email ? theme.danger : theme.separator }]}>
+                <Mail size={20} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }]}
+                  style={[styles.input, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}
                   onChangeText={setEmail}
                   value={email}
                   placeholder="Email"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
@@ -386,20 +446,20 @@ export default function SignUpScreen() {
             </View>
 
             {/* Password Input */}
-            <View style={{ marginBottom: 10 }}>
-              <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: errors.password ? theme.danger : theme.cardBorder }]}>
-                <Lock size={20} color={theme.secondaryText} style={{ marginRight: 12 }} />
+            <View style={{ marginBottom: 12 }}>
+              <View style={[styles.inputContainer, { backgroundColor: theme.cardSolid, borderColor: errors.password ? theme.danger : theme.separator }]}>
+                <Lock size={20} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }]}
+                  style={[styles.input, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}
                   onChangeText={setPassword}
                   value={password}
                   placeholder="Password"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
                 <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                  {showPassword ? <EyeOff size={20} color={theme.secondaryText} /> : <Eye size={20} color={theme.secondaryText} />}
+                  {showPassword ? <EyeOff size={20} color={theme.textSecondary} /> : <Eye size={20} color={theme.textSecondary} />}
                 </Pressable>
               </View>
               {errors.password && <Text style={[styles.errorText, { color: theme.danger }]}>{errors.password}</Text>}
@@ -407,19 +467,19 @@ export default function SignUpScreen() {
 
             {/* Confirm Password Input */}
             <View style={{ marginBottom: 24 }}>
-              <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: errors.confirmPassword ? theme.danger : theme.cardBorder }]}>
-                <Lock size={20} color={theme.secondaryText} style={{ marginRight: 12 }} />
+              <View style={[styles.inputContainer, { backgroundColor: theme.cardSolid, borderColor: errors.confirmPassword ? theme.danger : theme.separator }]}>
+                <Lock size={20} color={theme.textSecondary} style={{ marginRight: 12 }} />
                 <TextInput
-                  style={[styles.input, { color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }]}
+                  style={[styles.input, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}
                   onChangeText={setConfirmPassword}
                   value={confirmPassword}
                   placeholder="Confirm Password"
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
                 />
                 <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ padding: 4 }}>
-                  {showConfirmPassword ? <EyeOff size={20} color={theme.secondaryText} /> : <Eye size={20} color={theme.secondaryText} />}
+                  {showConfirmPassword ? <EyeOff size={20} color={theme.textSecondary} /> : <Eye size={20} color={theme.textSecondary} />}
                 </Pressable>
               </View>
               {errors.confirmPassword && <Text style={[styles.errorText, { color: theme.danger }]}>{errors.confirmPassword}</Text>}
@@ -428,31 +488,38 @@ export default function SignUpScreen() {
             <Pressable
               onPress={signUpWithEmail}
               disabled={loading}
-              style={[styles.primaryButton, { backgroundColor: theme.accent,  opacity: loading ? 0.7 : 1 }]}
+              style={[styles.primaryButton, { backgroundColor: theme.accent, opacity: loading ? 0.7 : 1 }]}
             >
               <Text style={styles.primaryButtonText}>{loading ? 'Creating Account...' : 'Create Account'}</Text>
             </Pressable>
 
             {/* Divider */}
             <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 24 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: theme.cardBorder }} />
-              <Text style={{ marginHorizontal: 16, color: theme.secondaryText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>or</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: theme.cardBorder }} />
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.separator }} />
+              <Text style={{ marginHorizontal: 16, color: theme.textSecondary, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>or</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.separator }} />
             </View>
 
             {/* Continue with Google */}
             <Pressable
               onPress={signInWithGoogle}
               disabled={googleLoading || loading}
-              style={[styles.secondaryButton, { backgroundColor: theme.accentLight, borderColor: theme.accentBorder, opacity: googleLoading ? 0.7 : 1 }]}
+              style={[
+                styles.secondaryButton,
+                {
+                  backgroundColor: theme.cardSolid,
+                  borderColor: theme.separator,
+                  opacity: googleLoading ? 0.7 : 1,
+                },
+              ]}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                 {googleLoading ? (
                   <ActivityIndicator size="small" color={theme.accent} />
                 ) : (
                   <>
-                    <FontAwesome name="google" size={18} color={theme.accent} style={{ marginRight: 10 }} />
-                    <Text style={[styles.secondaryButtonText, { color: theme.accent }]}>Continue with Google</Text>
+                    <FontAwesome name="google" size={18} color={theme.text} style={{ marginRight: 10 }} />
+                    <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Continue with Google</Text>
                   </>
                 )}
               </View>
@@ -460,7 +527,7 @@ export default function SignUpScreen() {
 
             {/* Sign In Link */}
             <View style={{ alignItems: 'center', marginTop: 24 }}>
-              <Text style={{ color: theme.secondaryText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
                 Already have an account?{' '}
                 <Text onPress={() => router.push('/login' as any)} style={{ color: theme.accent, fontFamily: 'Inter_700Bold' }}>
                   Sign In
@@ -470,7 +537,7 @@ export default function SignUpScreen() {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

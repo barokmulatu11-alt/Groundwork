@@ -23,8 +23,6 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/users', label: 'Users', icon: Users },
-  { href: '/dashboard/payments', label: 'Payment Requests', icon: CreditCard },
-  { href: '/dashboard/subscriptions', label: 'Pro Subscriptions', icon: Star },
   { href: '/dashboard/flags', label: 'Feature Flags', icon: Flag },
   { href: '/dashboard/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/dashboard/reports', label: 'Reports', icon: AlertTriangle },

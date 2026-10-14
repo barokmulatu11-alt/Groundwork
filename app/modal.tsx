@@ -1,4 +1,3 @@
-import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { useRouter } from 'expo-router';
@@ -8,36 +7,34 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 export default function ModalScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   return (
-    <BackgroundGradient>
-      <View style={styles.container}>
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 16 }}>
-            <Text style={[styles.title, { color: theme.primaryText }]}>Quick Action</Text>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              style={[styles.closeBtn, { backgroundColor: theme.cardBorder }]}
-            >
-              <X size={18} color={theme.primaryText} />
-            </TouchableOpacity>
-          </View>
-          <Text style={[styles.message, { color: theme.secondaryText }]}>
-            Use Groundwork's bottom tabs and action menus to navigate your daily tasks, focus timer, and notebooks.
-          </Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.card, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 16 }}>
+          <Text style={[styles.title, { color: theme.text }]}>Quick Action</Text>
           <TouchableOpacity
-            accessibilityRole="button"
             onPress={() => router.back()}
-            style={[styles.doneBtn, { backgroundColor: theme.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            style={[styles.closeBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
           >
-            <Text style={styles.doneBtnText}>Done</Text>
+            <X size={18} color={theme.text} />
           </TouchableOpacity>
         </View>
+        <Text style={[styles.message, { color: theme.textSecondary }]}>
+          Use Groundwork's tabs and actions to navigate your daily tasks, focus timer, and habits.
+        </Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={[styles.doneBtn, { backgroundColor: theme.accent }]}
+        >
+          <Text style={styles.doneBtnText}>Done</Text>
+        </TouchableOpacity>
       </View>
-    </BackgroundGradient>
+    </View>
   );
 }
 

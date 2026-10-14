@@ -30,100 +30,97 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
-  const translateX = useRef(new Animated.Value(0)).current;
-  const paddingHorizontal = 10;
-
-  const totalTabs = state.routes.length;
-  const BAR_WIDTH = isDesktop ? 220 : (width - 80);
-  const usableWidth = isDesktop ? 200 : (BAR_WIDTH - (paddingHorizontal * 2));
-  const tabWidth = isDesktop ? 200 : (usableWidth / totalTabs);
-
-  useEffect(() => {
-    if (!isDesktop) {
-      Animated.spring(translateX, {
-        toValue: state.index * tabWidth,
-        useNativeDriver: true,
-        bounciness: 4,
-        speed: 14,
-      }).start();
-    }
-  }, [state.index, isDesktop, tabWidth]);
-
   if (isDesktop) {
-    return null; // Sidebar rendered separately
+    return null; // Sidebar rendered separately on desktop
   }
 
   return (
-    <View style={[styles.container, { bottom: Math.max(insets.bottom, 16), width: BAR_WIDTH }]}>
-      <BlurView
-        intensity={Platform.OS === 'ios' ? 80 : 100}
-        tint={isDark ? 'dark' : 'light'}
-        style={[
-          styles.blurContainer,
-          {
-            backgroundColor: isDark ? 'rgba(28, 28, 30, 0.92)' : 'rgba(255, 255, 255, 0.92)',
-            borderColor: theme.cardBorder,
-          }
-        ]}
+    <View
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: theme.background,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: theme.separator,
+        paddingBottom: Math.max(insets.bottom, 10),
+        paddingTop: 8,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-around',
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: 480,
+          alignSelf: 'center',
+        }}
       >
-        <View style={[styles.tabItemsContainer, { paddingHorizontal }]}>
-          <Animated.View
-            style={[
-              styles.activeIndicator,
-              {
-                width: tabWidth - 12,
-                backgroundColor: theme.accent + '15',
-                transform: [{ translateX: Animated.add(translateX, 6) }],
-              }
-            ]}
-          />
-          {state.routes.map((route: any, index: number) => {
-            const { options } = descriptors[route.key];
-            const isFocused = state.index === index;
+        {state.routes.map((route: any, index: number) => {
+          const { options } = descriptors[route.key];
+          const isFocused = state.index === index;
 
-            const onPress = () => {
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!isFocused && !event.defaultPrevented) {
-                hapticSelection();
-                navigation.navigate(route.name);
-              }
-            };
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              hapticSelection();
+              navigation.navigate(route.name);
+            }
+          };
 
-            const Icon = options.tabBarIcon;
+          const Icon = options.tabBarIcon;
+          const activeColor = theme.accent;
+          const inactiveColor = theme.secondaryText;
+          const color = isFocused ? activeColor : inactiveColor;
 
-            return (
-              <TouchableOpacity
-                key={route.key}
-                onPress={onPress}
-                style={styles.tabButton}
-                activeOpacity={0.7}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isFocused }}
-                accessibilityLabel={options.title || route.name}
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={onPress}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 4,
+              }}
+              activeOpacity={0.7}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={options.title || route.name}
+            >
+              <View style={{ marginBottom: 3, alignItems: 'center', justifyContent: 'center' }}>
+                {Icon && Icon({ color, focused: isFocused, size: 22 })}
+              </View>
+              <Text
+                style={{
+                  color,
+                  fontSize: 11,
+                  fontFamily: isFocused ? 'Inter_700Bold' : 'Inter_500Medium',
+                }}
               >
-                <View style={styles.iconWrapper}>
-                  {Icon && Icon({ color: isFocused ? theme.accent : theme.secondaryText, focused: isFocused, size: 24 })}
-                </View>
-                <Text
-                  style={[
-                    styles.label,
-                    {
-                      color: isFocused ? theme.accent : theme.secondaryText,
-                      fontFamily: isFocused ? 'Inter_700Bold' : 'Inter_500Medium',
-                    }
-                  ]}
-                >
-                  {options.title}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </BlurView>
+                {options.title}
+              </Text>
+              {isFocused && (
+                <View
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: theme.accent,
+                    marginTop: 3,
+                  }}
+                />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -195,15 +192,15 @@ export default function TabLayout() {
 
   if (isDesktop) {
     return (
-      <View style={[styles.desktopContainer, { backgroundColor: isDark ? '#080808' : '#f2f3f7' }]}>
+      <View style={[styles.desktopContainer, { backgroundColor: theme.background }]}>
         {/* Sidebar */}
         <Animated.View
           style={[
             styles.sidebar,
             {
               width: sidebarAnim,
-              backgroundColor: isDark ? '#0c0c0e' : '#ffffff',
-              borderRightColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)',
+              backgroundColor: isDark ? '#000000' : '#FFFFFF',
+              borderRightColor: theme.separator,
             }
           ]}
         >
@@ -239,12 +236,6 @@ export default function TabLayout() {
                   <Text style={[styles.brandName, { color: theme.primaryText }]}>
                     <Text style={{ color: theme.accent }}>g</Text>roundwork<Text style={{ color: theme.accent }}>.</Text>
                   </Text>
-                  {profile?.pro_status && (
-                    <View style={[styles.proBadge, { backgroundColor: theme.accent + '20', borderColor: theme.accent + '50' }]}>
-                      <Zap size={9} color={theme.accent} fill={theme.accent} />
-                      <Text style={[styles.proBadgeText, { color: theme.accent }]}>PRO</Text>
-                    </View>
-                  )}
                 </Animated.View>
               )}
             </View>
@@ -386,8 +377,10 @@ export default function TabLayout() {
             <Tabs.Screen
               name="index"
               options={{
-                title: 'Home',
-                tabBarIcon: ({ color }) => <Home size={22} color={color} />,
+                title: 'Today',
+                tabBarIcon: ({ color, focused }: any) => (
+                  <Home size={22} color={color} strokeWidth={focused ? 2.2 : 1.8} fill={focused ? color : 'none'} />
+                ),
               }}
             />
             <Tabs.Screen
@@ -418,8 +411,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <Home size={22} color={color} />,
+          title: 'Today',
+          tabBarIcon: ({ color, focused }: any) => (
+            <Home size={22} color={color} strokeWidth={focused ? 2.2 : 1.8} fill={focused ? color : 'none'} />
+          ),
         }}
       />
       <Tabs.Screen

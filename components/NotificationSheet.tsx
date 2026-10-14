@@ -64,19 +64,19 @@ export function NotificationSheet({ visible, onClose }: NotificationSheetProps) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
-        <View style={[styles.sheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: theme.cardBorder }]}>
+      <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.4)' }]}>
+        <View style={[styles.sheet, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Bell size={20} color={theme.primaryText} />
-              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Notifications</Text>
+              <Bell size={20} color={theme.text} />
+              <Text style={[styles.headerTitle, { color: theme.text }]}>Notifications</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Pressable onPress={markAllRead}>
                 <Text style={{ fontSize: 13, color: theme.accent, fontFamily: 'Inter_700Bold' }}>Mark all read</Text>
               </Pressable>
               <Pressable onPress={onClose}>
-                <X size={20} color={theme.tertiaryText} />
+                <X size={20} color={theme.textSecondary} />
               </Pressable>
             </View>
           </View>
@@ -87,8 +87,8 @@ export function NotificationSheet({ visible, onClose }: NotificationSheetProps) 
             </View>
           ) : notifications.length === 0 ? (
             <View style={styles.center}>
-              <Inbox size={48} color={theme.tertiaryText} strokeWidth={1} />
-              <Text style={[styles.emptyText, { color: theme.secondaryText }]}>All caught up!</Text>
+              <Inbox size={48} color={theme.textSecondary} strokeWidth={1} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>All caught up!</Text>
             </View>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
@@ -97,20 +97,24 @@ export function NotificationSheet({ visible, onClose }: NotificationSheetProps) 
                   key={n.id} 
                   style={[
                     styles.notificationItem, 
-                    { backgroundColor: n.is_read ? 'transparent' : theme.accent + '08' }
+                    { 
+                      backgroundColor: n.is_read ? 'transparent' : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,102,255,0.06)'),
+                      borderWidth: 1,
+                      borderColor: n.is_read ? theme.separator : 'transparent'
+                    }
                   ]}
                 >
-                  <View style={styles.iconCol}>
+                  <View style={[styles.iconCol, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>
                     {getIcon(n.type)}
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={styles.itemHeader}>
-                      <Text style={[styles.itemTitle, { color: theme.primaryText }]}>{n.title}</Text>
-                      <Text style={[styles.itemTime, { color: theme.tertiaryText }]}>
+                      <Text style={[styles.itemTitle, { color: theme.text }]}>{n.title}</Text>
+                      <Text style={[styles.itemTime, { color: theme.textSecondary }]}>
                         {new Date(n.created_at).toLocaleDateString()}
                       </Text>
                     </View>
-                    <Text style={[styles.itemMessage, { color: theme.secondaryText }]}>{n.message}</Text>
+                    <Text style={[styles.itemMessage, { color: theme.textSecondary }]}>{n.message}</Text>
                   </View>
                   {!n.is_read && <View style={[styles.unreadDot, { backgroundColor: theme.accent }]} />}
                 </View>

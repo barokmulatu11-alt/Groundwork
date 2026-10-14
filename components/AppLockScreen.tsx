@@ -115,14 +115,14 @@ export function AppLockScreen() {
 
   return (
     <Modal visible={isLocked} animationType="fade" transparent={false}>
-      <BackgroundGradient>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <View style={styles.container}>
           <View style={styles.content}>
-            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-              <Lock size={48} color={theme.primaryText} />
+            <View style={[styles.iconBox, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
+              <Lock size={48} color={theme.text} />
             </View>
-            <Text style={[styles.title, { color: theme.primaryText }]}>GroundWork is Locked</Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+            <Text style={[styles.title, { color: theme.text }]}>Groundwork is Locked</Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
               {pinError
                 ? "Incorrect PIN. Please try again."
                 : authFailed
@@ -138,13 +138,13 @@ export function AppLockScreen() {
                   style={[
                     styles.pinInput,
                     {
-                      color: theme.primaryText,
-                      backgroundColor: theme.card,
-                      borderColor: pinError ? theme.danger : theme.cardBorder,
+                      color: theme.text,
+                      backgroundColor: theme.cardSolid,
+                      borderColor: pinError ? theme.danger : theme.separator,
                     },
                   ]}
                   placeholder="Enter PIN"
-                  placeholderTextColor={theme.tertiaryText}
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry
                   keyboardType="numeric"
                   value={pinInput}
@@ -187,7 +187,7 @@ export function AppLockScreen() {
             )}
           </View>
         </View>
-      </BackgroundGradient>
+      </View>
     </Modal>
   );
 }

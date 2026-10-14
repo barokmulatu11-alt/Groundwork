@@ -1,5 +1,6 @@
 import SQLite, { type SQLiteDatabase } from './sqliteClient';
 import { Platform } from 'react-native';
+import { getLocalDateString } from './dateUtils';
 
 export const APP_VERSION = '1.1.0';
 
@@ -20,6 +21,7 @@ export type Task = {
   user_id: string;
   title: string;
   time_block: string | null;
+  due_time?: string | null;
   date: string;
   completed: boolean;
   completed_at: string | null;
@@ -1020,6 +1022,26 @@ export function initDb() {
   } catch (e) {
     console.error('[DB] Error repairing notes deleted_at:', e);
   }
+
+  // Repair malformed tasks (prevent id = 'guest' or empty ids from corrupting task routing)
+  try {
+    const malformed = db.getAllSync<{ id: string; user_id: string }>(
+      "SELECT id, user_id FROM tasks WHERE id = 'guest' OR id = '' OR id IS NULL"
+    );
+    for (const row of malformed) {
+      const newId = `task_repaired_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      db.runSync('UPDATE tasks SET id = ? WHERE id = ?', [newId, row.id]);
+      try {
+        db.runSync('UPDATE sub_tasks SET task_id = ? WHERE task_id = ?', [newId, row.id]);
+      } catch (_) {}
+      try {
+        db.runSync('UPDATE focus_sessions SET task_id = ? WHERE task_id = ?', [newId, row.id]);
+      } catch (_) {}
+      console.log(`[DB] Repaired malformed task ID from '${row.id}' to '${newId}'`);
+    }
+  } catch (e) {
+    console.warn('[DB] Error repairing malformed tasks:', e);
+  }
 }
 
 
@@ -1085,14 +1107,19 @@ export function getOverdueTasks(userId: string = 'guest'): Task[] {
 
 export function addTask(task: Partial<Task>) {
   try {
-    const id = task.id || Math.random().toString(36).substring(7);
+    const user_id = task.user_id || 'guest';
+    const rawId = task.id ? String(task.id).trim() : '';
+    // Prevent invalid IDs (e.g. if caller passed task.id = 'guest' or task.id = user_id)
+    const id = (rawId && rawId !== 'guest' && rawId !== user_id)
+      ? rawId
+      : `task_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const now = new Date().toISOString();
     const created_at = task.created_at || now;
     const updated_at = task.updated_at || now;
     const order_index = task.order_index ?? 0;
-    const title = task.title || 'Untitled Task';
-    const date = task.date || created_at.split('T')[0];
-    const user_id = task.user_id || 'guest';
+    const rawTitle = task.title ? String(task.title).trim() : '';
+    const title = rawTitle.length > 0 ? rawTitle : 'Untitled task';
+    const date = task.date || getLocalDateString(new Date(created_at));
 
     db.runSync(
       `INSERT OR REPLACE INTO tasks (id, user_id, title, date, time_block, priority, note, reminder_time, order_index, completed, completed_at, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1140,12 +1167,23 @@ export function addTask(task: Partial<Task>) {
 
 export function updateTask(id: string, updates: Partial<Task>) {
   try {
-    const keys = Object.keys(updates).filter(k => k !== 'id' && k !== 'sub_tasks');
+    if (!id || id === 'guest') return;
+    const sanitizedUpdates = { ...updates };
+    // Prevent blank titles from erasing task title
+    if (sanitizedUpdates.title !== undefined) {
+      const trimmed = String(sanitizedUpdates.title).trim();
+      if (!trimmed) {
+        delete sanitizedUpdates.title;
+      } else {
+        sanitizedUpdates.title = trimmed;
+      }
+    }
+    const keys = Object.keys(sanitizedUpdates).filter(k => k !== 'id' && k !== 'sub_tasks');
     if (keys.length === 0) return;
     
     const setClause = [...keys.map(k => `${k} = ?`), 'updated_at = ?'].join(', ');
     const values = keys.map(k => {
-      const val = (updates as any)[k];
+      const val = (sanitizedUpdates as any)[k];
       if (typeof val === 'boolean') return val ? 1 : 0;
       return val;
     });

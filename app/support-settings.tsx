@@ -1,7 +1,6 @@
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AppText as Text } from '@/components/ui/AppText';
-import { BrandLogo } from '@/components/ui/BrandLogo';
-import { TabHeader } from '@/components/ui/TabHeader';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useTheme } from '@/lib/ThemeContext';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
@@ -41,7 +40,7 @@ function SectionLabel({ label, theme }: { label: string; theme: any }) {
 
 function Card({ children, theme }: { children: React.ReactNode; theme: any }) {
   return (
-    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder, borderWidth: 1 }]}>
+    <View style={[styles.card, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
       {children}
     </View>
   );
@@ -65,10 +64,10 @@ function SupportRow({ icon: Icon, title, subtitle, theme, onPress, destructive, 
           <Icon size={18} color={destructive ? theme.danger : theme.accent} />
         </View>
         <View style={styles.infoBox}>
-          <Text style={[styles.rowTitle, { color: destructive ? theme.danger : theme.primaryText }]}>{title}</Text>
-          {subtitle && <Text style={[styles.rowSubtitle, { color: theme.secondaryText }]}>{subtitle}</Text>}
+          <Text style={[styles.rowTitle, { color: destructive ? theme.danger : theme.text }]}>{title}</Text>
+          {subtitle && <Text style={[styles.rowSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
         </View>
-        {rightElement || <ChevronRight size={18} color={theme.tertiaryText} />}
+        {rightElement || <ChevronRight size={18} color={theme.textMuted} />}
       </View>
     </TouchableOpacity>
   );
@@ -130,25 +129,32 @@ export default function SupportAboutScreen() {
   };
 
   return (
-    <BackgroundGradient>
-      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 24 }}>
-        <TabHeader title="Support & Contact" subtitle="Help, feedback and information" />
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Support.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Get help or report an issue.
+          </Text>
+        </View>
+
         {/* ── ABOUT SECTION ─────────────────────────────── */}
         <Animated.View entering={FadeIn.delay(100).duration(600)} style={styles.aboutCardContainer}>
           <Card theme={theme}>
             <View style={styles.aboutHeader}>
               <View style={styles.aboutInfo}>
-                <BrandLogo fontSize={24} />
-                <Text style={[styles.appVersion, { color: theme.secondaryText, marginTop: 4 }]}>Version {version}</Text>
+                <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>groundwork.</Text>
+                <Text style={[styles.appVersion, { color: theme.textSecondary, marginTop: 4 }]}>Version {version}</Text>
               </View>
             </View>
-            <Text style={[styles.appDescription, { color: theme.secondaryText }]}>
+            <Text style={[styles.appDescription, { color: theme.textSecondary }]}>
               groundwork. is a premium productivity companion designed to help you stay focused, manage tasks, and build meaningful habits with ease.
             </Text>
             <View style={{ height: 16 }} />
@@ -159,35 +165,6 @@ export default function SupportAboutScreen() {
               </TouchableOpacity>
             </View>
           </Card>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(200).duration(500)}>
-          {/* ── DONATE / SUPPORT ─────────────────────────────── */}
-          <SectionLabel label="SUPPORT THE DEVELOPER" theme={theme} />
-          <Card theme={theme}>
-            <SupportRow
-              icon={Heart}
-              title="Telebirr"
-              subtitle="+251935008069"
-              theme={theme}
-              onPress={() => handleCopy("+251935008069", "Telebirr")}
-              rightElement={copiedLabel === 'Telebirr' ? <CheckCircle2 size={18} color={theme.success} /> : <Copy size={18} color={theme.tertiaryText} />}
-            />
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-            <SupportRow
-              icon={Heart}
-              title="CBE Birr / Bank"
-              subtitle="1000750283784"
-              theme={theme}
-              onPress={() => handleCopy("1000750283784", "CBE")}
-              rightElement={copiedLabel === 'CBE' ? <CheckCircle2 size={18} color={theme.success} /> : <Copy size={18} color={theme.tertiaryText} />}
-            />
-          </Card>
-          {copiedLabel && (
-            <Animated.Text entering={FadeIn} style={[styles.copyMessage, { color: theme.success }]}>
-              Copied {copiedLabel} number!
-            </Animated.Text>
-          )}
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(300).duration(500)}>
@@ -279,7 +256,7 @@ export default function SupportAboutScreen() {
         </View>
 
       </ScrollView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

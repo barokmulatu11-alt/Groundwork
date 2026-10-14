@@ -3,7 +3,7 @@ import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { CenterModal } from '@/components/ui/CenterModal';
-import { TabHeader } from '@/components/ui/TabHeader';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useTheme } from '@/lib/ThemeContext';
 import { useStore } from '@/store/useStore';
 import {
@@ -218,16 +218,26 @@ export default function CalendarScreen() {
   // ─── Main Render ───────────────────────────────────────────────────────────
 
   return (
-    <BackgroundGradient>      <ScrollView
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView
         style={{ flex: 1, paddingHorizontal: 24 }}
         contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 120 }}
         showsVerticalScrollIndicator={false}
       >
-        <TabHeader title="Calendar" subtitle={format(currentDate, 'MMMM yyyy')} />
+        <BrandHeader title="groundwork." onBack={() => router.back()} />
+
+        <View style={{ marginBottom: 28, marginTop: 8 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Calendar.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            {format(currentDate, 'MMMM yyyy')}
+          </Text>
+        </View>
         
         <View style={{ flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 24 }}>
           {/* Mode Switcher */}
-          <View style={{ flexDirection: 'row', backgroundColor: theme.card, borderRadius: 20, padding: 4, borderWidth: 1, borderColor: theme.cardBorder }}>
+          <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderRadius: 20, padding: 4, borderWidth: 1, borderColor: theme.separator }}>
             <Pressable 
               testID="calendar-mode-monthly"
               accessibilityRole="button"
@@ -235,7 +245,7 @@ export default function CalendarScreen() {
               onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('monthly'); }}
               style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'monthly' ? theme.accent : 'transparent' }}
             >
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'monthly' ? 'white' : theme.secondaryText }}>Monthly</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'monthly' ? 'white' : theme.textSecondary }}>Monthly</Text>
             </Pressable>
             <Pressable 
               testID="calendar-mode-weekly"
@@ -244,14 +254,14 @@ export default function CalendarScreen() {
               onPress={() => { LayoutAnimation.easeInEaseOut(); setViewMode('weekly'); }}
               style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: viewMode === 'weekly' ? theme.accent : 'transparent' }}
             >
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'weekly' ? 'white' : theme.secondaryText }}>Weekly</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: viewMode === 'weekly' ? 'white' : theme.textSecondary }}>Weekly</Text>
             </Pressable>
           </View>
         </View>
 
         {/* Month/Week Navigation */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>
+          <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>
             {format(currentDate, viewMode === 'monthly' ? 'MMMM yyyy' : "'Week' w, MMMM")}
           </Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -260,29 +270,29 @@ export default function CalendarScreen() {
               accessibilityRole="button"
               accessibilityLabel="Previous period"
               onPress={() => setCurrentDate(viewMode === 'monthly' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1))}
-              style={[styles.iconBox, { backgroundColor: theme.card }]}
+              style={[styles.iconBox, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderWidth: 1, borderColor: theme.separator }]}
             >
-              <ChevronLeft size={20} color={theme.primaryText} />
+              <ChevronLeft size={20} color={theme.text} />
             </Pressable>
             <Pressable 
               testID="calendar-next-btn"
               accessibilityRole="button"
               accessibilityLabel="Next period"
               onPress={() => setCurrentDate(viewMode === 'monthly' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1))}
-              style={[styles.iconBox, { backgroundColor: theme.card }]}
+              style={[styles.iconBox, { backgroundColor: isDark ? '#000000' : '#FFFFFF', borderWidth: 1, borderColor: theme.separator }]}
             >
-              <ChevronRight size={20} color={theme.primaryText} />
+              <ChevronRight size={20} color={theme.text} />
             </Pressable>
           </View>
         </View>
 
         {/* Calendar View */}
-        <AnimatedCard style={{ padding: 16, marginBottom: 24 }}>
+        <AnimatedCard style={{ padding: 16, marginBottom: 24, backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
           {viewMode === 'monthly' ? (
             <View>
               <View style={{ flexDirection: 'row', marginBottom: 16 }}>
                 {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                  <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>{d}</Text>
+                  <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>{d}</Text>
                 ))}
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -303,33 +313,33 @@ export default function CalendarScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 40 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent }} />
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>Activity Indicators</Text>
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>Activity Indicators</Text>
           </View>
         </View>
 
         {/* Insights Section */}
-        <Text style={{ fontSize: 18, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 20 }}>Productivity Insights</Text>
+        <Text style={{ fontSize: 18, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginBottom: 20 }}>Productivity Insights</Text>
         <View style={{ gap: 16 }}>
           <View style={{ flexDirection: 'row', gap: 16 }}>
-            <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: theme.card }}>
+            <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
               <ProductivityRing percentage={monthlyConsistency} size={60} strokeWidth={6} color={theme.accent} />
-              <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginTop: 12 }}>{monthlyConsistency}%</Text>
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText, marginTop: 4 }}>CONSISTENCY</Text>
+              <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 12 }}>{monthlyConsistency}%</Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 4 }}>CONSISTENCY</Text>
             </AnimatedCard>
-            <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: theme.card }}>
+            <AnimatedCard style={{ flex: 1, padding: 20, alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
               <Flame size={32} color={theme.accent} />
-              <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginTop: 12 }}>{longestStreak}d</Text>
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText, marginTop: 4 }}>LONGEST STREAK</Text>
+              <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginTop: 12 }}>{longestStreak}d</Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary, marginTop: 4 }}>LONGEST STREAK</Text>
             </AnimatedCard>
           </View>
           
-          <AnimatedCard style={{ padding: 20, flexDirection: 'row', alignItems: 'center' }}>
-            <View style={[styles.iconBox, { backgroundColor: theme.accentLight, marginRight: 16 }]}>
+          <AnimatedCard style={{ padding: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#000000' : '#FFFFFF', borderColor: theme.separator, borderWidth: 1 }}>
+            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(0,102,255,0.15)' : 'rgba(0,102,255,0.08)', marginRight: 16 }]}>
               <Award size={24} color={theme.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>Best Performance</Text>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.secondaryText }}>You perform best on Mondays</Text>
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>Best Performance</Text>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.textSecondary }}>You perform best on Mondays</Text>
             </View>
           </AnimatedCard>
         </View>
@@ -346,8 +356,8 @@ export default function CalendarScreen() {
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                   <View>
-                    <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>{format(selectedDate, 'MMMM do')}</Text>
-                    <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.secondaryText }}>{format(selectedDate, 'EEEE, yyyy')}</Text>
+                    <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>{format(selectedDate, 'MMMM do')}</Text>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: theme.textSecondary }}>{format(selectedDate, 'EEEE, yyyy')}</Text>
                   </View>
                   {data.isPerfect && (
                     <View style={{ backgroundColor: '#FFD60A20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
@@ -358,35 +368,35 @@ export default function CalendarScreen() {
 
                 {/* Day Stats */}
                 <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-                  <View style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 16, alignItems: 'center' }}>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#0A0A0A' : '#F5F2EB', padding: 12, borderRadius: 16, alignItems: 'center' }}>
                     <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>{data.tasks.filter(t => t.completed).length}/{data.tasks.length}</Text>
-                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>TASKS</Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>TASKS</Text>
                   </View>
-                  <View style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 16, alignItems: 'center' }}>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#0A0A0A' : '#F5F2EB', padding: 12, borderRadius: 16, alignItems: 'center' }}>
                     <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>{data.habits.length}</Text>
-                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>HABITS</Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>HABITS</Text>
                   </View>
-                  <View style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 16, alignItems: 'center' }}>
+                  <View style={{ flex: 1, backgroundColor: isDark ? '#0A0A0A' : '#F5F2EB', padding: 12, borderRadius: 16, alignItems: 'center' }}>
                     <Text style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: theme.accent }}>{Math.round(data.sessions.reduce((acc, s) => acc + s.duration_minutes, 0) / 60)}h</Text>
-                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.secondaryText }}>FOCUS</Text>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_800ExtraBold', color: theme.textSecondary }}>FOCUS</Text>
                   </View>
                 </View>
 
-                {/* Day Note */}
+                {/* Daily Reflection */}
                 <View style={{ marginBottom: 24 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                     <Pencil size={16} color={theme.accent} style={{ marginRight: 8 }} />
-                    <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText }}>Day Note</Text>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.text }}>Daily Reflection</Text>
                   </View>
                   <TextInput
                     testID="calendar-day-note-input"
                     accessibilityLabel="Day Note"
                     style={{ 
-                      backgroundColor: theme.card, borderRadius: 16, padding: 14,
-                      color: theme.primaryText, fontSize: 13, fontFamily: 'Inter_600SemiBold', minHeight: 80, textAlignVertical: 'top'
+                      backgroundColor: isDark ? '#0A0A0A' : '#F5F2EB', borderRadius: 16, padding: 14,
+                      color: theme.text, fontSize: 13, fontFamily: 'Inter_600SemiBold', minHeight: 80, textAlignVertical: 'top'
                     }}
                     placeholder="How was your day? Reflections, wins, thoughts..."
-                    placeholderTextColor={theme.secondaryText}
+                    placeholderTextColor={theme.textMuted}
                     multiline
                     value={dayNoteInput}
                     onChangeText={(t) => { setDayNoteInput(t); saveDayNote(dateStr, t); }}
@@ -394,24 +404,24 @@ export default function CalendarScreen() {
                 </View>
 
                 {/* Tasks List */}
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 12 }}>Planned Tasks</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginBottom: 12 }}>Planned Tasks</Text>
                 {data.tasks.length === 0 ? (
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: theme.secondaryText, fontStyle: 'italic', marginBottom: 20 }}>No tasks planned for this day.</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: theme.textSecondary, fontStyle: 'italic', marginBottom: 20 }}>No tasks planned for this day.</Text>
                 ) : (
                   <View style={{ gap: 10, marginBottom: 20 }}>
                     {data.tasks.map(t => (
                       <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <CheckCircle2 size={18} color={t.completed ? theme.accent : theme.card} />
-                        <Text style={{ marginLeft: 10, fontSize: 13, fontFamily: 'Inter_600SemiBold', color: t.completed ? theme.secondaryText : theme.primaryText, textDecorationLine: t.completed ? 'line-through' : 'none' }}>{t.title}</Text>
+                        <CheckCircle2 size={18} color={t.completed ? theme.accent : theme.textMuted} />
+                        <Text style={{ marginLeft: 10, fontSize: 13, fontFamily: 'Inter_600SemiBold', color: t.completed ? theme.textSecondary : theme.text, textDecorationLine: t.completed ? 'line-through' : 'none' }}>{t.title}</Text>
                       </View>
                     ))}
                   </View>
                 )}
 
                 {/* Habits */}
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.primaryText, marginBottom: 12 }}>Habit Check-ins</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: theme.text, marginBottom: 12 }}>Habit Check-ins</Text>
                 {data.habits.length === 0 ? (
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: theme.secondaryText, fontStyle: 'italic', marginBottom: 20 }}>No habits completed this day.</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: theme.textSecondary, fontStyle: 'italic', marginBottom: 20 }}>No habits completed this day.</Text>
                 ) : (
                   <View style={{ gap: 10, marginBottom: 20 }}>
                     {data.habits.map(h => (
@@ -433,7 +443,7 @@ export default function CalendarScreen() {
           })()}
         </CenterModal>
       </ScrollView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

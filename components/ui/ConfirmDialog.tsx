@@ -32,10 +32,10 @@ export function ConfirmDialog({
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.overlay}>
-        <View style={[styles.dialogBox, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: theme.cardBorder }]}>
-          <Text style={[styles.title, { color: theme.primaryText }]}>{title}</Text>
-          <Text style={[styles.message, { color: theme.secondaryText }]}>{message}</Text>
+      <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.45)' }]}>
+        <View style={[styles.dialogBox, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+          <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+          <Text style={[styles.message, { color: theme.textSecondary }]}>{message}</Text>
           
           <View style={styles.buttonRow}>
             {!hideCancel && (
@@ -43,10 +43,10 @@ export function ConfirmDialog({
                 testID={`popup-btn-${String(cancelText || 'cancel').toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                 accessibilityRole="button"
                 accessibilityLabel={cancelText}
-                style={[styles.button, styles.cancelButton, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7', borderColor: theme.cardBorder }]} 
+                style={[styles.button, styles.cancelButton, { backgroundColor: theme.background, borderColor: theme.separator }]} 
                 onPress={onCancel}
               >
-                <Text style={[styles.buttonText, { color: theme.primaryText }]}>{cancelText}</Text>
+                <Text style={[styles.buttonText, { color: theme.text }]}>{cancelText}</Text>
               </Pressable>
             )}
             <Pressable 
@@ -71,7 +71,6 @@ export function ConfirmDialog({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -82,26 +81,19 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     padding: 24,
-    
-    
-    
-    
-    
   },
   title: {
     fontSize: 20,
-    fontFamily: 'System',
-    fontWeight: '800',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 14,
-    fontFamily: 'System',
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 20,
     marginBottom: 24,
     textAlign: 'center',
-    lineHeight: 20,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -110,25 +102,21 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelButton: {
     borderWidth: 1,
   },
-  confirmButton: {
-    // Background color is handled dynamically
-  },
+  confirmButton: {},
   buttonText: {
     fontSize: 15,
-    fontFamily: 'System',
-    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
   },
   confirmButtonText: {
     fontSize: 15,
-    fontFamily: 'System',
-    fontWeight: '700',
-    color: '#FFF',
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
   },
 });

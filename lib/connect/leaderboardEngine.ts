@@ -41,6 +41,8 @@ export interface LeaderboardScore {
   weekly_score: number;
   monthly_score: number;
   streak_count: number;
+  current_streak?: number;
+  tasks_completed?: number;
   last_active: string | null;
   rank_movement: 'up' | 'down' | 'same';
   institution?: string | null;

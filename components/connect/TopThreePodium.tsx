@@ -57,17 +57,17 @@ export const TopThreePodium: React.FC<Props> = ({ entries }) => {
         <Text style={[styles.username, { color: theme.primaryText }]} numberOfLines={1}>
           {entry.username}
         </Text>
-        <Text style={styles.xpText}>{entry.displayScore.toLocaleString()} pts</Text>
+        <Text style={[styles.xpText, { color: theme.accent }]}>{entry.displayScore.toLocaleString()} pts</Text>
 
         <View
           style={[
             styles.podiumBox,
             {
               height,
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.7)',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
               borderColor,
             },
-            entry.isCurrentUser && { borderColor: '#007AFF', borderWidth: 2, backgroundColor: isDark ? 'rgba(0,122,255,0.15)' : 'rgba(0,122,255,0.1)' }
+            entry.isCurrentUser && { borderColor: theme.accent, borderWidth: 2, backgroundColor: isDark ? 'rgba(0,102,255,0.15)' : 'rgba(0,102,255,0.08)' }
           ]}
         >
           <Text style={[styles.rankNumber, { color: borderColor }]}>{place}</Text>
@@ -107,14 +107,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   avatarCircle: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0066FF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
     overflow: 'hidden',
   },
   avatarImg: {
@@ -146,7 +142,7 @@ const styles = StyleSheet.create({
   xpText: {
     fontSize: 12,
     fontFamily: 'Inter_800ExtraBold',
-    color: '#007AFF',
+    color: '#0066FF',
     marginBottom: 8,
   },
   podiumBox: {
@@ -158,10 +154,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
   },
   rankNumber: {
     fontSize: 48,
@@ -169,9 +161,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   currentUserGlow: {
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
+    borderWidth: 1,
+    borderColor: '#0066FF',
   },
 });

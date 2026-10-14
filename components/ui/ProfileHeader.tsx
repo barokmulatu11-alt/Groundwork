@@ -38,7 +38,7 @@ export function ProfileHeader({
     
     if (type === 'guest') {
       title = "Guest Mode";
-      message = "You are using Groundwork locally without an account. All your habits, tasks, and notes stay safely on this device. Sign in anytime to sync across devices!";
+      message = "You are using Groundwork locally without an account. All your habits, tasks, and focus sessions stay safely on this device. Sign in anytime to sync across devices!";
     } else if (type === 'owner') {
       title = "Platform Owner";
       message = "You are the creator and owner of groundwork. You have full access to the system, dashboard, and settings.";
@@ -131,15 +131,7 @@ export function ProfileHeader({
           </TouchableOpacity>
         )}
 
-        {isPro && !isOwner && !isAdmin && !isModerator && (
-          <TouchableOpacity 
-            onPress={() => handleTagPress('pro')}
-            style={[styles.statBadge, { backgroundColor: isDark ? 'rgba(255,149,0,0.15)' : 'rgba(255,149,0,0.1)' }]}
-          >
-            <CheckCircle2 size={12} color="#FF9500" />
-            <Text style={[styles.statText, { color: '#FF9500' }]}>Pro Member</Text>
-          </TouchableOpacity>
-        )}
+
 
         {isGuest ? (
           <TouchableOpacity 

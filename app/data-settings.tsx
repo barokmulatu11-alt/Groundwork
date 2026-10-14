@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Pressable, Switch, Platform, Share, ActivityIndicator } from 'react-native';
 import { useTheme } from '@/lib/ThemeContext';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
@@ -51,7 +52,7 @@ function SectionLabel({ label, theme }: { label: string; theme: any }) {
 
 function Card({ children, theme, style }: { children: React.ReactNode; theme: any; style?: any }) {
   return (
-    <View style={[styles.card, { backgroundColor: theme.card }, style]}>
+    <View style={[styles.card, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }, style]}>
       {children}
     </View>
   );
@@ -121,6 +122,44 @@ export default function DataSyncSettingsScreen() {
   })();
 
   const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
+
+  const handleClearCache = async () => {
+    if (isClearingCache) return;
+    setIsClearingCache(true);
+    try {
+      if (Platform.OS !== 'web') {
+        const FileSystem = await import('expo-file-system/legacy');
+        if (FileSystem.cacheDirectory) {
+          const files = await FileSystem.readDirectoryAsync(FileSystem.cacheDirectory);
+          for (const file of files) {
+            try {
+              await FileSystem.deleteAsync(`${FileSystem.cacheDirectory}${file}`, { idempotent: true });
+            } catch (_) {}
+          }
+        }
+      } else {
+        try {
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            window.sessionStorage.clear();
+          }
+        } catch (_) {}
+      }
+      showAlert({
+        title: "Clear Cache",
+        message: "Temporary cache files cleared successfully. Your tasks, habits, and settings are preserved.",
+        primaryButton: { text: "OK", onPress: () => {} },
+      });
+    } catch (e) {
+      showAlert({
+        title: "Clear Cache",
+        message: "Failed to clear cache. Please try again.",
+        primaryButton: { text: "OK", onPress: () => {} },
+      });
+    } finally {
+      setIsClearingCache(false);
+    }
+  };
 
   const handleBackup = async () => {
     if (isGuest || !session) {
@@ -304,7 +343,7 @@ export default function DataSyncSettingsScreen() {
   };
 
   const calculateStorage = () => {
-    const totalItems = tasks.length + habits.length + notes.length + focusSessions.length;
+    const totalItems = tasks.length + habits.length + focusSessions.length;
     const estimatedSize = (totalItems * 0.5).toFixed(1); // Rough estimate in KB
     return `${estimatedSize} KB (${totalItems} items)`;
   };
@@ -380,21 +419,21 @@ export default function DataSyncSettingsScreen() {
   };
 
   return (
-    <BackgroundGradient>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <ChevronLeft size={24} color={accentColor} />
-          <Text style={[styles.backText, { color: accentColor }]}>Settings</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.primaryText }]}>Data & Sync</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Manage your cloud data</Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ marginBottom: 28 }}>
+          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            Data & sync.
+          </Text>
+          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+            Backups, import and cloud sync.
+          </Text>
+        </View>
         <Animated.View entering={FadeInDown.delay(100).duration(500)}>
           {/* ── CLOUD SYNC ─────────────────────────────── */}
           <SectionLabel label="CLOUD SYNC" theme={theme} />
@@ -516,9 +555,9 @@ export default function DataSyncSettingsScreen() {
             <SettingRow 
               icon={Trash2} 
               title="Clear Local Cache" 
-              subtitle="Remove temporary files only" 
+              subtitle={isClearingCache ? "Clearing temporary files..." : "Remove temporary files only"} 
               theme={theme}
-              onPress={() => showAlert({ title: "Clear Cache", message: "Local cache has been cleared successfully.", primaryButton: { text: "OK", onPress: () => {} } })}
+              onPress={handleClearCache}
               destructive
             />
           </Card>
@@ -544,7 +583,7 @@ export default function DataSyncSettingsScreen() {
         confirmText="Import"
       />
 
-    </BackgroundGradient>
+    </View>
   );
 }
 

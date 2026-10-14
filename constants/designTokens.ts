@@ -1,59 +1,81 @@
 export const DesignTokens = {
   colors: {
-    // Primary academic gradients (blue to purple)
-    gradientStart: 'hsl(220, 70%, 55%)', // #3b76f6-ish
-    gradientEnd: 'hsl(260, 50%, 60%)',   // #886ee6-ish
-    
-    // Status/Consistency colors
-    beginner: '#94A3B8', // Slate-400
-    strong: '#3B82F6',   // Blue-500
-    elite: '#8B5CF6',    // Violet-500
-    master: '#EC4899',   // Pink-500
+    pureBlack: '#000000',
+    warmIvory: '#F5F2EB',
+    secondaryGray: '#A3A099',
+    tertiaryGray: '#787571',
+    thinDivider: 'rgba(255, 255, 255, 0.12)',
 
-    // Status Indicator colors
-    statusActive: '#10B981', // Green-500
-    statusConsistent: '#3B82F6', // Blue-500
-    statusFocus: '#8B5CF6', // Purple-500
-    statusInactive: '#64748B', // Slate-500
+    // Light Theme Tokens
+    offWhite: '#FAF9F6',
+    nearBlack: '#141312',
+    secondaryGrayLight: '#686662',
+    tertiaryGrayLight: '#8E8C87',
+    thinDividerLight: 'rgba(0, 0, 0, 0.08)',
 
-    // Card Colors (Light/Dark transparency settings)
-    cardBgLight: 'rgba(255, 255, 255, 0.10)', // softer glassy white
-    cardBgDark: 'rgba(28, 28, 30, 0.75)',
-    cardBorderLight: 'rgba(230, 230, 235, 0.30)',
-    cardBorderDark: 'rgba(48, 48, 52, 0.8)',
-    
-    // Levels color
-    levelGlowColor: 'rgba(139, 92, 246, 0.25)',
+    accentBlue: '#0066FF',
+    accentBlueHover: '#0052CC',
+    accentBlueSubtle: 'rgba(0, 102, 255, 0.15)',
+    gradientStart: '#0066FF',
+    gradientEnd: '#0052CC',
+
+    // Status colors
+    beginner: '#8E8C87',
+    strong: '#0066FF',
+    elite: '#8B5CF6',
+    master: '#EC4899',
+
+    statusActive: '#10B981',
+    statusConsistent: '#0066FF',
+    statusFocus: '#8B5CF6',
+    statusInactive: '#5A5854',
+
+    // Surfaces
+    cardBgLight: '#FFFFFF',
+    cardBgDark: '#000000',
+    cardBorderLight: 'rgba(0, 0, 0, 0.08)',
+    cardBorderDark: 'rgba(255, 255, 255, 0.12)',
   },
-  
+
   shadows: {
     soft: {
       shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.05,
-      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
     },
     premium: {
-      shadowColor: '#3B82F6',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.1,
-      shadowRadius: 16,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 12,
     },
   },
 
   borderRadius: {
+    xs: 4,
     sm: 8,
     md: 12,
     lg: 16,
-    xl: 24,
+    xl: 20,
     round: 9999,
   },
 
   fonts: {
-    bold: 'Inter_800ExtraBold',
-    semiBold: 'Inter_700Bold',
-    medium: 'Inter_600SemiBold',
-    regular: 'Inter_500Medium',
+    // Sans-serif headings & labels
+    heading: 'Inter_800ExtraBold',
+    bold: 'Inter_700Bold',
+    semiBold: 'Inter_600SemiBold',
+    medium: 'Inter_500Medium',
+    regular: 'Inter_400Regular',
+
+    // High-contrast Serif numerals and editorial headings
+    serifNumerals: 'PlayfairDisplay_700Bold',
+    serifEditorial: 'PlayfairDisplay_600SemiBold',
+    serifRegular: 'PlayfairDisplay_400Regular',
+    serifItalic: 'PlayfairDisplay_400Regular_Italic',
+    serifBold: 'PlayfairDisplay_700Bold',
+    serifExtraBold: 'PlayfairDisplay_800ExtraBold',
   },
 
   spacing: {
@@ -63,6 +85,7 @@ export const DesignTokens = {
     lg: 16,
     xl: 24,
     xxl: 32,
+    xxxl: 48,
   },
 };
 
@@ -72,8 +95,8 @@ export function getConnectTokens(accent: string) {
     ...DesignTokens,
     colors: {
       ...DesignTokens.colors,
-      gradientStart: accent,
-      gradientEnd: accent + '99',
+      accentBlue: accent,
+      accentBlueSubtle: accent + '26',
     },
   };
 }

@@ -83,7 +83,7 @@ export default function EditProfileScreen() {
       setAvatarUri(
         profile?.avatar_url ||
           session?.user?.user_metadata?.avatar_url ||
-          `https://api.dicebear.com/7.x/avataaars/png?seed=${session?.user?.email || "user"}`,
+          null,
       );
 
       // Load institution from connect_profiles
@@ -539,11 +539,11 @@ export default function EditProfileScreen() {
     }
   };
 
-  const inputBg = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)";
-  const inputBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)";
+  const inputBg = theme.cardSolid;
+  const inputBorder = theme.separator;
 
   return (
-    <BackgroundGradient>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -558,7 +558,7 @@ export default function EditProfileScreen() {
             <ChevronLeft size={24} color={theme.accent} />
             <Text style={[styles.backText, { color: theme.accent }]}>Back</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.primaryText }]}>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
             Edit Profile
           </Text>
           <TouchableOpacity
@@ -591,14 +591,34 @@ export default function EditProfileScreen() {
               activeOpacity={0.8}
               style={styles.avatarContainer}
             >
-              <Image
-                source={{
-                  uri:
-                    avatarUri ||
-                    "https://api.dicebear.com/7.x/avataaars/svg?seed=Barok",
-                }}
-                style={[styles.avatar, { borderColor: theme.cardBorder }]}
-              />
+              {avatarUri ? (
+                <Image
+                  source={{ uri: avatarUri }}
+                  style={[styles.avatar, { borderColor: theme.cardBorder }]}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.avatar,
+                    {
+                      borderColor: theme.cardBorder,
+                      backgroundColor: theme.cardSolid,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 36,
+                      fontWeight: "700",
+                      color: theme.accent,
+                    }}
+                  >
+                    {(name || username || "U").charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
               <View
                 style={[styles.cameraBadge, { backgroundColor: theme.accent }]}
               >
@@ -820,7 +840,7 @@ export default function EditProfileScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </BackgroundGradient>
+    </View>
   );
 }
 

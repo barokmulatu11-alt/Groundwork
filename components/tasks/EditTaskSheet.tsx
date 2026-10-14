@@ -54,16 +54,16 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
             ref={inputRef}
             testID="edit-task-title-input"
             accessibilityLabel="Edit task title input"
-            style={[styles.titleInput, { color: theme.primaryText }]}
+            style={[styles.titleInput, { color: theme.text }]}
             placeholder="What needs to get done?"
-            placeholderTextColor={theme.secondaryText}
+            placeholderTextColor={theme.textSecondary}
             value={title}
             onChangeText={setTitle}
             maxLength={120}
           />
-          <View style={[styles.borderBottom, { backgroundColor: theme.accent }]} />
+          <View style={[styles.borderBottom, { backgroundColor: theme.separator }]} />
 
-          <Text style={[styles.label, { color: theme.secondaryText }]}>PRIORITY</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>PRIORITY</Text>
           <View style={styles.priorityRow}>
             {(['high', 'medium', 'low'] as const).map(p => (
               <Pressable 
@@ -74,23 +74,25 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
                 onPress={() => setPriority(p)}
                 style={[
                   styles.priorityPill, 
-                  priority === p ? { backgroundColor: p === 'high' ? '#FF3B30' : p === 'medium' ? '#FF9500' : '#34C759' } : { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }
+                  priority === p 
+                    ? { backgroundColor: p === 'high' ? '#FF3B30' : p === 'medium' ? '#FF9500' : '#34C759' } 
+                    : { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }
                 ]}
               >
-                <Text style={[styles.priorityText, priority === p ? { color: 'white' } : { color: theme.secondaryText }]}>
+                <Text style={[styles.priorityText, priority === p ? { color: 'white' } : { color: theme.textSecondary }]}>
                   {p === 'high' ? '🔴 High' : p === 'medium' ? '🟡 Medium' : '🟢 Low'}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={[styles.label, { color: theme.secondaryText }]}>NOTE</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>NOTE</Text>
           <TextInput
             testID="edit-task-note-input"
             accessibilityLabel="Edit task note input"
-            style={[styles.noteInput, { color: theme.primaryText, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }]}
+            style={[styles.noteInput, { color: theme.text, backgroundColor: theme.background, borderColor: theme.separator, borderWidth: 1 }]}
             placeholder="Add a note (optional)"
-            placeholderTextColor={theme.secondaryText}
+            placeholderTextColor={theme.textSecondary}
             multiline
             value={note}
             onChangeText={setNote}
@@ -102,11 +104,11 @@ export const EditTaskSheet = forwardRef<EditTaskSheetRef, Props>(({ onUpdate }, 
             testID="edit-task-save-btn"
             accessibilityRole="button"
             accessibilityLabel="Save Changes"
-            style={[styles.submitBtn, { backgroundColor: theme.accent }, !title.trim() && { backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }]} 
+            style={[styles.submitBtn, { backgroundColor: theme.accent }, !title.trim() && { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]} 
             onPress={handleUpdate}
             disabled={!title.trim()}
           >
-            <Text style={[styles.submitText, !title.trim() && { color: theme.secondaryText }]}>Save Changes</Text>
+            <Text style={[styles.submitText, !title.trim() && { color: theme.textSecondary }]}>Save Changes</Text>
           </Pressable>
         </ScrollView>
       </View>

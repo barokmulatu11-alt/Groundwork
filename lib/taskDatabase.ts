@@ -1,4 +1,5 @@
 import { db } from './db';
+import { getLocalDateString } from './dateUtils';
 
 export interface Task {
   id: string;
@@ -12,6 +13,7 @@ export interface Task {
   reminder_offset: number | null;
   reminder_scheduled: boolean;
   order_index: number;
+  due_time?: string | null;
   created_at: string;
   updated_at: string;
   sub_tasks?: SubTask[];
@@ -117,8 +119,14 @@ export const getTaskById = (id: string): Task | null => {
 };
 
 export const createTask = (task: TaskInput): Task => {
-  const id = task.id || Date.now().toString();
+  const rawId = task.id ? String(task.id).trim() : '';
+  const id = (rawId && rawId !== 'guest')
+    ? rawId
+    : `task_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const now = new Date().toISOString();
+  const rawTitle = task.title ? String(task.title).trim() : '';
+  const title = rawTitle.length > 0 ? rawTitle : 'Untitled task';
+  const date = task.date || getLocalDateString();
   
   db.runSync(
     `INSERT INTO tasks (
@@ -127,9 +135,9 @@ export const createTask = (task: TaskInput): Task => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
-      task.title,
+      title,
       task.note || '',
-      task.date,
+      date,
       task.time_block || null,
       task.completed ? 1 : 0,
       task.priority || 'medium',

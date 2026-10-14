@@ -1,594 +1,825 @@
-import { BackgroundGradient as BG } from '@/components/BackgroundGradient';
-import { AnimatedCard } from '@/components/ui/AnimatedCard';
-import { AppText as Text } from '@/components/ui/AppText';
-import { CenterModal } from '@/components/ui/CenterModal';
-import { CustomAlert } from '@/components/ui/CustomAlert';
-import { CustomTimePicker } from '@/components/ui/CustomTimePicker';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { TabHeader } from '@/components/ui/TabHeader';
-import { getFocusMetrics } from '@/lib/analytics/AnalyticsEngine';
-import { hapticSuccess } from '@/lib/haptics';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    cancelFocusCompleteNotification,
-    scheduleFocusCompleteNotification,
-} from '@/lib/notifications';
-import { isPro } from '@/lib/subscriptionService';
-import { useTheme } from '@/lib/ThemeContext';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useSettingsStore } from '@/store/useSettingsStore';
-import { useStore } from '@/store/useStore';
-import { useFocusEffect } from '@react-navigation/native';
-import {
-    eachDayOfInterval,
-    endOfWeek,
-    format,
-    isSameDay,
-    isToday,
-    startOfWeek,
-} from 'date-fns';
-import { Brain, Flame, Target, Trophy, Zap } from 'lucide-react-native';
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-    Alert,
-    AppState,
-    AppStateStatus,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    Vibration,
-    View
+  View,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Platform,
+  useWindowDimensions,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
-import Animated, {
-    FadeInDown,
-    useAnimatedStyle,
-    useSharedValue,
-    withRepeat,
-    withSpring,
-    withTiming,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Play, Pause, RotateCcw, Check, Sparkles, Clock, Target } from 'lucide-react-native';
+import { AppText as Text } from '@/components/ui/AppText';
+import { BrandHeader } from '@/components/ui/BrandHeader';
+import { useTheme } from '@/lib/ThemeContext';
+import { useStore } from '@/store/useStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { Svg, Circle } from 'react-native-svg';
+import { getLocalDateString } from '@/lib/dateUtils';
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const PRESET_DURATIONS = [15, 25, 45, 60];
 
-// A pill-shaped button for selecting focus timer mode (Study, Deep Work, Sprint, Custom)
-const ModePill = ({ label, active, onPress, theme, testID }: any) => (
-  <TouchableOpacity
-    testID={testID}
-    accessibilityRole="button"
-    accessibilityLabel={`Mode: ${label}`}
-    onPress={onPress}
-    activeOpacity={0.8}
-    style={[
-      styles.modePill,
-      {
-        backgroundColor: active ? theme.accent : 'transparent',
-        borderColor: active ? 'transparent' : theme.cardBorder,
-      },
-    ]}
-  >
-    <Text style={[styles.modePillText, { color: active ? 'white' : theme.primaryText }]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
-// An audio-visualizer-style bar animation that pulses when the timer is active
-const AnimatedVisualizer = ({ active, theme }: { active: boolean; theme: any }) => {
-  const bars = Array.from({ length: 15 });
-  return (
-    <View style={styles.visualizerContainer}>
-      {bars.map((_, i) => (
-        <VisualizerBar key={i} index={i} active={active} theme={theme} />
-      ))}
-    </View>
-  );
-};
-
-// A single animated bar in the visualizer — height pulses randomly when active
-const VisualizerBar = ({ index, active, theme }: any) => {
-  const height = useSharedValue(10);
-
-  useEffect(() => {
-    if (active) {
-      height.value = withRepeat(
-        withTiming(15 + Math.random() * 25, { duration: 400 + Math.random() * 300 }),
-        -1,
-        true,
-      );
-    } else {
-      height.value = withSpring(10);
-    }
-  }, [active]);
-
-  const style = useAnimatedStyle(() => ({
-    height: height.value,
-    backgroundColor: theme.accent,
-    opacity: 0.6,
-  }));
-
-  return <Animated.View style={[styles.visualizerBar, style]} />;
-};
-
-// ─── Pro Analytics Card ───────────────────────────────────────────────────────
-
-// Converts minutes to a human-readable string like "1h 30m" or "45m"
-const formatMinutes = (mins: number) => {
-  if (!mins || mins === 0) return '0m';
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h === 0) return `${m}m`;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-};
-
-// Pro-only analytics card — shows focus score, weekly stats, average session length, and peak focus hours
-const FocusAnalyticsCard = ({ metrics, theme }: { metrics: any; theme: any }) => {
-  if (!metrics) return null;
-  return (
-    <Animated.View entering={FadeInDown.duration(400)}>
-      <View style={[styles.analyticsCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-        <Text style={[styles.analyticsTitle, { color: theme.secondaryText }]}>
-          FOCUS ANALYTICS · 30 DAYS
-        </Text>
-
-        {/* Score + stats */}
-        <View style={styles.analyticsRow}>
-          <View style={[styles.scoreCircle, { backgroundColor: theme.accent + '20' }]}>
-            <Text style={[styles.scoreNum, { color: theme.accent }]}>
-              {metrics.focusScore ?? 0}
-            </Text>
-            <Text style={[styles.scoreLabel, { color: theme.tertiaryText }]}>/100</Text>
-          </View>
-          <View style={styles.analyticsStats}>
-            {[
-              { icon: Flame, label: 'This week', value: formatMinutes(metrics.totalFocusTimeThisWeek ?? 0), color: '#FF9500' },
-              { icon: Brain, label: 'Avg session', value: formatMinutes(metrics.averageSessionLength ?? 0), color: '#AF52DE' },
-              { icon: Target, label: 'Distraction', value: `${metrics.distractionRate ?? 0}%`, color: '#FF3B30' },
-            ].map((item) => (
-              <View key={item.label} style={styles.analyticsStat}>
-                <item.icon size={13} color={item.color} />
-                <Text style={[styles.analyticsStatVal, { color: theme.primaryText }]}>
-                  {item.value}
-                </Text>
-                <Text style={[styles.analyticsStatLbl, { color: theme.tertiaryText }]}>
-                  {item.label}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Best focus hours */}
-        {metrics.bestFocusHours?.length > 0 && (
-          <View style={styles.peakSection}>
-            <Text style={[styles.peakLabel, { color: theme.tertiaryText }]}>
-              PEAK HOURS
-            </Text>
-            <View style={styles.peakRow}>
-              {metrics.bestFocusHours.slice(0, 4).map((h: any, i: number) => (
-                <View key={i} style={[styles.peakBadge, { backgroundColor: theme.accent + '20' }]}>
-                  <Text style={[styles.peakTime, { color: theme.accent }]}>
-                    {h.hour < 12
-                      ? `${h.hour === 0 ? 12 : h.hour}AM`
-                      : `${h.hour === 12 ? 12 : h.hour - 12}PM`}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-      </View>
-    </Animated.View>
-  );
-};
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
-// Main focus timer screen — mode selector, countdown, controls, history, and Pro analytics
 export default function FocusScreen() {
-  const { tasks, loadAllTasks, focusSessions, addFocusSession, loadFocusSessions } = useStore();
-  const { theme, isDark } = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
+
+  const { tasks, loadAllTasks, focusSessions, addFocusSession, loadFocusSessions } = useStore();
   const { session } = useAuthStore();
   const userId = session?.user?.id || 'guest';
-  const userIsPro = isPro();
-
-  const [focusMetrics, setFocusMetrics] = useState<any>(null);
 
   const {
     focusTimerActive,
     focusTimerTimeLeft,
-    focusTimerMode,
     focusTimerDurationMinutes,
     focusTimerSelectedTaskId,
     focusTimerStartTime,
+    pomodoroBreakDuration,
     setFocusTimerActive,
     setFocusTimerTimeLeft,
-    setFocusTimerMode,
     setFocusTimerDurationMinutes,
     setFocusTimerSelectedTaskId,
     setFocusTimerStartTime,
   } = useSettingsStore();
 
+  const [selectedDuration, setSelectedDuration] = useState<number>(focusTimerDurationMinutes || 25);
+  const [isCustom, setIsCustom] = useState<boolean>(!PRESET_DURATIONS.includes(selectedDuration));
+  const [customMinutesInput, setCustomMinutesInput] = useState<string>(selectedDuration.toString());
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(focusTimerSelectedTaskId);
-  const [mode, setMode] = useState<'Study' | 'Quick Sprint' | 'Deep Work' | 'Custom'>(focusTimerMode);
-  const [defaultDurationMinutes, setDefaultDurationMinutes] = useState(focusTimerDurationMinutes);
-  const [timeLeft, setTimeLeft] = useState(focusTimerTimeLeft);
-  const [isActive, setIsActive] = useState(focusTimerActive);
-  const [isEditSheetVisible, setEditSheetVisible] = useState(false);
-  const [completionAlertVisible, setCompletionAlertVisible] = useState(false);
-  const [tempHours, setTempHours] = useState('0');
-  const [tempMinutes, setTempMinutes] = useState('25');
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
 
-  // Recalculate remaining time when app comes back to foreground (timer was ticking in background)
+  const [timeLeft, setTimeLeft] = useState<number>(
+    focusTimerTimeLeft > 0 ? focusTimerTimeLeft : selectedDuration * 60
+  );
+  const [isRunning, setIsRunning] = useState<boolean>(focusTimerActive);
+  const isRecordingRef = useRef(false);
+
+  // Load data
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+    loadAllTasks();
+    if (loadFocusSessions) loadFocusSessions();
+  }, [loadAllTasks, loadFocusSessions]);
+
+  // Recalculate remaining time when app returns from background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active' && focusTimerActive && focusTimerStartTime) {
-        const elapsedSeconds = Math.floor((Date.now() - focusTimerStartTime) / 1000);
-        const newTimeLeft = Math.max(0, focusTimerTimeLeft - elapsedSeconds);
-        setTimeLeft(newTimeLeft);
-        setFocusTimerTimeLeft(newTimeLeft);
-        if (newTimeLeft === 0) {
-          setIsActive(false);
-          setFocusTimerActive(false);
-          setFocusTimerStartTime(null);
-          handleTimerCompletion();
+        const elapsedSec = Math.floor((Date.now() - focusTimerStartTime) / 1000);
+        const newLeft = Math.max(0, focusTimerTimeLeft - elapsedSec);
+        setTimeLeft(newLeft);
+        setFocusTimerTimeLeft(newLeft);
+        if (newLeft === 0) {
+          handleSessionFinished();
         }
       }
     });
-    return () => subscription.remove();
+    return () => sub.remove();
   }, [focusTimerActive, focusTimerStartTime, focusTimerTimeLeft]);
 
-  // Main countdown interval — ticks every second when the timer is active
+  // Timer interval
   useEffect(() => {
     let interval: any;
-    if (isActive && timeLeft > 0) {
+    if (isRunning && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
           const next = prev - 1;
-          if (next <= 0) { clearInterval(interval); return 0; }
+          setFocusTimerTimeLeft(next);
+          if (next <= 0) {
+            clearInterval(interval);
+            handleSessionFinished();
+            return 0;
+          }
           return next;
         });
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isActive]);
+  }, [isRunning, timeLeft]);
 
-  // Sync local timer state back to the global settings store
-  useEffect(() => {
-    if (timeLeft === 0 && isActive) handleTimerCompletion();
-    if (focusTimerTimeLeft !== timeLeft) setFocusTimerTimeLeft(timeLeft);
-  }, [timeLeft]);
-
-  useEffect(() => {
-    if (focusTimerActive !== isActive) setFocusTimerActive(isActive);
-  }, [isActive]);
-
-  useEffect(() => {
-    if (focusTimerMode !== mode) setFocusTimerMode(mode);
-    if (focusTimerDurationMinutes !== defaultDurationMinutes) setFocusTimerDurationMinutes(defaultDurationMinutes);
-  }, [mode, defaultDurationMinutes]);
-
-  useEffect(() => {
-    if (focusTimerSelectedTaskId !== selectedTaskId) setFocusTimerSelectedTaskId(selectedTaskId);
-  }, [selectedTaskId]);
-
-  useEffect(() => {
-    if (isEditSheetVisible) {
-      setTempHours(String(Math.floor(defaultDurationMinutes / 60)));
-      setTempMinutes(String(defaultDurationMinutes % 60));
-    }
-  }, [isEditSheetVisible]);
-
-  // Called when the timer hits zero — logs the session, vibrates, and shows a success alert
-  const handleTimerCompletion = async () => {
-    setIsActive(false);
+  const handleSessionFinished = async () => {
+    if (isRecordingRef.current) return;
+    isRecordingRef.current = true;
+    setIsRunning(false);
     setFocusTimerActive(false);
     setFocusTimerStartTime(null);
-    await cancelFocusCompleteNotification();
-    addFocusSession({
-      duration_minutes: defaultDurationMinutes,
-      task_id: selectedTaskId || undefined,
-      date: new Date().toISOString().split('T')[0],
-      completed_at: new Date().toISOString(),
-      mode,
-    });
-    Vibration.vibrate([0, 500, 200, 500]);
     hapticSuccess();
-    setCompletionAlertVisible(true);
-  };
 
-  // Toggles the timer between active and paused states, also schedules/cancels a completion notification
-  const handleStartPause = async () => {
-    if (isActive) {
-      setIsActive(false);
-      setFocusTimerActive(false);
-      setFocusTimerStartTime(null);
-      await cancelFocusCompleteNotification();
-    } else {
-      setIsActive(true);
-      setFocusTimerActive(true);
-      setFocusTimerStartTime(Date.now());
-      const task = tasks.find((t) => t.id === selectedTaskId);
-      await scheduleFocusCompleteNotification(timeLeft / 60, task?.title);
-    }
-  };
-
-  // Resets the timer to its original duration and logs partial focus time if any was accumulated
-  const handleReset = async () => {
-    const secondsSpent = defaultDurationMinutes * 60 - timeLeft;
-    const minutesSpent = Math.floor(secondsSpent / 60);
-    if (minutesSpent > 0 && isActive) {
-      addFocusSession({
-        duration_minutes: minutesSpent,
+    try {
+      const durationCompleted = selectedDuration;
+      await addFocusSession({
+        duration_minutes: durationCompleted,
         task_id: selectedTaskId || undefined,
-        date: new Date().toISOString().split('T')[0],
-        mode: `${mode} (Partial)`,
+        user_id: userId,
+        completed_at: new Date().toISOString(),
       });
+      if (loadFocusSessions) await loadFocusSessions();
+    } catch (e) {
+      console.warn('[FocusScreen] Failed to save focus session:', e);
+    } finally {
+      isRecordingRef.current = false;
     }
-    setIsActive(false);
+  };
+
+  const handleStart = () => {
+    hapticLight();
+    const durationToUse = isCustom
+      ? Math.max(1, parseInt(customMinutesInput, 10) || 25)
+      : selectedDuration;
+    const initialSeconds = timeLeft > 0 ? timeLeft : durationToUse * 60;
+    setTimeLeft(initialSeconds);
+    setIsRunning(true);
+    setFocusTimerActive(true);
+    setFocusTimerStartTime(Date.now());
+    setFocusTimerDurationMinutes(durationToUse);
+    setFocusTimerTimeLeft(initialSeconds);
+  };
+
+  const handlePause = () => {
+    hapticLight();
+    setIsRunning(false);
     setFocusTimerActive(false);
     setFocusTimerStartTime(null);
-    setTimeLeft(defaultDurationMinutes * 60);
-    setFocusTimerTimeLeft(defaultDurationMinutes * 60);
-    await cancelFocusCompleteNotification();
+    setFocusTimerTimeLeft(timeLeft);
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadAllTasks();
-      loadFocusSessions();
-      if (userIsPro) {
-        try { setFocusMetrics(getFocusMetrics(userId, 30)); } catch (_) {}
-      }
-    }, [userId, userIsPro]),
-  );
+  const handleReset = () => {
+    hapticLight();
+    setIsRunning(false);
+    setFocusTimerActive(false);
+    setFocusTimerStartTime(null);
+    const durationToUse = isCustom
+      ? Math.max(1, parseInt(customMinutesInput, 10) || 25)
+      : selectedDuration;
+    const initialSeconds = durationToUse * 60;
+    setTimeLeft(initialSeconds);
+    setFocusTimerTimeLeft(initialSeconds);
+  };
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todaySessions = focusSessions.filter((s) => s.date === todayStr);
+  const handleSelectPreset = (mins: number) => {
+    if (isRunning) return;
+    hapticLight();
+    setIsCustom(false);
+    setSelectedDuration(mins);
+    setTimeLeft(mins * 60);
+    setFocusTimerDurationMinutes(mins);
+    setFocusTimerTimeLeft(mins * 60);
+  };
 
-  // Parses the custom hour/minute pickers, validates, and applies the duration to the timer
-  const applyCustomDuration = () => {
-    const h = parseInt(tempHours) || 0;
-    const m = parseInt(tempMinutes) || 0;
-    const totalMins = h * 60 + m;
-    if (totalMins > 0) {
-      setMode('Custom');
-      setDefaultDurationMinutes(totalMins);
-      setTimeLeft(totalMins * 60);
-      setEditSheetVisible(false);
-    } else {
-      Alert.alert('Invalid Time', 'Please select a duration greater than 0.');
+  const handleSetCustom = (text: string) => {
+    setCustomMinutesInput(text);
+    const val = parseInt(text, 10);
+    if (!isNaN(val) && val > 0 && !isRunning) {
+      setSelectedDuration(val);
+      setTimeLeft(val * 60);
+      setFocusTimerDurationMinutes(val);
+      setFocusTimerTimeLeft(val * 60);
     }
   };
+
+  // Timer formatted MM:SS
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const timeFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+  const totalSeconds = selectedDuration * 60;
+  const progressRatio = totalSeconds > 0 ? Math.max(0, Math.min(1, (totalSeconds - timeLeft) / totalSeconds)) : 0;
+
+  const timerState: 'idle' | 'running' | 'paused' | 'completed' = (() => {
+    if (isRunning) return 'running';
+    if (timeLeft === 0) return 'completed';
+    if (timeLeft < totalSeconds) return 'paused';
+    return 'idle';
+  })();
+
+  const ringSize = 250;
+  const strokeWidth = 3;
+  const radius = (ringSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - progressRatio);
+
+  // Today's session totals using local calendar date
+  const todayStr = getLocalDateString();
+  const todaySessions = (focusSessions || []).filter((s) => {
+    if (!s.completed_at) return false;
+    return s.completed_at.split('T')[0] === todayStr;
+  });
+  const todayTotalMinutes = todaySessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+
+  const activeTasksList = (tasks || []).filter((t) => !t.deleted_at && !t.completed);
+  const selectedTaskObj = activeTasksList.find((t) => t.id === selectedTaskId);
+
+  const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
   return (
-    <BG>
+    <View style={styles.root}>
+      <View style={{ paddingTop: insets.top }}>
+        <BrandHeader showBack showMoreMenu onRightPress={() => router.push('/settings' as any)} />
+      </View>
+
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, paddingTop: insets.top + 24 }}
+        style={{ flex: 1, width: '100%' }}
+        contentContainerStyle={{
+          paddingHorizontal: isDesktop ? 32 : 20,
+          paddingTop: 20,
+          paddingBottom: Math.max(insets.bottom, 16) + 80,
+          maxWidth: isDesktop ? 640 : undefined,
+          alignSelf: isDesktop ? 'center' : undefined,
+          width: '100%',
+        }}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
-        <TabHeader title="Focus Timer" subtitle="Stay in the zone" showBack />
+        {/* Heading */}
+        <Text style={styles.pageHeading}>Focus.</Text>
+        <Text style={styles.pageSubline}>Give your mind single direction.</Text>
 
-        {/* Mode selector */}
-        <View style={styles.modeSelector}>
-          <ModePill testID="mode-pill-study" label="Study" active={mode === 'Study'} onPress={() => { setMode('Study'); setDefaultDurationMinutes(25); setTimeLeft(25 * 60); }} theme={theme} />
-          <ModePill testID="mode-pill-deep-work" label="Deep Work" active={mode === 'Deep Work'} onPress={() => { setMode('Deep Work'); setDefaultDurationMinutes(45); setTimeLeft(45 * 60); }} theme={theme} />
-          <ModePill testID="mode-pill-sprint" label="Sprint" active={mode === 'Quick Sprint'} onPress={() => { setMode('Quick Sprint'); setDefaultDurationMinutes(15); setTimeLeft(15 * 60); }} theme={theme} />
-          <ModePill testID="mode-pill-custom" label="Custom" active={mode === 'Custom'} onPress={() => setEditSheetVisible(true)} theme={theme} />
-        </View>
+        <View style={styles.thinDivider} />
 
-        {/* Timer circle */}
-        <View style={styles.timerContainer}>
-          <TouchableOpacity
-            testID="focus-timer-circle"
-            activeOpacity={0.9}
-            onPress={() => !isActive && setEditSheetVisible(true)}
-            style={[styles.timerCircle, { borderColor: isActive ? theme.accent : theme.card, borderWidth: isActive ? 4 : 2 }]}
-          >
-            <Text testID="focus-timer-display" style={[styles.timerText, { color: theme.primaryText, fontSize: timeLeft >= 3600 ? 40 : 48, fontFamily: 'Inter_800ExtraBold' }]}>
-              {timeLeft >= 3600
-                ? `${Math.floor(timeLeft / 3600)}:${String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`
-                : `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`}
-            </Text>
-            <Text style={[styles.timerMode, { color: theme.secondaryText }]}>{mode}</Text>
-          </TouchableOpacity>
+        {/* ── Central Focal Point: Serif Timer & Restrained Progress Ring ── */}
+        <View style={styles.timerCenterWrap}>
+          <View style={styles.ringWrapper}>
+            <Svg width={ringSize} height={ringSize} style={styles.svgRing}>
+              {/* Subtle background track */}
+              <Circle
+                cx={ringSize / 2}
+                cy={ringSize / 2}
+                r={radius}
+                stroke={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
+                strokeWidth={strokeWidth}
+                fill="none"
+              />
+              {/* Accurate progress track */}
+              <Circle
+                cx={ringSize / 2}
+                cy={ringSize / 2}
+                r={radius}
+                stroke={theme.accent}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${circumference} ${circumference}`}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                fill="none"
+                transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+              />
+            </Svg>
 
-          <AnimatedVisualizer active={isActive} theme={theme} />
+            {/* Inner Ring Content */}
+            <View style={styles.innerRingContent}>
+              <View
+                style={[
+                  styles.stateBadge,
+                  timerState === 'running' && styles.stateBadgeRunning,
+                  timerState === 'paused' && styles.stateBadgePaused,
+                  timerState === 'completed' && styles.stateBadgeCompleted,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.stateBadgeText,
+                    timerState === 'running' && { color: theme.accent },
+                    timerState === 'paused' && { color: '#EAB308' },
+                    timerState === 'completed' && { color: '#10B981' },
+                  ]}
+                >
+                  {timerState === 'running'
+                    ? 'IN FOCUS'
+                    : timerState === 'paused'
+                    ? 'PAUSED'
+                    : timerState === 'completed'
+                    ? 'COMPLETED'
+                    : 'READY'}
+                </Text>
+              </View>
 
+              <Text style={styles.serifTimerDisplay}>{timeFormatted}</Text>
+
+              <Text style={styles.breakInfoText} numberOfLines={1}>
+                {selectedTaskObj ? selectedTaskObj.title : `Break: ${pomodoroBreakDuration || 5}m after`}
+              </Text>
+            </View>
+          </View>
+
+          {/* Primary Controls */}
           <View style={styles.controlsRow}>
-            <TouchableOpacity
-              testID="focus-reset-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Reset Timer"
-              onPress={handleReset}
-              style={[styles.controlBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.card }]}
-            >
-              <Text style={{ color: theme.primaryText, fontFamily: 'Inter_600SemiBold' }}>Reset</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="focus-start-pause-btn"
-              accessibilityRole="button"
-              accessibilityLabel={isActive ? 'Pause Timer' : 'Start Focus Timer'}
-              onPress={handleStartPause}
-              style={[styles.playBtn, { backgroundColor: theme.accent }]}
-            >
-              <Text style={styles.playBtnText}>{isActive ? 'Pause' : 'Start Focus'}</Text>
-            </TouchableOpacity>
+            {!isRunning ? (
+              <TouchableOpacity
+                onPress={handleStart}
+                style={styles.primaryPillBtn}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={timeLeft < selectedDuration * 60 ? 'Resume timer' : 'Start focus'}
+              >
+                <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.primaryPillBtnText}>
+                  {timeLeft < selectedDuration * 60 ? 'Resume' : 'Start focus'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={handlePause}
+                style={styles.secondaryPillBtn}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Pause timer"
+              >
+                <Pause size={16} color={theme.text} style={{ marginRight: 8 }} />
+                <Text style={styles.secondaryPillBtnText}>Pause</Text>
+              </TouchableOpacity>
+            )}
+
+            {(timeLeft < selectedDuration * 60 || isRunning) && (
+              <TouchableOpacity
+                onPress={handleReset}
+                style={styles.resetBtn}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Reset timer"
+              >
+                <RotateCcw size={16} color={theme.textSecondary} style={{ marginRight: 6 }} />
+                <Text style={styles.resetBtnText}>Reset</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Focus History */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Focus History</Text>
-          <AnimatedCard style={styles.historyCard}>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Flame color="#FF9500" size={20} />
-                <Text style={[styles.statValue, { color: theme.primaryText }]}>{todaySessions.length}</Text>
-                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Today</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Zap color="#FFD60A" size={20} />
-                <Text style={[styles.statValue, { color: theme.primaryText }]}>
-                  {formatMinutes(todaySessions.reduce((acc, s) => acc + (Number(s.duration_minutes) || 0), 0))}
-                </Text>
-                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Focused</Text>
-              </View>
+        <View style={styles.thinDivider} />
+
+        {/* ── Secondary Controls: Intention & Duration ── */}
+        <View style={styles.taskSelectionBox}>
+          <Text style={styles.fieldLabel}>INTENTION</Text>
+          <TouchableOpacity
+            onPress={() => setTaskPickerOpen(!taskPickerOpen)}
+            style={styles.taskPickerTrigger}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Select intention task"
+          >
+            <View style={styles.taskPickerLeft}>
+              <Target size={18} color="#0066FF" strokeWidth={2} />
+              <Text style={styles.selectedTaskTitle} numberOfLines={1}>
+                {selectedTaskObj ? selectedTaskObj.title : 'Free focus (no task linked)'}
+              </Text>
             </View>
-            <View style={styles.dayStrip}>
-              {eachDayOfInterval({ start: startOfWeek(new Date()), end: endOfWeek(new Date()) }).map((day, i) => {
-                const hasSession = focusSessions.some((s) => isSameDay(new Date(s.date), day));
-                return (
-                  <View key={i} style={styles.dayItem}>
-                    <Text style={[styles.dayName, { color: theme.secondaryText }]}>{format(day, 'E')[0]}</Text>
-                    <View style={[styles.dayDot, {
-                      backgroundColor: hasSession ? theme.accent : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'),
-                      borderWidth: isToday(day) ? 1 : 0,
-                      borderColor: theme.accent,
-                    }]} />
-                  </View>
-                );
-              })}
+            <Text style={styles.changeActionText}>
+              {taskPickerOpen ? 'Done' : 'Change'}
+            </Text>
+          </TouchableOpacity>
+
+          {taskPickerOpen && (
+            <View style={styles.taskDropdownWrap}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedTaskId(null);
+                  setFocusTimerSelectedTaskId(null);
+                  setTaskPickerOpen(false);
+                }}
+                style={[
+                  styles.taskDropdownItem,
+                  !selectedTaskId && styles.taskDropdownItemActive,
+                ]}
+              >
+                <Text style={styles.taskDropdownText}>Free focus (no task linked)</Text>
+                {!selectedTaskId && <Check size={16} color="#0066FF" />}
+              </TouchableOpacity>
+
+              {activeTasksList.map((t) => (
+                <TouchableOpacity
+                  key={t.id}
+                  onPress={() => {
+                    setSelectedTaskId(t.id);
+                    setFocusTimerSelectedTaskId(t.id);
+                    setTaskPickerOpen(false);
+                  }}
+                  style={[
+                    styles.taskDropdownItem,
+                    selectedTaskId === t.id && styles.taskDropdownItemActive,
+                  ]}
+                >
+                  <Text style={styles.taskDropdownText} numberOfLines={1}>
+                    {t.title}
+                  </Text>
+                  {selectedTaskId === t.id && <Check size={16} color="#0066FF" />}
+                </TouchableOpacity>
+              ))}
             </View>
-          </AnimatedCard>
+          )}
         </View>
 
-        {/* Pro: Focus Analytics */}
-        {userIsPro && focusMetrics && (
-          <View style={styles.section}>
-            <FocusAnalyticsCard metrics={focusMetrics} theme={theme} />
+        <View style={{ height: 14 }} />
+
+        {/* Duration Presets */}
+        <Text style={styles.fieldLabel}>DURATION</Text>
+        <View style={styles.presetsRow}>
+          {PRESET_DURATIONS.map((dur) => {
+            const active = !isCustom && selectedDuration === dur;
+            return (
+              <TouchableOpacity
+                key={dur}
+                onPress={() => handleSelectPreset(dur)}
+                disabled={isRunning}
+                style={[
+                  styles.presetPill,
+                  active && styles.presetPillActive,
+                  isRunning && { opacity: 0.5 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`${dur} minutes duration`}
+              >
+                <Text
+                  style={[
+                    styles.presetPillText,
+                    active && styles.presetPillTextActive,
+                  ]}
+                >
+                  {dur}m
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          <TouchableOpacity
+            onPress={() => {
+              if (isRunning) return;
+              setIsCustom(true);
+            }}
+            disabled={isRunning}
+            style={[
+              styles.presetPill,
+              isCustom && styles.presetPillActive,
+              isRunning && { opacity: 0.5 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Custom minutes duration"
+          >
+            <Text
+              style={[
+                styles.presetPillText,
+                isCustom && styles.presetPillTextActive,
+              ]}
+            >
+              Custom
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {isCustom && !isRunning && (
+          <View style={styles.customInputRow}>
+            <Text style={styles.customInputLabel}>Minutes:</Text>
+            <TextInput
+              value={customMinutesInput}
+              onChangeText={handleSetCustom}
+              keyboardType="number-pad"
+              maxLength={3}
+              style={styles.customTextInput}
+              accessibilityLabel="Custom duration in minutes"
+            />
           </View>
         )}
 
-        {/* Focus Goal */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Focus Goal</Text>
-          {tasks.filter((t) => !t.completed).length > 0 ? (
-            tasks.filter((t) => !t.completed).map((task) => (
-              <Pressable
-                key={task.id}
-                onPress={() => setSelectedTaskId(task.id)}
-                style={({ pressed }) => [
-                  styles.taskCard,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: selectedTaskId === task.id ? theme.accent : theme.cardBorder,
-                    borderWidth: selectedTaskId === task.id ? 2 : 1,
-                    borderRadius: 14,
-                    opacity: pressed ? 0.75 : 1,
-                    marginBottom: 12,
-                  },
-                ]}
-              >
-                <View style={[styles.taskRadio, { borderColor: selectedTaskId === task.id ? theme.accent : theme.secondaryText }]}>
-                  {selectedTaskId === task.id && <View style={[styles.taskRadioInner, { backgroundColor: theme.accent }]} />}
-                </View>
-                <Text style={[styles.taskTitle, { color: theme.primaryText }]}>{task.title}</Text>
-              </Pressable>
-            ))
+        {/* Daily Totals & Session History */}
+        <View style={styles.historySection}>
+          <View style={styles.historyHeaderRow}>
+            <Text style={styles.fieldLabel}>TODAY'S RHYTHM</Text>
+            <Text style={styles.dailyTotalStat}>
+              {todayTotalMinutes}m focused · {todaySessions.length} sessions
+            </Text>
+          </View>
+
+          {todaySessions.length === 0 ? (
+            <View style={styles.emptyHistoryBox}>
+              <Text style={styles.emptyHistoryText}>
+                No sessions recorded yet today. Start your first session to build momentum.
+              </Text>
+            </View>
           ) : (
-            <EmptyState
-              icon={Trophy}
-              title="No tasks to link"
-              subtitle="Add a task first, or start an open focus session without linking one."
-            />
+            <View style={styles.sessionsListWrap}>
+              {todaySessions.slice(0, 5).map((session, idx) => (
+                <View key={session.id || idx} style={styles.sessionItemRow}>
+                  <View style={styles.sessionItemLeft}>
+                    <Clock size={15} color={theme.accent} />
+                    <Text style={styles.sessionItemTitle}>
+                      {session.duration_minutes}m focused session
+                    </Text>
+                  </View>
+                  <Text style={styles.sessionItemTime}>
+                    {session.completed_at
+                      ? new Date(session.completed_at).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Today'}
+                  </Text>
+                </View>
+              ))}
+            </View>
           )}
         </View>
       </ScrollView>
-
-      {/* Custom timer modal */}
-      <CenterModal visible={isEditSheetVisible} onClose={() => setEditSheetVisible(false)} maxWidth={380}>
-        <View style={styles.sheetContent}>
-          <Text style={[styles.sheetTitle, { color: theme.primaryText }]}>Set Timer</Text>
-          <View style={styles.pickerContainer}>
-            <View style={styles.pickerItem}>
-              <CustomTimePicker items={Array.from({ length: 13 }, (_, i) => String(i))} selectedValue={tempHours} onValueChange={setTempHours} />
-              <Text style={[styles.pickerLabel, { color: theme.primaryText }]}>hours</Text>
-            </View>
-            <Text style={[styles.pickerSeparator, { color: theme.primaryText }]}>:</Text>
-            <View style={styles.pickerItem}>
-              <CustomTimePicker items={Array.from({ length: 60 }, (_, i) => String(i))} selectedValue={tempMinutes} onValueChange={setTempMinutes} />
-              <Text style={[styles.pickerLabel, { color: theme.primaryText }]}>mins</Text>
-            </View>
-          </View>
-          <TouchableOpacity 
-            testID="focus-apply-duration-btn"
-            accessibilityRole="button"
-            accessibilityLabel="Apply Custom Duration"
-            onPress={applyCustomDuration} 
-            style={[styles.applyBtn, { backgroundColor: theme.accent }]}
-          >
-            <Text style={styles.applyBtnText}>Apply Duration</Text>
-          </TouchableOpacity>
-        </View>
-      </CenterModal>
-
-      <CustomAlert
-        visible={completionAlertVisible}
-        type="success"
-        title="Session Complete!"
-        message="Amazing work! You've successfully completed your focus block."
-        onConfirm={() => setCompletionAlertVisible(false)}
-      />
-    </BG>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  modeSelector: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 15, paddingHorizontal: 20 },
-  modePill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  modePillText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  timerContainer: { alignItems: 'center', marginBottom: 25 },
-  timerCircle: { width: 200, height: 200, borderRadius: 100, alignItems: 'center', justifyContent: 'center' },
-  timerText: { fontSize: 48, fontFamily: 'Inter_800ExtraBold' },
-  timerMode: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 4, opacity: 0.6 },
-  controlsRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 25 },
-  controlBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14 },
-  playBtn: { paddingHorizontal: 36, paddingVertical: 12, borderRadius: 14 },
-  playBtnText: { color: 'white', fontFamily: 'Inter_700Bold', fontSize: 16 },
-  section: { paddingHorizontal: 0, marginBottom: 30 },
-  sectionTitle: { fontSize: 18, fontFamily: 'Inter_800ExtraBold', marginBottom: 16 },
-  historyCard: { padding: 20 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
-  statItem: { alignItems: 'center' },
-  statValue: { fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 8 },
-  statLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
-  dayStrip: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10 },
-  dayItem: { alignItems: 'center' },
-  dayName: { fontSize: 10, fontFamily: 'Inter_700Bold', marginBottom: 8 },
-  dayDot: { width: 8, height: 8, borderRadius: 4 },
-  taskCard: { flexDirection: 'row', alignItems: 'center', padding: 16, marginBottom: 12 },
-  taskRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  taskRadioInner: { width: 10, height: 10, borderRadius: 5 },
-  taskTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  sheetContent: { padding: 24, alignItems: 'center' },
-  sheetTitle: { fontSize: 20, fontFamily: 'Inter_800ExtraBold', marginBottom: 24 },
-  pickerContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 200, marginBottom: 24 },
-  pickerItem: { flex: 1, alignItems: 'center' },
-  pickerLabel: { fontSize: 12, fontFamily: 'Inter_700Bold', marginTop: 8, textTransform: 'uppercase' },
-  pickerSeparator: { fontSize: 32, fontFamily: 'Inter_700Bold', marginHorizontal: 10, marginBottom: 20 },
-  applyBtn: { paddingHorizontal: 50, paddingVertical: 15, borderRadius: 15, width: '100%', alignItems: 'center' },
-  applyBtnText: { color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' },
-  visualizerContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 40, marginTop: 20 },
-  visualizerBar: { width: 4, borderRadius: 2 },
-  // Pro analytics card
-  analyticsCard: { borderRadius: 18, borderWidth: 1, padding: 18, marginBottom: 0 },
-  analyticsTitle: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 },
-  analyticsRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 },
-  scoreCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
-  scoreNum: { fontSize: 26, fontFamily: 'Inter_800ExtraBold' },
-  scoreLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 10 },
-  analyticsStats: { flex: 1, gap: 8 },
-  analyticsStat: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  analyticsStatVal: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  analyticsStatLbl: { fontSize: 11, fontFamily: 'Inter_500Medium' },
-  peakSection: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(0,0,0,0.1)', paddingTop: 12 },
-  peakLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
-  peakRow: { flexDirection: 'row', gap: 8 },
-  peakBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  peakTime: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-});
+function createStyles(theme: any, isDark: boolean) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    pageHeading: {
+      fontSize: 44,
+      fontFamily: 'Inter_800ExtraBold',
+      letterSpacing: -1,
+      color: theme.text,
+      marginBottom: 4,
+    },
+    pageSubline: {
+      fontSize: 16,
+      fontFamily: 'Inter_400Regular',
+      color: theme.textSecondary,
+      marginBottom: 20,
+    },
+    thinDivider: {
+      height: 1,
+      backgroundColor: theme.separator,
+      marginVertical: 18,
+    },
+    fieldLabel: {
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.5,
+      color: theme.textSecondary,
+      marginBottom: 10,
+    },
+
+    // Intention / Task Picker
+    taskSelectionBox: {
+      width: '100%',
+    },
+    taskPickerTrigger: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+    },
+    taskPickerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+    },
+    selectedTaskTitle: {
+      fontSize: 15,
+      fontFamily: 'Inter_500Medium',
+      color: theme.text,
+    },
+    changeActionText: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.accent,
+    },
+    taskDropdownWrap: {
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 8,
+      marginTop: 6,
+      backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF',
+      overflow: 'hidden',
+    },
+    taskDropdownItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+    },
+    taskDropdownItemActive: {
+      backgroundColor: isDark ? 'rgba(0, 102, 255, 0.12)' : 'rgba(0, 102, 255, 0.08)',
+    },
+    taskDropdownText: {
+      fontSize: 14,
+      fontFamily: 'Inter_500Medium',
+      color: theme.text,
+      flex: 1,
+    },
+
+    // Presets
+    presetsRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 12,
+    },
+    presetPill: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      backgroundColor: isDark ? 'transparent' : '#FFFFFF',
+    },
+    presetPillActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    presetPillText: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.textSecondary,
+    },
+    presetPillTextActive: {
+      color: '#FFFFFF',
+    },
+    customInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 6,
+      marginBottom: 10,
+    },
+    customInputLabel: {
+      fontSize: 13,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textSecondary,
+    },
+    customTextInput: {
+      width: 60,
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.text,
+      borderWidth: 1,
+      borderColor: theme.separator,
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      textAlign: 'center',
+      backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF',
+    },
+
+    // Large Serif Timer
+    timerCenterWrap: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 24,
+    },
+    ringWrapper: {
+      width: 250,
+      height: 250,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 20,
+      position: 'relative',
+    },
+    svgRing: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+    },
+    innerRingContent: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+    },
+    stateBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+      marginBottom: 6,
+    },
+    stateBadgeRunning: {
+      backgroundColor: 'rgba(0, 102, 255, 0.12)',
+    },
+    stateBadgePaused: {
+      backgroundColor: 'rgba(234, 179, 8, 0.12)',
+    },
+    stateBadgeCompleted: {
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    },
+    stateBadgeText: {
+      fontSize: 10,
+      fontFamily: 'Inter_700Bold',
+      letterSpacing: 1.2,
+      color: theme.textSecondary,
+    },
+    serifTimerDisplay: {
+      fontSize: 54,
+      fontFamily: 'PlayfairDisplay_700Bold',
+      letterSpacing: -1,
+      color: theme.text,
+      lineHeight: 60,
+      fontVariant: ['tabular-nums'],
+    },
+    breakInfoText: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.textSecondary,
+      marginTop: 4,
+      textAlign: 'center',
+      maxWidth: 200,
+    },
+    controlsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    primaryPillBtn: {
+      backgroundColor: theme.accent,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 28,
+      paddingVertical: 14,
+      borderRadius: 999,
+    },
+    primaryPillBtnText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+    },
+    secondaryPillBtn: {
+      backgroundColor: isDark ? '#1E1E1E' : '#EDEAE3',
+      borderWidth: 1,
+      borderColor: theme.separator,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 28,
+      paddingVertical: 14,
+      borderRadius: 999,
+    },
+    secondaryPillBtnText: {
+      color: theme.text,
+      fontSize: 15,
+      fontFamily: 'Inter_700Bold',
+    },
+    resetBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    resetBtnText: {
+      color: theme.textSecondary,
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+    },
+
+    // History & Rhythm
+    historySection: {
+      width: '100%',
+      paddingVertical: 6,
+    },
+    historyHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 12,
+    },
+    dailyTotalStat: {
+      fontSize: 12,
+      fontFamily: 'Inter_500Medium',
+      color: theme.textSecondary,
+    },
+    emptyHistoryBox: {
+      paddingVertical: 12,
+    },
+    emptyHistoryText: {
+      fontSize: 13,
+      fontFamily: 'Inter_400Regular',
+      color: theme.textSecondary,
+      lineHeight: 20,
+    },
+    sessionsListWrap: {
+      width: '100%',
+    },
+    sessionItemRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.separator,
+    },
+    sessionItemLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    sessionItemTitle: {
+      fontSize: 14,
+      fontFamily: 'Inter_500Medium',
+      color: theme.text,
+    },
+    sessionItemTime: {
+      fontSize: 12,
+      fontFamily: 'Inter_400Regular',
+      color: theme.textSecondary,
+    },
+  });
+}

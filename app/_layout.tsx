@@ -1,14 +1,24 @@
 import notifee, { EventType } from '@/lib/safeNotifee';
 import { supabase } from '@/lib/supabase';
 import {
+  Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
   Inter_800ExtraBold,
+  Inter_900Black,
 } from '@expo-google-fonts/inter';
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_600SemiBold,
+  PlayfairDisplay_700Bold,
+  PlayfairDisplay_800ExtraBold,
+  PlayfairDisplay_400Regular_Italic,
+  PlayfairDisplay_700Bold_Italic,
+} from '@expo-google-fonts/playfair-display';
 import { FontAwesome } from '@expo/vector-icons';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, DarkTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -24,8 +34,6 @@ import '../global.css';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { XPToastProvider } from '@/components/XPToastProvider';
 import { SecurityProvider } from '@/components/security/SecurityProvider';
-import { UniversalRefreshButton } from '@/components/ui/UniversalRefreshButton';
-import { WebAuthHeader } from '@/components/ui/WebAuthHeader';
 import { ThemeProvider, useTheme } from '@/lib/ThemeContext';
 import { initConnectDb } from '@/lib/connect/connectDatabase';
 import { initDb } from '@/lib/db';
@@ -81,10 +89,18 @@ function ThemeAwareStatusBar() {
 // Root layout — manages splash screen, fonts, database init, auth init, and sync
 export default function RootLayout() {
   const [loaded, error] = useFonts({
+    Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    Inter_900Black,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_600SemiBold,
+    PlayfairDisplay_700Bold,
+    PlayfairDisplay_800ExtraBold,
+    PlayfairDisplay_400Regular_Italic,
+    PlayfairDisplay_700Bold_Italic,
     ...FontAwesome.font,
   });
 
@@ -147,7 +163,6 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <View style={{ flex: 1 }}>
-        <WebAuthHeader />
         <AuthMiddleware />
         <SecurityProvider>
           <RootLayoutNav />
@@ -223,6 +238,8 @@ function AuthMiddleware() {
 // Main navigation container — sets up notification handlers, deep link handling, and screen stack
 function RootLayoutNav() {
   const router = useRouter();
+  const { theme, isDark } = useTheme();
+  const navTheme = isDark ? DarkTheme : DefaultTheme;
 
   useEffect(() => {
     // Check if app was opened from a notification while killed
@@ -323,11 +340,10 @@ function RootLayoutNav() {
       <SafeAreaProvider>
         <ThemeAwareStatusBar />
         <BackgroundGradient>
-          <NavigationThemeProvider value={DefaultTheme}>
+          <NavigationThemeProvider value={navTheme}>
             <BottomSheetModalProvider>
               <XPToastProvider>
-              <UniversalRefreshButton />
-              <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }}>
+              <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: theme.background } }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
                 <Stack.Screen name="login" options={{ headerShown: false, animation: 'slide_from_bottom' }} />

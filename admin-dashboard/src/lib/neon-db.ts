@@ -5,8 +5,7 @@ try {
 } catch {}
 
 const connStr =
-  process.env.NEON_DATABASE_URL ||
-  'postgresql://neondb_owner:npg_lLZTbmK1WNR2@ep-gentle-night-b4oacb89.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require';
+  process.env.NEON_DATABASE_URL || '';
 
 const endpoint =
   process.env.NEON_SQL_URL ||

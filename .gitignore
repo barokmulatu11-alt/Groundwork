@@ -48,6 +48,7 @@ yarn-error.*
 tsc_output.txt
 test-*.js
 supabase/.temp/
+scripts/
 .vercel
 
 # local scratch folders created during builds/deploys

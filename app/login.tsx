@@ -4,7 +4,7 @@ import { AppText as Text } from "@/components/ui/AppText";
 import { useTheme } from "@/lib/ThemeContext";
 import { migrateGuestData } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
-import { neonAuth } from "@/lib/neon";
+import { neonAuth, persistSessionToken } from "@/lib/neon";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FontAwesome } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -28,6 +28,25 @@ import {
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 WebBrowser.maybeCompleteAuthSession();
+
+function extractParamsFromUrl(url: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  const hashIdx = url.indexOf('#');
+  const queryIdx = url.indexOf('?');
+  const parts: string[] = [];
+  if (hashIdx !== -1) parts.push(url.substring(hashIdx + 1));
+  if (queryIdx !== -1) {
+    const end = hashIdx !== -1 && hashIdx > queryIdx ? hashIdx : url.length;
+    parts.push(url.substring(queryIdx + 1, end));
+  }
+  for (const part of parts) {
+    part.split('&').forEach((pair) => {
+      const [k, v] = pair.split('=');
+      if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+    });
+  }
+  return params;
+}
 
 // Login screen — email/password and Google OAuth sign-in with MFA support
 export default function LoginScreen() {
@@ -76,97 +95,172 @@ export default function LoginScreen() {
     null,
   );
 
-  // Signs in with email/password, checks for MFA, migrates guest data, and triggers sync
+  // Signs in with email/password, migrates guest data, and triggers sync
   async function signInWithEmail() {
     if (!validateForm()) return;
 
     setLoading(true);
 
-    const { isGuest } = await import("@/store/useAuthStore").then((m) => ({
-      isGuest: m.useAuthStore.getState().isGuest,
-    }));
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      if (error) {
+        Alert.alert("Sign In Failed", error.message || "Invalid credentials");
+        setErrors({ email: error.message || "Invalid credentials" });
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      Alert.alert("Sign In Failed", error.message || "Unknown error");
-      setErrors({ email: error.message || "Unknown error" });
+      const user = data?.user || (data?.session as any)?.user;
+      if (user) {
+        migrateGuestData("guest", user.id);
+        
+        const { useAuthStore } = await import("@/store/useAuthStore");
+        useAuthStore.getState().setIsGuest(false);
+        
+        await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user, session: data.session });
+
+        import("@/store/useStore").then((m) =>
+          m.useStore.getState().syncFromCloud(),
+        );
+
+        setLoading(false);
+        router.replace("/");
+      } else {
+        Alert.alert("Sign In Failed", "Could not retrieve user session. Please check your credentials.");
+        setLoading(false);
+      }
+    } catch (err: any) {
+      console.error("[Login] signInWithEmail error:", err);
+      Alert.alert("Sign In Error", err?.message || "An unexpected error occurred.");
       setLoading(false);
-    } else if (data?.user) {
-      // Always migrate local guest data to the authenticated user ID to prevent data loss
-      migrateGuestData("guest", data.user.id);
-      
-      const { useAuthStore } = await import("@/store/useAuthStore");
-      useAuthStore.getState().setIsGuest(false);
-      
-      // Manually trigger the Auth Store hydrate since we removed the global listener
-      await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: data.user });
-
-      // Trigger sync from cloud immediately
-      import("@/store/useStore").then((m) =>
-        m.useStore.getState().syncFromCloud(),
-      );
-
-      setLoading(false);
-      router.replace("/");
     }
   }
 
-  // Google OAuth sign-in — opens a browser, exchanges the code for a session, migrates guest data, triggers sync.
-  // Does NOT manually navigate; AuthMiddleware handles redirects on session change.
+  // Google OAuth sign-in — opens a browser, exchanges the code/tokens for a session, migrates guest data, triggers sync.
   async function signInWithGoogle() {
     try {
       setGoogleLoading(true);
-      // Block AuthMiddleware from reacting to the session=null window during OAuth
       useAuthStore.getState().setIsOAuthPending(true);
 
-      // Use consistent redirect URL across dev, production, and web
-      // This ensures the OAuth flow properly redirects back to the app via deep linking or browser origin
       const isWeb = Platform.OS === 'web';
       const redirectUrl = isWeb
         ? (typeof window !== 'undefined' ? `${window.location.origin}/` : 'http://localhost:8081/')
-        : "groundwork://auth/callback";
+        : "https://barok-labs.pro.et/api/auth/google-callback";
       console.log("[Auth] Starting Google OAuth with redirect:", redirectUrl);
 
-      const { data, error } = await (neonAuth.signIn as any).social({
-        provider: "google",
-        callbackURL: redirectUrl,
-      });
-
-      if (error) throw error;
-
-      if (data?.url) {
-        if (isWeb && typeof window !== 'undefined') {
-          window.location.href = data.url;
+      let oauthUrl: string | null = null;
+      try {
+        const { data, error } = await (neonAuth.signIn as any).social({
+          provider: "google",
+          callbackURL: redirectUrl,
+        });
+        if (error) throw error;
+        oauthUrl = data?.url || null;
+      } catch (oauthErr: any) {
+        if (oauthErr?.code === 'feature_not_supported' || oauthErr?.status === 403) {
+          Alert.alert(
+            "Google Sign-In Unavailable",
+            "Google Sign-In is not currently enabled on your Neon instance. Please sign in with your email and password."
+          );
+          setGoogleLoading(false);
+          useAuthStore.getState().setIsOAuthPending(false);
           return;
         }
-        // WebBrowser.openAuthSessionAsync second parameter is the URL scheme to listen for
-        const res = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          "groundwork://",
-        );
+        throw oauthErr;
+      }
 
-        if (res.type === "success") {
-          const { data: authData } = await neonAuth.getSession();
-          const userId = authData?.user?.id || null;
+      if (!oauthUrl) {
+        throw new Error("No authentication URL returned from auth provider.");
+      }
 
-          if (userId && authData?.user && authData?.session) {
-            // Always migrate local guest data and sync profile/settings (themes, etc.)
-            await migrateGuestData("guest", userId);
-            useAuthStore.getState().setIsGuest(false);
-            await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: authData.user, session: authData.session });
+      if (isWeb && typeof window !== 'undefined') {
+        window.location.href = oauthUrl;
+        return;
+      }
 
-            const { useStore } = await import("@/store/useStore");
-            await useStore.getState().syncFromCloud();
-            console.log("[Auth] Google login sync complete");
-            router.replace("/");
+      const res = await WebBrowser.openAuthSessionAsync(
+        oauthUrl,
+        "groundwork://",
+      );
+
+      if (res.type === "success" || res.type === "dismiss") {
+        let token: string | null = null;
+        let userId: string | null = null;
+        let email: string | null = null;
+        let name: string | null = null;
+
+        if (res.type === "success" && (res as any).url) {
+          const params = extractParamsFromUrl((res as any).url);
+          token = params.token || null;
+          userId = params.userId || null;
+          email = params.email || null;
+          name = params.name || null;
+        }
+
+        // Fallback: Query mobile-session bridge from Neon
+        if (!token || !userId) {
+          try {
+            const bridgeRes = await fetch("https://barok-labs.pro.et/api/auth/mobile-session");
+            const bridgeData = await bridgeRes.json();
+            if (bridgeData.success && bridgeData.session?.token) {
+              token = bridgeData.session.token;
+              userId = bridgeData.session.userId;
+              email = bridgeData.session.email || null;
+              name = bridgeData.session.name || null;
+            }
+          } catch (bridgeErr) {
+            console.warn("[Auth] Bridge session fetch error:", bridgeErr);
           }
         }
-      } else {
-        throw new Error("No authentication URL returned from auth provider.");
+
+        if (token && userId) {
+          await persistSessionToken(token);
+          useAuthStore.getState().setIsGuest(false);
+          await migrateGuestData("guest", userId);
+          await useAuthStore.getState().handleAuthEvent("SIGNED_IN", {
+            user: {
+              id: userId,
+              email: email || "",
+              user_metadata: { full_name: name || "" },
+            },
+            session: {
+              access_token: token,
+              token: token,
+              userId: userId,
+              user: { id: userId, email: email || "", user_metadata: { full_name: name || "" } },
+            },
+          });
+
+          const { useStore } = await import("@/store/useStore");
+          await useStore.getState().syncFromCloud();
+          console.log("[Auth] Google login sync complete");
+          router.replace("/");
+          return;
+        }
+
+        // Second fallback: neonAuth.getSession()
+        const { data: authData } = await neonAuth.getSession().catch(() => ({ data: null }));
+        const authUser = authData?.user;
+        const authSession = authData?.session;
+
+        const fallbackUserId = authUser?.id || null;
+        if (fallbackUserId && authUser && authSession) {
+          await migrateGuestData("guest", fallbackUserId);
+          useAuthStore.getState().setIsGuest(false);
+          await useAuthStore.getState().handleAuthEvent("SIGNED_IN", {
+            user: authUser,
+            session: authSession,
+          });
+
+          const { useStore } = await import("@/store/useStore");
+          await useStore.getState().syncFromCloud();
+          console.log("[Auth] Google login sync complete");
+          router.replace("/");
+        }
       }
     } catch (e: any) {
       console.error("[Auth] Google sign in error:", e);
@@ -179,6 +273,11 @@ export default function LoginScreen() {
       setGoogleLoading(false);
     }
   }
+
+  const handleContinueAsGuest = () => {
+    useAuthStore.getState().setIsGuest(true);
+    router.replace("/");
+  };
 
   // Desktop layout: side-by-side brand panel and auth card
   if (isDesktop) {
@@ -469,12 +568,15 @@ export default function LoginScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
+          contentContainerStyle={{ flexGrow: 1, padding: 24, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         >
           {/* Back Button */}
           <Animated.View
@@ -490,23 +592,17 @@ export default function LoginScreen() {
           </Animated.View>
 
           {/* Header */}
-          <Animated.View
-            entering={FadeInUp.delay(100).duration(300)}
-            style={{ marginBottom: 32, zIndex: 1 }}
-          >
+          <View style={{ marginBottom: 32, zIndex: 1 }}>
             <Text style={[styles.title, { color: theme.text }]}>
               Sign In
             </Text>
             <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'PlayfairDisplay_600SemiBold_Italic' }]}>
               Welcome back
             </Text>
-          </Animated.View>
+          </View>
 
           {/* Form */}
-          <Animated.View
-            entering={FadeInUp.delay(200).duration(300)}
-            style={{ zIndex: 1 }}
-          >
+          <View style={{ zIndex: 1 }}>
             {/* Email Input */}
             <View style={{ marginBottom: 10 }}>
               <View
@@ -705,8 +801,20 @@ export default function LoginScreen() {
                   Sign Up
                 </Text>
               </Text>
+
+              <Pressable
+                onPress={handleContinueAsGuest}
+                style={{ marginTop: 16, paddingVertical: 8, paddingHorizontal: 16 }}
+              >
+                <Text style={{ color: theme.secondaryText, fontSize: 13, fontFamily: "Inter_500Medium" }}>
+                  or{" "}
+                  <Text style={{ color: theme.accent, fontFamily: "Inter_600SemiBold" }}>
+                    Continue as Guest
+                  </Text>
+                </Text>
+              </Pressable>
             </View>
-          </Animated.View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 

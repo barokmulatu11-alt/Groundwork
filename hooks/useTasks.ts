@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import * as db from '../lib/db';
 import { canAddTask } from '@/lib/subscriptionService';
+import { getLocalDateString } from '@/lib/dateUtils';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useStore } from '@/store/useStore';
+import { useStore, type TaskCreationResult } from '@/store/useStore';
 
 export const useTasks = (date?: string) => {
   const { autoSortTasks } = useSettingsStore();
@@ -70,19 +71,22 @@ export const useTasks = (date?: string) => {
     setViewMode('upcoming');
   }, []);
 
-  /** Returns gate result so the caller can show a paywall if not allowed */
-  const addTask = async (input: Partial<db.Task>, currentView?: 'Today' | 'Upcoming' | 'All') => {
+  /** Returns task creation result containing created task or error */
+  const addTask = async (input: Partial<db.Task>, currentView?: 'Today' | 'Upcoming' | 'All'): Promise<TaskCreationResult> => {
     try {
       setLoading(true);
       setError(null);
       const gate = canAddTask();
-      if (!gate.allowed) return gate;  // caller shows paywall
+      if (!gate.allowed) return { ...gate, success: false, error: gate.reason || 'Creation limit reached' };
       const result = await storeAddTask(input);
-      if (result && !result.allowed) return result;
-      return { allowed: true };
+      if (!result.success) {
+        setError(result.error || 'Failed to create task');
+      }
+      return result;
     } catch (e: any) {
-      setError(e.message);
-      return { allowed: true };
+      const errStr = e?.message || 'An unexpected error occurred';
+      setError(errStr);
+      return { allowed: true, success: false, error: errStr };
     } finally {
       setLoading(false);
     }
@@ -144,7 +148,7 @@ export const useTasks = (date?: string) => {
   };
 
   const getOverdue = useCallback(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     return allZustandTasks.filter(t => t.date < today && !t.completed && !t.deleted_at);
   }, [allZustandTasks]);
 

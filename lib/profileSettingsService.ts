@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { neonData } from '@/lib/neon';
 
 export interface SettingsMergeOptions {
   directUpdates?: Record<string, any>;
@@ -31,7 +31,7 @@ export async function atomicUpdateProfileSettings(
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     // 1. Fetch current profile from database
-    const { data: profileRow, error: fetchErr } = await supabase
+    const { data: profileRow, error: fetchErr } = await neonData
       .from('profiles')
       .select('*, settings')
       .eq('id', userId)
@@ -128,7 +128,7 @@ export async function atomicUpdateProfileSettings(
     };
 
     // 5. Version-checked OCC conditional update using actual production query semantics
-    let query = supabase
+    let query = (neonData as any)
       .from('profiles')
       .update(updatePayload)
       .eq('id', userId);

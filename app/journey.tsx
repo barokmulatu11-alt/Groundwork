@@ -49,6 +49,7 @@ import { hapticLight, hapticSelection, hapticSuccess } from "@/lib/haptics";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useResponsive } from "@/hooks/useResponsive";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -185,33 +186,46 @@ export default function JourneyScreen() {
 
   const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
+
   return (
     <View style={styles.container}>
       {confettiActive && (
         <Confetti onComplete={() => setConfettiActive(false)} />
       )}
 
+      {/* Header */}
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
+
       {/* Main Page Scroll */}
       <Animated.ScrollView
         style={[styles.scroll, { opacity: entryOpacity }]}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 100 },
+          {
+            paddingTop: 16,
+            paddingBottom: insets.bottom + 100,
+            paddingHorizontal: horizontalPadding,
+            maxWidth: isDesktop ? contentMaxWidth : undefined,
+            alignSelf: isDesktop ? 'center' : undefined,
+            width: '100%',
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <BrandHeader title="groundwork." onBack={() => router.back()} />
+        <View style={isDesktop ? styles.desktopTwoColLayout : undefined}>
+          {/* Main Column */}
+          <View style={isDesktop ? styles.desktopMainCol : undefined}>
+            {/* Heading */}
+            <View style={styles.headerBlock}>
+              <Text style={styles.mainTitle}>Growth showcase.</Text>
+              <Text style={styles.subTitle}>Personal journey & progression</Text>
+            </View>
 
-        {/* Heading */}
-        <View style={styles.headerBlock}>
-          <Text style={styles.mainTitle}>Growth showcase.</Text>
-          <Text style={styles.subTitle}>Personal journey & progression</Text>
-        </View>
-
-        {/* HERO IDENTITY CARD */}
-        <Animated.View
-          style={[styles.heroCard, { transform: [{ scale: entryScale }] }]}
-        >
+            {/* HERO IDENTITY CARD */}
+            <Animated.View
+              style={[styles.heroCard, { transform: [{ scale: entryScale }] }]}
+            >
           {/* Avatar Ring */}
           <View style={styles.avatarContainer}>
             {profile?.avatar_url ? (
@@ -362,152 +376,277 @@ export default function JourneyScreen() {
           </View>
         </View>
 
-        {/* ACHIEVEMENTS CAROUSEL */}
-        <View style={styles.sectionSpacer}>
-          <Text style={styles.sectionTitleText}>Achievements Showcase</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.achieveCarousel}
-          >
-            {achievementList.map((a) => (
-              <TouchableOpacity
-                key={a.key}
-                onPress={() => {
-                  hapticLight();
-                  setSelectedAchievement(a);
-                }}
-                activeOpacity={0.8}
-                style={[
-                  styles.achievementTile,
-                  a.isUnlocked && { borderColor: theme.accent },
-                ]}
-              >
-                <Trophy size={20} color={a.isUnlocked ? theme.accent : theme.textMuted} />
-                <Text style={styles.achieveTileName} numberOfLines={1}>
-                  {a.name}
-                </Text>
-                <View
-                  style={[
-                    styles.achieveRarityBadge,
-                    {
-                      backgroundColor: a.isUnlocked
-                        ? `${theme.accent}1A`
-                        : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.achieveRarityText,
-                      { color: a.isUnlocked ? theme.accent : theme.textMuted },
-                    ]}
+            {/* Mobile/Tablet: Achievements & Discipline Metrics */}
+            {!isDesktop && (
+              <>
+                {/* ACHIEVEMENTS CAROUSEL */}
+                <View style={styles.sectionSpacer}>
+                  <Text style={styles.sectionTitleText}>Achievements Showcase</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.achieveCarousel}
                   >
-                    {a.category.toUpperCase()}
-                  </Text>
+                    {achievementList.map((a) => (
+                      <TouchableOpacity
+                        key={a.key}
+                        onPress={() => {
+                          hapticLight();
+                          setSelectedAchievement(a);
+                        }}
+                        activeOpacity={0.8}
+                        style={[
+                          styles.achievementTile,
+                          a.isUnlocked && { borderColor: theme.accent },
+                        ]}
+                      >
+                        <Trophy size={20} color={a.isUnlocked ? theme.accent : theme.textMuted} />
+                        <Text style={styles.achieveTileName} numberOfLines={1}>
+                          {a.name}
+                        </Text>
+                        <View
+                          style={[
+                            styles.achieveRarityBadge,
+                            {
+                              backgroundColor: a.isUnlocked
+                                ? `${theme.accent}1A`
+                                : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.achieveRarityText,
+                              { color: a.isUnlocked ? theme.accent : theme.textMuted },
+                            ]}
+                          >
+                            {a.category.toUpperCase()}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
 
-        {/* PERSONAL LIFE INSIGHTS */}
-        <View style={styles.sectionSpacer}>
-          <Text style={styles.sectionTitleText}>Discipline Metrics</Text>
-          <View style={styles.insightsRow}>
-            <View style={styles.insightCard}>
-              <Flame size={18} color="#FF9500" />
-              <Text style={styles.insightLabel}>Most Consistent Habit</Text>
-              <Text style={styles.insightVal}>Daily Ritual</Text>
+                {/* PERSONAL LIFE INSIGHTS */}
+                <View style={styles.sectionSpacer}>
+                  <Text style={styles.sectionTitleText}>Discipline Metrics</Text>
+                  <View style={styles.insightsRow}>
+                    <View style={styles.insightCard}>
+                      <Flame size={18} color="#FF9500" />
+                      <Text style={styles.insightLabel}>Most Consistent Habit</Text>
+                      <Text style={styles.insightVal}>Daily Ritual</Text>
+                    </View>
+
+                    <View style={styles.insightCard}>
+                      <Award size={18} color={theme.accent} />
+                      <Text style={styles.insightLabel}>Current Title</Text>
+                      <Text style={styles.insightVal}>{levelTitle}</Text>
+                    </View>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* JOURNEY MILESTONE TIMELINE */}
+            <View style={styles.sectionSpacer}>
+              <Text style={styles.sectionTitleText}>Journey Milestones</Text>
+              <View style={styles.timelineContainer}>
+                <View style={styles.timelineTrack} />
+
+                <View style={styles.timelineItem}>
+                  <View style={[styles.timelineNode, { backgroundColor: theme.accent }]} />
+                  <View style={styles.timelineCard}>
+                    <Text style={styles.timelineTitle}>First Goal Completed</Text>
+                    <Text style={styles.timelineDesc}>
+                      Built a consistent foundation of daily habits.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.timelineItem}>
+                  <View style={[styles.timelineNode, { backgroundColor: "#FF9500" }]} />
+                  <View style={styles.timelineCard}>
+                    <Text style={styles.timelineTitle}>First 7 Day Streak</Text>
+                    <Text style={styles.timelineDesc}>
+                      Sustained daily review sessions.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.timelineItem}>
+                  <View style={[styles.timelineNode, { backgroundColor: theme.accent }]} />
+                  <View style={styles.timelineCard}>
+                    <Text style={styles.timelineTitle}>
+                      Level {currentLevel} Reached
+                    </Text>
+                    <Text style={styles.timelineDesc}>
+                      Advanced into the {levelTitle} rank status.
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
 
-            <View style={styles.insightCard}>
-              <Award size={18} color={theme.accent} />
-              <Text style={styles.insightLabel}>Current Title</Text>
-              <Text style={styles.insightVal}>{levelTitle}</Text>
-            </View>
+            {/* Mobile/Tablet: Lifetime Output & Share Button */}
+            {!isDesktop && (
+              <>
+                {/* LEGACY CUMULATIVE SECTION */}
+                <View style={styles.sectionSpacer}>
+                  <Text style={styles.sectionTitleText}>Total Lifetime Output</Text>
+                  <View style={styles.legacyContainer}>
+                    <View style={styles.legacyGridRow}>
+                      <View style={styles.legacyGridItem}>
+                        <Clock size={20} color={theme.accent} />
+                        <Text style={styles.legacyVal}>
+                          {(stats.totalFocusMinutes / 60).toFixed(1)}h
+                        </Text>
+                        <Text style={styles.legacyLabel}>Focused Time</Text>
+                      </View>
+                      <View style={styles.legacyGridItem}>
+                        <Flame size={20} color={theme.accent} />
+                        <Text style={styles.legacyVal}>{stats.totalHabitsCompleted || stats.longestStreak || 0}</Text>
+                        <Text style={styles.legacyLabel}>Habit Check-ins</Text>
+                      </View>
+                      <View style={styles.legacyGridItem}>
+                        <Crown size={20} color={theme.accent} />
+                        <Text style={styles.legacyVal}>{stats.totalTasksCompleted}</Text>
+                        <Text style={styles.legacyLabel}>Tasks Completed</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* SHARE MY JOURNEY BUTTON */}
+                <View style={styles.shareBtnBox}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticSelection();
+                      setShareModalVisible(true);
+                    }}
+                    activeOpacity={0.8}
+                    style={styles.shareJourneyBtn}
+                  >
+                    <Share2 size={18} color="#FFFFFF" />
+                    <Text style={styles.shareJourneyBtnText}>Share My Journey</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
-        </View>
 
-        {/* JOURNEY MILESTONE TIMELINE */}
-        <View style={styles.sectionSpacer}>
-          <Text style={styles.sectionTitleText}>Journey Milestones</Text>
-          <View style={styles.timelineContainer}>
-            <View style={styles.timelineTrack} />
+          {/* Desktop Right Column: Discipline Metrics, Lifetime Output, Achievements, Share */}
+          {isDesktop && (
+            <View style={styles.desktopSideCol}>
+              {/* PERSONAL LIFE INSIGHTS */}
+              <View style={[styles.sectionSpacer, { marginTop: 0 }]}>
+                <Text style={styles.sectionTitleText}>Discipline Metrics</Text>
+                <View style={styles.insightsRow}>
+                  <View style={styles.insightCard}>
+                    <Flame size={18} color="#FF9500" />
+                    <Text style={styles.insightLabel}>Most Consistent Habit</Text>
+                    <Text style={styles.insightVal}>Daily Ritual</Text>
+                  </View>
 
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineNode, { backgroundColor: theme.accent }]} />
-              <View style={styles.timelineCard}>
-                <Text style={styles.timelineTitle}>First Goal Completed</Text>
-                <Text style={styles.timelineDesc}>
-                  Built a consistent foundation of daily habits.
-                </Text>
+                  <View style={styles.insightCard}>
+                    <Award size={18} color={theme.accent} />
+                    <Text style={styles.insightLabel}>Current Title</Text>
+                    <Text style={styles.insightVal}>{levelTitle}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* LEGACY CUMULATIVE SECTION */}
+              <View style={styles.sectionSpacer}>
+                <Text style={styles.sectionTitleText}>Total Lifetime Output</Text>
+                <View style={styles.legacyContainer}>
+                  <View style={styles.legacyGridRow}>
+                    <View style={styles.legacyGridItem}>
+                      <Clock size={20} color={theme.accent} />
+                      <Text style={styles.legacyVal}>
+                        {(stats.totalFocusMinutes / 60).toFixed(1)}h
+                      </Text>
+                      <Text style={styles.legacyLabel}>Focused Time</Text>
+                    </View>
+                    <View style={styles.legacyGridItem}>
+                      <Flame size={20} color={theme.accent} />
+                      <Text style={styles.legacyVal}>{stats.totalHabitsCompleted || stats.longestStreak || 0}</Text>
+                      <Text style={styles.legacyLabel}>Habit Check-ins</Text>
+                    </View>
+                    <View style={styles.legacyGridItem}>
+                      <Crown size={20} color={theme.accent} />
+                      <Text style={styles.legacyVal}>{stats.totalTasksCompleted}</Text>
+                      <Text style={styles.legacyLabel}>Tasks Completed</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* ACHIEVEMENTS CAROUSEL / LIST */}
+              <View style={styles.sectionSpacer}>
+                <Text style={styles.sectionTitleText}>Achievements Showcase</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.achieveCarousel}
+                >
+                  {achievementList.map((a) => (
+                    <TouchableOpacity
+                      key={a.key}
+                      onPress={() => {
+                        hapticLight();
+                        setSelectedAchievement(a);
+                      }}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.achievementTile,
+                        a.isUnlocked && { borderColor: theme.accent },
+                      ]}
+                    >
+                      <Trophy size={20} color={a.isUnlocked ? theme.accent : theme.textMuted} />
+                      <Text style={styles.achieveTileName} numberOfLines={1}>
+                        {a.name}
+                      </Text>
+                      <View
+                        style={[
+                          styles.achieveRarityBadge,
+                          {
+                            backgroundColor: a.isUnlocked
+                              ? `${theme.accent}1A`
+                              : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.achieveRarityText,
+                            { color: a.isUnlocked ? theme.accent : theme.textMuted },
+                          ]}
+                        >
+                          {a.category.toUpperCase()}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* SHARE MY JOURNEY BUTTON */}
+              <View style={styles.shareBtnBox}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticSelection();
+                    setShareModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                  style={styles.shareJourneyBtn}
+                >
+                  <Share2 size={18} color="#FFFFFF" />
+                  <Text style={styles.shareJourneyBtnText}>Share My Journey</Text>
+                </TouchableOpacity>
               </View>
             </View>
-
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineNode, { backgroundColor: "#FF9500" }]} />
-              <View style={styles.timelineCard}>
-                <Text style={styles.timelineTitle}>First 7 Day Streak</Text>
-                <Text style={styles.timelineDesc}>
-                  Sustained daily review sessions.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineNode, { backgroundColor: theme.accent }]} />
-              <View style={styles.timelineCard}>
-                <Text style={styles.timelineTitle}>
-                  Level {currentLevel} Reached
-                </Text>
-                <Text style={styles.timelineDesc}>
-                  Advanced into the {levelTitle} rank status.
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* LEGACY CUMULATIVE SECTION */}
-        <View style={styles.sectionSpacer}>
-          <Text style={styles.sectionTitleText}>Total Lifetime Output</Text>
-          <View style={styles.legacyContainer}>
-            <View style={styles.legacyGridRow}>
-              <View style={styles.legacyGridItem}>
-                <Clock size={20} color={theme.accent} />
-                <Text style={styles.legacyVal}>
-                  {(stats.totalFocusMinutes / 60).toFixed(1)}h
-                </Text>
-                <Text style={styles.legacyLabel}>Focused Time</Text>
-              </View>
-              <View style={styles.legacyGridItem}>
-                <Flame size={20} color={theme.accent} />
-                <Text style={styles.legacyVal}>{stats.totalHabitsCompleted || stats.longestStreak || 0}</Text>
-                <Text style={styles.legacyLabel}>Habit Check-ins</Text>
-              </View>
-              <View style={styles.legacyGridItem}>
-                <Crown size={20} color={theme.accent} />
-                <Text style={styles.legacyVal}>{stats.totalTasksCompleted}</Text>
-                <Text style={styles.legacyLabel}>Tasks Completed</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* SHARE MY JOURNEY BUTTON */}
-        <View style={styles.shareBtnBox}>
-          <TouchableOpacity
-            onPress={() => {
-              hapticSelection();
-              setShareModalVisible(true);
-            }}
-            activeOpacity={0.8}
-            style={styles.shareJourneyBtn}
-          >
-            <Share2 size={18} color="#FFFFFF" />
-            <Text style={styles.shareJourneyBtnText}>Share My Journey</Text>
-          </TouchableOpacity>
+          )}
         </View>
       </Animated.ScrollView>
 
@@ -755,6 +894,20 @@ export default function JourneyScreen() {
 
 function createStyles(theme: any, isDark: boolean) {
   return StyleSheet.create({
+    desktopTwoColLayout: {
+      flexDirection: 'row',
+      gap: 36,
+      alignItems: 'flex-start',
+      width: '100%',
+    },
+    desktopMainCol: {
+      flex: 1.35,
+      maxWidth: 720,
+    },
+    desktopSideCol: {
+      flex: 0.95,
+      gap: 20,
+    },
     container: {
       flex: 1,
       backgroundColor: theme.background,

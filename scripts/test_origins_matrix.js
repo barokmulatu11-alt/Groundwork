@@ -11,7 +11,7 @@ async function testOrigins() {
     'http://10.0.2.2:8081',
     'http://127.0.0.1:8081',
     'https://groundwork.app',
-    'https://v0-barok-labs.vercel.app',
+    'https://barok-labs.vercel.app',
     'groundwork://',
     'groundwork://reset-password'
   ];
@@ -24,7 +24,7 @@ async function testOrigins() {
     'http://localhost:8081/reset-password',
     'http://10.0.2.2:8081/reset-password',
     'https://groundwork.app/reset-password',
-    'https://v0-barok-labs.vercel.app/reset-password',
+    'https://barok-labs.vercel.app/reset-password',
     'groundwork://reset-password'
   ];
 

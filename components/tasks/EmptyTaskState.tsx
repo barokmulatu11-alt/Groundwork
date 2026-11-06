@@ -45,16 +45,16 @@ export const EmptyTaskState = ({ onQuickAdd, yesterdayTasks, onAddYesterdayTasks
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center', justifyContent: 'center', padding: 24, marginTop: 40 },
-  title: { fontSize: 20, fontFamily: 'System', fontWeight: '700', marginBottom: 8 },
-  subtitle: { fontSize: 15, fontFamily: 'System', fontWeight: '500', textAlign: 'center', marginBottom: 24, lineHeight: 22 },
+  title: { fontSize: 20, fontFamily: 'Inter_700Bold', marginBottom: 8 },
+  subtitle: { fontSize: 15, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: 24, lineHeight: 22 },
   suggestions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 32 },
   chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
-  chipText: { fontSize: 14, fontFamily: 'System', fontWeight: '500' },
+  chipText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   yesterdayCard: { padding: 16, borderRadius: 16, width: '100%', alignItems: 'center' },
-  yesterdayTitle: { fontSize: 16, fontFamily: 'System', fontWeight: '600', marginBottom: 4 },
-  yesterdaySub: { fontSize: 13, fontFamily: 'System', fontWeight: '500', textAlign: 'center', marginBottom: 16, lineHeight: 18 },
+  yesterdayTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginBottom: 4 },
+  yesterdaySub: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: 16, lineHeight: 18 },
   addYesterdayBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 8 },
-  addYesterdayBtnText: { color: 'white', fontSize: 14, fontFamily: 'System', fontWeight: '600' }
+  addYesterdayBtnText: { color: 'white', fontSize: 14, fontFamily: 'Inter_600SemiBold' }
 });
 
 

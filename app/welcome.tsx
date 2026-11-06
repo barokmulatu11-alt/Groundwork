@@ -2,15 +2,36 @@ import { BackgroundGradient } from "@/components/BackgroundGradient";
 import { AppText as Text } from "@/components/ui/AppText";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { migrateGuestData } from "@/lib/db";
-import { neonAuth } from "@/lib/neon";
+import { neonAuth, persistSessionToken } from "@/lib/neon";
+import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuthStore } from "@/store/useAuthStore";
 import { FontAwesome } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
+
+function extractParamsFromUrl(url: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  const hashIdx = url.indexOf('#');
+  const queryIdx = url.indexOf('?');
+  const parts: string[] = [];
+  if (hashIdx !== -1) parts.push(url.substring(hashIdx + 1));
+  if (queryIdx !== -1) {
+    const end = hashIdx !== -1 && hashIdx > queryIdx ? hashIdx : url.length;
+    parts.push(url.substring(queryIdx + 1, end));
+  }
+  for (const part of parts) {
+    part.split('&').forEach((pair) => {
+      const [k, v] = pair.split('=');
+      if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+    });
+  }
+  return params;
+}
 import React from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -42,43 +63,115 @@ export default function WelcomeScreen() {
       const isWeb = Platform.OS === "web";
       const redirectUrl = isWeb
         ? (typeof window !== "undefined" ? `${window.location.origin}/` : "http://localhost:8081/")
-        : "groundwork://auth/callback";
+        : "https://barok-labs.pro.et/api/auth/google-callback";
       console.log(
         "[Auth] Starting Google OAuth (Welcome) with redirect:",
         redirectUrl,
       );
 
-      const { data, error } = await (neonAuth.signIn as any).social({
-        provider: "google",
-        callbackURL: redirectUrl,
-      });
-
-      if (error) throw error;
-
-      if (data?.url) {
-        if (isWeb && typeof window !== "undefined") {
-          window.location.href = data.url;
+      let oauthUrl: string | null = null;
+      try {
+        const { data, error } = await (neonAuth.signIn as any).social({
+          provider: "google",
+          callbackURL: redirectUrl,
+        });
+        if (error) throw error;
+        oauthUrl = data?.url || null;
+      } catch (oauthErr: any) {
+        if (oauthErr?.code === 'feature_not_supported' || oauthErr?.status === 403) {
+          Alert.alert(
+            "Google Sign-In Unavailable",
+            "Google Sign-In is not currently enabled on your Neon instance. Please sign in with your email and password."
+          );
+          setGoogleLoading(false);
+          useAuthStore.getState().setIsOAuthPending(false);
           return;
         }
-        const res = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          "groundwork://",
-        );
-        if (res.type === "success") {
-          const { data: authData } = await neonAuth.getSession();
-          const userId = (authData as any)?.user?.id || (authData as any)?.session?.userId;
+        throw oauthErr;
+      }
 
-          if (userId) {
-            await migrateGuestData("guest", userId);
-            useAuthStore.getState().setIsGuest(false);
+      if (!oauthUrl) {
+        throw new Error("No authentication URL returned from auth provider.");
+      }
 
-            const { useStore } = await import("@/store/useStore");
-            await useStore.getState().syncFromCloud();
-            console.log("[Auth] Google welcome sync complete");
+      if (isWeb && typeof window !== "undefined") {
+        window.location.href = oauthUrl;
+        return;
+      }
+
+      const res = await WebBrowser.openAuthSessionAsync(
+        oauthUrl,
+        "groundwork://",
+      );
+
+      if (res.type === "success" || res.type === "dismiss") {
+        let token: string | null = null;
+        let userId: string | null = null;
+        let email: string | null = null;
+        let name: string | null = null;
+
+        if (res.type === "success" && (res as any).url) {
+          const params = extractParamsFromUrl((res as any).url);
+          token = params.token || null;
+          userId = params.userId || null;
+          email = params.email || null;
+          name = params.name || null;
+        }
+
+        // Fallback: Query mobile-session bridge from Neon
+        if (!token || !userId) {
+          try {
+            const bridgeRes = await fetch("https://barok-labs.pro.et/api/auth/mobile-session");
+            const bridgeData = await bridgeRes.json();
+            if (bridgeData.success && bridgeData.session?.token) {
+              token = bridgeData.session.token;
+              userId = bridgeData.session.userId;
+              email = bridgeData.session.email || null;
+              name = bridgeData.session.name || null;
+            }
+          } catch (bridgeErr) {
+            console.warn("[Auth] Bridge session fetch error:", bridgeErr);
           }
         }
-      } else {
-        throw new Error("No authentication URL returned from Neon Auth.");
+
+        if (token && userId) {
+          await persistSessionToken(token);
+          useAuthStore.getState().setIsGuest(false);
+          await migrateGuestData("guest", userId);
+          await useAuthStore.getState().handleAuthEvent("SIGNED_IN", {
+            user: {
+              id: userId,
+              email: email || "",
+              user_metadata: { full_name: name || "" },
+            },
+            session: {
+              access_token: token,
+              token: token,
+              userId: userId,
+              user: { id: userId, email: email || "", user_metadata: { full_name: name || "" } },
+            },
+          });
+
+          const { useStore } = await import("@/store/useStore");
+          await useStore.getState().syncFromCloud();
+          console.log("[Auth] Google welcome sync complete");
+          router.replace("/");
+          return;
+        }
+
+        // Second fallback: neonAuth.getSession()
+        const { data: authData } = await neonAuth.getSession().catch(() => ({ data: null }));
+        const authUser = authData?.user;
+        const authSession = authData?.session;
+        const fallbackUserId = authUser?.id || null;
+        if (fallbackUserId && authUser && authSession) {
+          await migrateGuestData("guest", fallbackUserId);
+          useAuthStore.getState().setIsGuest(false);
+          await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: authUser, session: authSession });
+          const { useStore } = await import("@/store/useStore");
+          await useStore.getState().syncFromCloud();
+          router.replace("/");
+        }
       }
     } catch (e: any) {
       console.error("[Auth] Google sign in error:", e);
@@ -123,31 +216,19 @@ export default function WelcomeScreen() {
               : { alignItems: "center", zIndex: 1 }
           }
         >
-          <Animated.View
-            entering={FadeInUp.delay(0).duration(300)}
-            style={{ alignItems: "center", marginBottom: 32 }}
-          >
+          <View style={{ alignItems: "center", marginBottom: 32 }}>
             <BrandLogo fontSize={38} />
-          </Animated.View>
+          </View>
 
-          <Animated.Text
-            entering={FadeInUp.delay(100).duration(300)}
-            style={[styles.tagline, { color: theme.text }]}
-          >
+          <Text style={[styles.tagline, { color: theme.text }]}>
             Your daily focus companion.
-          </Animated.Text>
+          </Text>
 
-          <Animated.Text
-            entering={FadeInUp.delay(200).duration(300)}
-            style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'PlayfairDisplay_600SemiBold_Italic' }]}
-          >
+          <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'PlayfairDisplay_600SemiBold_Italic' }]}>
             Tasks, habits, and timers built for deep work.
-          </Animated.Text>
+          </Text>
 
-          <Animated.View
-            entering={FadeInUp.delay(300).duration(300)}
-            style={{ width: "100%", marginTop: 36 }}
-          >
+          <View style={{ width: "100%", marginTop: 36 }}>
             <Pressable
               onPress={handleCreateAccount}
               style={[styles.primaryButton, { backgroundColor: theme.accent }]}
@@ -217,12 +298,9 @@ export default function WelcomeScreen() {
                 )}
               </View>
             </Pressable>
-          </Animated.View>
+          </View>
 
-          <Animated.View
-            entering={FadeInUp.delay(400).duration(300)}
-            style={{ marginTop: 20, alignItems: "center" }}
-          >
+          <View style={{ marginTop: 20, alignItems: "center" }}>
             <Pressable
               onPress={handleContinueWithoutAccount}
               style={{ backgroundColor: "transparent", paddingVertical: 6 }}
@@ -242,7 +320,7 @@ export default function WelcomeScreen() {
             >
               Your tasks, habits, and focus stay on this device unless connected.
             </Text>
-          </Animated.View>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>

@@ -123,11 +123,11 @@ export default function ProductivitySettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+        <View style={{ marginBottom: 24, marginTop: 4 }}>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
             Productivity.
           </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
             Build your daily rhythm.
           </Text>
         </View>

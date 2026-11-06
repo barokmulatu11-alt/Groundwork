@@ -18,11 +18,11 @@ export default function AboutScreen() {
       <BrandHeader title="groundwork." onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
-        <View style={{ marginBottom: 24, marginTop: 8 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+        <View style={{ marginBottom: 24, marginTop: 4 }}>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
             About.
           </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
             Version, credits and legal.
           </Text>
         </View>
@@ -36,13 +36,13 @@ export default function AboutScreen() {
         <View style={styles.legalSection}>
           <TouchableOpacity 
             style={[styles.legalItem, { borderTopWidth: 1, borderTopColor: theme.separator }]}
-            onPress={() => Linking.openURL('https://v0-barok-labs.vercel.app/privacy')}
+            onPress={() => Linking.openURL('https://barok-labs.pro.et/privacy')}
           >
             <Text style={[styles.legalText, { color: theme.text }]}>Privacy Policy</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.legalItem, { borderTopWidth: 1, borderTopColor: theme.separator }]}
-            onPress={() => Linking.openURL('https://v0-barok-labs.vercel.app/terms')}
+            onPress={() => Linking.openURL('https://barok-labs.pro.et/terms')}
           >
             <Text style={[styles.legalText, { color: theme.text }]}>Terms and Conditions</Text>
           </TouchableOpacity>

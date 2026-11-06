@@ -24,6 +24,10 @@ import {
   PenTool,
   Sparkles,
   Flame,
+  Coffee,
+  Heart,
+  Sun,
+  Pencil,
 } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
@@ -36,7 +40,8 @@ import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useTheme } from '@/lib/ThemeContext';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { habitCompletedOnDate, parseHabitDates } from '@/lib/habitUtils';
+import { habitCompletedOnDate, parseHabitDates, isHabitDueOnDate, filterHabitsForView } from '@/lib/habitUtils';
+import { HabitComposer, HabitComposerModal } from '@/components/habits/HabitComposer';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { getLocalDateString, formatHeaderDate } from '@/lib/dateUtils';
 import { useReducedMotion } from '@/lib/animationUtils';
@@ -45,12 +50,15 @@ import type { Habit } from '@/lib/db';
 
 function getHabitIcon(title: string) {
   const lower = (title || '').toLowerCase();
-  if (lower.includes('read') || lower.includes('study') || lower.includes('book')) return BookOpen;
+  if (lower.includes('read') || lower.includes('study') || lower.includes('book') || lower.includes('page')) return BookOpen;
   if (lower.includes('water') || lower.includes('drink') || lower.includes('hydrat')) return Droplets;
-  if (lower.includes('run') || lower.includes('walk') || lower.includes('gym') || lower.includes('workout') || lower.includes('exercise')) return Activity;
+  if (lower.includes('run') || lower.includes('walk') || lower.includes('gym') || lower.includes('workout') || lower.includes('exercise') || lower.includes('fit') || lower.includes('strength') || lower.includes('dumb')) return Activity;
   if (lower.includes('sleep') || lower.includes('bed') || lower.includes('rest')) return Moon;
   if (lower.includes('journal') || lower.includes('write')) return PenTool;
   if (lower.includes('meditat') || lower.includes('mind') || lower.includes('calm')) return Sparkles;
+  if (lower.includes('coffee') || lower.includes('tea') || lower.includes('routin')) return Coffee;
+  if (lower.includes('sun') || lower.includes('outdoor')) return Sun;
+  if (lower.includes('heart') || lower.includes('well') || lower.includes('health')) return Heart;
   return Flame;
 }
 
@@ -102,7 +110,13 @@ function HabitRowItem({
       <View
         style={[
           styles.habitIconBox,
-          { backgroundColor: isDark ? 'rgba(0,102,255,0.1)' : 'rgba(0,102,255,0.08)' },
+          {
+            backgroundColor: theme.accent
+              ? `${theme.accent}${isDark ? '24' : '18'}`
+              : isDark
+              ? 'rgba(0,102,255,0.1)'
+              : 'rgba(0,102,255,0.08)',
+          },
         ]}
       >
         <IconComponent size={16} color={theme.accent} strokeWidth={2} />
@@ -167,8 +181,7 @@ export default function HabitsScreen() {
   const [activeTab, setActiveTab] = useState<HabitTab>('Today');
   const [selectedDateIndex, setSelectedDateIndex] = useState<number>(0);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newFrequency, setNewFrequency] = useState('Daily');
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [selectedHabitForDetail, setSelectedHabitForDetail] = useState<Habit | null>(null);
 
   useFocusEffect(
@@ -205,33 +218,9 @@ export default function HabitsScreen() {
   const selectedDayObj = weekDays[selectedDateIndex] || weekDays[0];
   const selectedDateStr = selectedDayObj.dateStr;
 
-  // Filter habits based on active tab
+  // Filter habits honestly using single tested consolidated schedule function
   const allHabits = habits || [];
-  let visibleHabits = allHabits;
-
-  if (activeTab === 'Today') {
-    visibleHabits = allHabits.filter((h) => !h.is_paused);
-  } else if (activeTab === 'Paused') {
-    visibleHabits = allHabits.filter((h) => h.is_paused);
-  } else {
-    // All habits
-    visibleHabits = allHabits;
-  }
-
-  const handleCreateHabit = async () => {
-    const trimmed = newTitle.trim();
-    if (!trimmed) return;
-    hapticSuccess();
-    await addHabit({
-      title: trimmed,
-      frequency: newFrequency,
-      streak: 0,
-      best_streak: 0,
-      dates_completed: JSON.stringify([]),
-    });
-    setNewTitle('');
-    setIsAddModalOpen(false);
-  };
+  const visibleHabits = filterHabitsForView(allHabits, activeTab, selectedDateStr);
 
   const handleToggleCheckin = async (habitId: string) => {
     await toggleHabit(habitId, selectedDateStr);
@@ -319,6 +308,14 @@ export default function HabitsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Compact Habit Composer */}
+      <View style={{ marginBottom: 18 }}>
+        <HabitComposer
+          mode="compact"
+          onRequestExpand={() => setIsAddModalOpen(true)}
+        />
+      </View>
+
       {/* Empty state matching mockup */}
       {visibleHabits.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -382,45 +379,13 @@ export default function HabitsScreen() {
 
   const renderDesktopSidePanel = () => (
     <View style={styles.desktopHabitsRight}>
-      {/* 1. Quick Add Habit Card */}
+      {/* 1. Quick Add Habit Card (Unified shared HabitComposer) */}
       <View style={styles.desktopSideCard}>
         <Text style={styles.desktopCardTitle}>New ritual</Text>
-        <TextInput
-          value={newTitle}
-          onChangeText={setNewTitle}
-          placeholder="e.g. Morning stretch"
-          placeholderTextColor={theme.textMuted}
-          style={styles.desktopQuickInput}
-          onSubmitEditing={handleCreateHabit}
+        <HabitComposer
+          mode="compact"
+          onRequestExpand={() => setIsAddModalOpen(true)}
         />
-        <View style={styles.desktopFreqRow}>
-          {['Daily', 'Weekdays', 'Weekends'].map((freq) => (
-            <TouchableOpacity
-              key={freq}
-              onPress={() => setNewFrequency(freq)}
-              style={[
-                styles.desktopFreqPill,
-                newFrequency === freq && styles.desktopFreqPillActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.desktopFreqText,
-                  newFrequency === freq && styles.desktopFreqTextActive,
-                ]}
-              >
-                {freq}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <TouchableOpacity
-          onPress={handleCreateHabit}
-          style={styles.desktopCreateBtn}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.desktopCreateBtnText}>+ Create ritual</Text>
-        </TouchableOpacity>
       </View>
 
       {/* 2. Streak & Consistency Card */}
@@ -463,9 +428,7 @@ export default function HabitsScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={{ paddingTop: insets.top }}>
-        <BrandHeader showBack showMoreMenu onRightPress={() => router.push('/settings' as any)} />
-      </View>
+      <BrandHeader showBack showMoreMenu onRightPress={() => router.push('/settings' as any)} />
 
       <ScrollView
         style={{ flex: 1, width: '100%' }}
@@ -493,68 +456,20 @@ export default function HabitsScreen() {
         )}
       </ScrollView>
 
-      {/* Add Habit Modal */}
-      <Modal
+      {/* Shared Habit Composer Modal */}
+      <HabitComposerModal
         visible={isAddModalOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setIsAddModalOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalHeading}>Create habit</Text>
-              <TouchableOpacity
-                onPress={() => setIsAddModalOpen(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <X size={20} color={theme.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalFieldLabel}>HABIT NAME</Text>
-            <TextInput
-              value={newTitle}
-              onChangeText={setNewTitle}
-              placeholder="e.g. Read for 15 minutes"
-              placeholderTextColor={theme.textMuted}
-              style={styles.modalTextInput}
-              autoFocus
-            />
-
-            <Text style={styles.modalFieldLabel}>FREQUENCY</Text>
-            <View style={styles.frequencyRow}>
-              {['Daily', 'Weekdays', 'Weekends'].map((freq) => (
-                <TouchableOpacity
-                  key={freq}
-                  onPress={() => setNewFrequency(freq)}
-                  style={[
-                    styles.freqPill,
-                    newFrequency === freq && styles.freqPillActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.freqPillText,
-                      newFrequency === freq && styles.freqPillActive ? styles.freqPillTextActive : null,
-                    ]}
-                  >
-                    {freq}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              onPress={handleCreateHabit}
-              style={styles.modalSaveBtn}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalSaveBtnText}>Save habit</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        initialHabit={editingHabit}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setEditingHabit(null);
+        }}
+        onSuccess={() => {
+          setIsAddModalOpen(false);
+          setEditingHabit(null);
+          loadHabits();
+        }}
+      />
 
       {/* Habit Detail / Actions Sheet */}
       {selectedHabitForDetail && (
@@ -584,6 +499,21 @@ export default function HabitsScreen() {
               <View style={styles.modalActionsRow}>
                 <TouchableOpacity
                   onPress={() => {
+                    const habitToEdit = selectedHabitForDetail;
+                    setSelectedHabitForDetail(null);
+                    setEditingHabit(habitToEdit);
+                    setIsAddModalOpen(true);
+                  }}
+                  style={styles.modalEditBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit habit"
+                >
+                  <Pencil size={15} color="#FFFFFF" strokeWidth={2.2} />
+                  <Text style={styles.modalEditBtnText}>Edit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
                     const nextPaused = !selectedHabitForDetail.is_paused;
                     updateHabit(selectedHabitForDetail.id, { is_paused: nextPaused });
                     setSelectedHabitForDetail(null);
@@ -591,16 +521,19 @@ export default function HabitsScreen() {
                   style={styles.modalSecondaryBtn}
                 >
                   <Text style={styles.modalSecondaryBtnText}>
-                    {selectedHabitForDetail.is_paused ? 'Resume habit' : 'Pause habit'}
+                    {selectedHabitForDetail.is_paused ? 'Resume' : 'Pause'}
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   onPress={() => {
-                    deleteHabit(selectedHabitForDetail.id);
+                    const habitId = selectedHabitForDetail.id;
                     setSelectedHabitForDetail(null);
+                    deleteHabit(habitId);
                   }}
                   style={styles.modalDeleteBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete habit"
                 >
                   <Trash2 size={16} color="#EF4444" />
                   <Text style={styles.modalDeleteBtnText}>Delete</Text>
@@ -628,17 +561,17 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 6,
     },
     pageHeading: {
-      fontSize: 44,
+      fontSize: 28,
       fontFamily: 'Inter_800ExtraBold',
-      letterSpacing: -1,
+      letterSpacing: -0.6,
       color: theme.text,
       marginBottom: 4,
     },
     pageSubline: {
-      fontSize: 16,
+      fontSize: 14,
       fontFamily: 'Inter_400Regular',
       color: theme.textSecondary,
-      marginBottom: 20,
+      marginBottom: 16,
     },
 
     // Weekly Date Strip
@@ -965,13 +898,27 @@ function createStyles(theme: any, isDark: boolean) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      gap: 12,
+      gap: 10,
+    },
+    modalEditBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.accent,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 999,
+    },
+    modalEditBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
     },
     modalSecondaryBtn: {
       borderWidth: 1,
       borderColor: theme.separator,
       backgroundColor: isDark ? 'transparent' : '#FFFFFF',
-      paddingHorizontal: 18,
+      paddingHorizontal: 16,
       paddingVertical: 10,
       borderRadius: 999,
     },

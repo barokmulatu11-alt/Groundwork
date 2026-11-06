@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
@@ -13,6 +14,7 @@ import { useLeaderboard, RankedEntry } from '@/hooks/connect/useLeaderboard';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/useAuthStore';
 import { hapticSelection } from '@/lib/haptics';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
 
 interface LeaderboardScreenProps {
   onSwitchToFriendsTab?: () => void;
@@ -268,9 +270,13 @@ export default function LeaderboardScreen({ onSwitchToFriendsTab }: LeaderboardS
 
                 {/* Avatar circle */}
                 <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarText}>
-                    {(entry.username || 'U').charAt(0).toUpperCase()}
-                  </Text>
+                  {resolveAvatarUrl(entry.avatar_url) ? (
+                    <Image source={{ uri: resolveAvatarUrl(entry.avatar_url)! }} style={styles.avatarImg} />
+                  ) : (
+                    <Text style={styles.avatarText}>
+                      {(entry.username || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  )}
                 </View>
 
                 {/* Identity info */}
@@ -316,11 +322,11 @@ function createStyles(theme: any, isDark: boolean) {
 
     // Editorial Heading matching visual direction
     editorialTitle: {
-      fontSize: 38,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 34,
+      fontFamily: 'Inter_800ExtraBold',
       color: theme.primaryText,
       letterSpacing: -0.8,
-      lineHeight: 44,
+      lineHeight: 40,
       marginBottom: 6,
     },
     editorialSubtitle: {
@@ -401,8 +407,8 @@ function createStyles(theme: any, isDark: boolean) {
       gap: 14,
     },
     myStandingRank: {
-      fontSize: 26,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 24,
+      fontFamily: 'Inter_700Bold',
       color: theme.accent,
     },
     myStandingName: {
@@ -420,8 +426,8 @@ function createStyles(theme: any, isDark: boolean) {
       alignItems: 'flex-end',
     },
     myStandingScore: {
-      fontSize: 20,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 18,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
     },
     myStandingScoreLabel: {
@@ -447,8 +453,8 @@ function createStyles(theme: any, isDark: boolean) {
       paddingHorizontal: 4,
     },
     emptyTitle: {
-      fontSize: 32,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 28,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       letterSpacing: -0.6,
       marginBottom: 8,
@@ -488,9 +494,11 @@ function createStyles(theme: any, isDark: boolean) {
       borderRadius: 12,
     },
     rankNumeral: {
-      fontSize: 20,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 18,
+      fontFamily: 'Inter_700Bold',
       width: 38,
+      fontVariant: ['tabular-nums'],
+      flexShrink: 0,
     },
     avatarCircle: {
       width: 38,
@@ -502,6 +510,13 @@ function createStyles(theme: any, isDark: boolean) {
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 12,
+      overflow: 'hidden',
+      flexShrink: 0,
+    },
+    avatarImg: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 19,
     },
     avatarText: {
       fontSize: 15,
@@ -510,6 +525,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     infoCol: {
       flex: 1,
+      minWidth: 0,
       paddingRight: 12,
     },
     nameRow: {
@@ -535,11 +551,13 @@ function createStyles(theme: any, isDark: boolean) {
     },
     scoreCol: {
       alignItems: 'flex-end',
+      flexShrink: 0,
     },
     scoreNumber: {
-      fontSize: 18,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
+      fontVariant: ['tabular-nums'],
     },
     scoreUnit: {
       fontSize: 11,

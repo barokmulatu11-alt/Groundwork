@@ -1,5 +1,6 @@
+import { Platform } from 'react-native';
 import { Text, TextProps } from './Themed';
 
 export function MonoText(props: TextProps) {
-  return <Text {...props} style={[props.style, { fontFamily: 'System' }]} />;
+  return <Text {...props} style={[props.style, { fontFamily: Platform.select({ ios: 'Courier', default: 'monospace' }) }]} />;
 }

@@ -1,5 +1,7 @@
+import '@/lib/cryptoPolyfill';
 import notifee, { EventType } from '@/lib/safeNotifee';
 import { supabase } from '@/lib/supabase';
+import { persistSessionToken } from '@/lib/neon';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -14,6 +16,7 @@ import {
   PlayfairDisplay_700Bold,
   PlayfairDisplay_800ExtraBold,
   PlayfairDisplay_400Regular_Italic,
+  PlayfairDisplay_600SemiBold_Italic,
   PlayfairDisplay_700Bold_Italic,
 } from '@expo-google-fonts/playfair-display';
 import { FontAwesome } from '@expo/vector-icons';
@@ -24,7 +27,7 @@ import { Stack, useRouter, useSegments, DefaultTheme, DarkTheme, ThemeProvider a
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, AppState, type AppStateStatus } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -39,6 +42,7 @@ import { initDb } from '@/lib/db';
 import { handleNotificationResponse } from '@/lib/notifications';
 import { useAuthStore } from '@/store/useAuthStore';
 import { startSyncManager, useStore } from '@/store/useStore';
+import { syncAllWidgets, syncWidgetData, processPendingWidgetCompletions } from '@/lib/widgetSync';
 import * as rewardsService from '@/lib/rewardsService';
 import * as audioStorage from '@/lib/audioStorage';
 import { useSettingsStore } from '@/store/useSettingsStore';
@@ -54,7 +58,7 @@ export const unstable_settings = {
   initialRouteName: '(tabs)',
 };
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Restrict test hooks exposure: never expose in standard production builds
 const isTestOrDev =
@@ -101,6 +105,7 @@ export default function RootLayout() {
     PlayfairDisplay_700Bold,
     PlayfairDisplay_800ExtraBold,
     PlayfairDisplay_400Regular_Italic,
+    PlayfairDisplay_600SemiBold_Italic,
     PlayfairDisplay_700Bold_Italic,
     ...FontAwesome.font,
   });
@@ -125,6 +130,7 @@ export default function RootLayout() {
         console.log('[RootLayout] Account rewards initialized');
         startSyncManager();
         console.log('[RootLayout] Sync manager started');
+        syncWidgetData().catch(() => {});
       } catch (e) {
         console.error('[RootLayout] Boot sequence failed:', e);
       } finally {
@@ -254,6 +260,19 @@ function RootLayoutNav() {
 
   const showDesktopRail = isWeb && isDesktop && !isAuthOrOnboarding;
 
+  // Synchronize Android Widget state & process pending completions made on Home Screen
+  useEffect(() => {
+    syncAllWidgets().catch(() => {});
+
+    const appStateSub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        syncAllWidgets().catch(() => {});
+      }
+    });
+
+    return () => appStateSub.remove();
+  }, []);
+
   useEffect(() => {
     // Check if app was opened from a notification while killed
     notifee.getInitialNotification().then(initialNotification => {
@@ -321,7 +340,59 @@ function RootLayoutNav() {
         }
       }
 
-      // 3. Regular OAuth redirects
+      // 3. Neon Auth OAuth callback (groundwork://auth/callback?token=...&userId=...)
+      if (url.includes('auth/callback') || (token && !isRecovery)) {
+        const userId = getParam('userId');
+        const email = getParam('email');
+        const name = getParam('name');
+        let effectiveToken = token;
+        let effectiveUserId = userId;
+        let effectiveEmail = email;
+        let effectiveName = name;
+
+        // If parameters missing in deep link, fetch from mobile-session bridge
+        if (!effectiveToken || !effectiveUserId) {
+          try {
+            const bridgeRes = await fetch('https://barok-labs.pro.et/api/auth/mobile-session');
+            const bridgeData = await bridgeRes.json();
+            if (bridgeData.success && bridgeData.session?.token) {
+              effectiveToken = bridgeData.session.token;
+              effectiveUserId = bridgeData.session.userId;
+              effectiveEmail = bridgeData.session.email;
+              effectiveName = bridgeData.session.name;
+            }
+          } catch (_) {}
+        }
+
+        if (effectiveToken && effectiveUserId) {
+          console.log('[Global DeepLink] Handling Neon OAuth callback');
+          try {
+            await persistSessionToken(effectiveToken);
+            useAuthStore.getState().setIsGuest(false);
+            await useAuthStore.getState().handleAuthEvent('SIGNED_IN', {
+              user: {
+                id: effectiveUserId,
+                email: effectiveEmail || '',
+                user_metadata: { full_name: effectiveName || '' },
+              },
+              session: {
+                access_token: effectiveToken,
+                token: effectiveToken,
+                userId: effectiveUserId,
+                user: { id: effectiveUserId, email: effectiveEmail || '', user_metadata: { full_name: effectiveName || '' } },
+              },
+            });
+            const { useStore } = await import('@/store/useStore');
+            await useStore.getState().syncFromCloud();
+            router.replace('/');
+            return;
+          } catch (e: any) {
+            console.error('[Global DeepLink] Failed to handle Neon OAuth session', e);
+          }
+        }
+      }
+
+      // 4. Legacy Supabase OAuth redirects
       if (!code && !access_token) return;
 
       console.log('[Global DeepLink] Processing OAuth redirect');
@@ -359,7 +430,7 @@ function RootLayoutNav() {
                 <View style={{ flex: 1, flexDirection: showDesktopRail ? 'row' : 'column' }}>
                   {showDesktopRail && <WebDesktopNav />}
                   <View style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
-                    <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: theme.background } }}>
+                    <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: theme.background } }}>
                       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                       <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
                       <Stack.Screen name="login" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
@@ -370,9 +441,8 @@ function RootLayoutNav() {
                       <Stack.Screen name="tasks/task-detail" options={{ headerShown: false }} />
                       <Stack.Screen name="habits" options={{ headerShown: false }} />
                       <Stack.Screen name="focus" options={{ headerShown: false }} />
-                      <Stack.Screen name="notes/index" options={{ headerShown: false }} />
-                      <Stack.Screen name="notes/[id]" options={{ headerShown: false }} />
                       <Stack.Screen name="achievements" options={{ headerShown: false }} />
+                      <Stack.Screen name="rewards" options={{ headerShown: false }} />
                       <Stack.Screen name="downloads" options={{ headerShown: false }} />
                       <Stack.Screen name="recap" options={{ headerShown: false }} />
                       <Stack.Screen name="calendar" options={{ headerShown: false }} />

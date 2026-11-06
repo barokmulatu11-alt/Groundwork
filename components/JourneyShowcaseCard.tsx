@@ -125,7 +125,7 @@ export function JourneyShowcaseCard({
       await Share.share({
         message: Platform.OS === "ios" ? shareMessage : shareMessage,
         title: "My Groundwork Journey",
-        url: "https://groundwork.app",
+        url: "https://barok-labs.pro.et/open.html",
       });
       hapticSuccess();
     } catch (err) {

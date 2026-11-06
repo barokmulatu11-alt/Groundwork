@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/connect/connectSupabase';
@@ -49,15 +49,23 @@ export const useProfile = (targetUserId?: string) => {
   const [connectionState, setConnectionState] = useState<'none' | 'sent' | 'received' | 'friends' | 'blocked'>('none');
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async () => {
+  const isFetchingRef = useRef(false);
+  const profileRef = useRef<ConnectProfile | null>(null);
+  profileRef.current = profile;
+
+  const fetchProfile = useCallback(async () => {
     if (!userId || userId === 'guest') {
       setLoading(false);
       return;
     }
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setLoading(true);
 
     try {
       let p = db.getFirstSync<ConnectProfile>('SELECT * FROM connect_profiles WHERE user_id = ?', [userId]);
+      const initialXp = p?.xp ?? 0;
+      const initialLevel = p?.level ?? 1;
       
       if (!p && isOwnProfile) {
         let cloudProfileData: ConnectProfile | null = null;
@@ -204,61 +212,47 @@ export const useProfile = (targetUserId?: string) => {
               [userId]
             )?.total || 0;
 
-            if (localLogSum > 0 && p.xp !== localLogSum) {
-              console.log('[useProfile] Correcting local profile XP from local logs sum:', localLogSum);
-              p.xp = localLogSum;
-              p.level = getLevelFromXP(localLogSum);
-              updatedLocal = true;
-            }
-
+            let cloudLogSum = 0;
             try {
               const { data: cloudLogs } = await supabase
                 .from('connect_xp_log')
-                .select('xp_amount')
+                .select('id, user_id, xp_amount, reason, created_at')
                 .eq('user_id', userId);
 
               if (cloudLogs && cloudLogs.length > 0) {
-                const cloudLogSum = cloudLogs.reduce((acc: number, log: any) => acc + (log.xp_amount || 0), 0);
-                if (cloudLogSum > 0 && (p.xp !== cloudLogSum || cloudProfile.xp !== cloudLogSum)) {
-                  console.log('[useProfile] Correcting profile XP from cloud logs sum:', cloudLogSum);
-                  p.xp = cloudLogSum;
-                  p.level = getLevelFromXP(cloudLogSum);
-                  cloudProfile.xp = cloudLogSum;
-                  cloudProfile.level = getLevelFromXP(cloudLogSum);
-                  updatedLocal = true;
-                  updatedCloud = true;
-                }
+                cloudLogSum = cloudLogs.reduce((acc: number, log: any) => acc + (log.xp_amount || 0), 0);
+                // Sync any missing cloud logs into local SQLite so local logs become complete
+                cloudLogs.forEach((log: any) => {
+                  db.runSync(
+                    'INSERT OR IGNORE INTO connect_xp_log (id, user_id, xp_amount, reason, created_at) VALUES (?, ?, ?, ?, ?)',
+                    [
+                      log.id || Math.random().toString(36).substring(7),
+                      userId,
+                      log.xp_amount || 0,
+                      log.reason || 'XP Log',
+                      log.created_at || new Date().toISOString()
+                    ]
+                  );
+                });
               }
             } catch (err) {
               console.warn('[useProfile] Could not fetch cloud logs sum:', err);
             }
 
-            if (cloudProfile.xp !== p.xp) {
-              // Always take the highest XP (user earns XP on either device)
-              const highestXp = Math.max(cloudProfile.xp || 0, p.xp || 0);
-              // ALWAYS recompute level from XP — never trust any stored level value
-              // which can be corrupted (e.g. set to 2026 by a timestamp bug)
-              const correctLevel = getLevelFromXP(highestXp);
-              if (p.xp !== highestXp || p.level !== correctLevel) {
-                p.xp = highestXp;
-                p.level = correctLevel;
-                updatedLocal = true;
-              }
-              if (cloudProfile.xp !== highestXp || cloudProfile.level !== correctLevel) {
-                updatedCloud = true;
-              }
-            } else if (p.level !== undefined) {
-              // XP matches — still recompute level to fix any pre-existing corruption
-              // on EITHER side (e.g. cloud or local showing 2026 instead of 5)
-              const correctLevel = getLevelFromXP(p.xp || 0);
-              if (p.level !== correctLevel) {
-                p.level = correctLevel;
-                updatedLocal = true;
-                updatedCloud = true;
-              } else if (cloudProfile.level !== correctLevel) {
-                // Local is already correct, but cloud is still corrupted
-                updatedCloud = true;
-              }
+            // Monotonic reconciliation: Take the true maximum earned XP across all sources
+            const targetXp = Math.max(localLogSum, cloudLogSum, p.xp || 0, cloudProfile?.xp || 0);
+            const targetLevel = getLevelFromXP(targetXp);
+
+            if (p.xp !== targetXp || p.level !== targetLevel) {
+              p.xp = targetXp;
+              p.level = targetLevel;
+              updatedLocal = true;
+            }
+
+            if (cloudProfile && (cloudProfile.xp !== targetXp || cloudProfile.level !== targetLevel)) {
+              cloudProfile.xp = targetXp;
+              cloudProfile.level = targetLevel;
+              updatedCloud = true;
             }
 
             // For personal fields, compare the updated_at timestamp
@@ -300,13 +294,14 @@ export const useProfile = (targetUserId?: string) => {
               }
             }
 
-
             if (updatedLocal) {
               db.runSync(
                 'UPDATE connect_profiles SET username = ?, bio = ?, avatar_url = ?, xp = ?, level = ?, privacy_level = ?, institution = ?, updated_at = ? WHERE user_id = ?',
                 [p.username, p.bio, p.avatar_url, p.xp, p.level, p.privacy_level || 'public', p.institution || null, new Date().toISOString(), userId]
               );
-              emitConnectEvent({ type: 'XP_UPDATED', xp: p.xp, level: p.level });
+              if (initialXp !== p.xp || initialLevel !== p.level) {
+                emitConnectEvent({ type: 'XP_UPDATED', xp: p.xp, level: p.level });
+              }
             }
 
             if (updatedCloud) {
@@ -635,15 +630,22 @@ export const useProfile = (targetUserId?: string) => {
     } catch (e) {
       console.error('[useProfile] fetch error:', e);
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
-  };
+  }, [userId, isOwnProfile, currentUserId, authProfile?.username, authProfile?.bio, authProfile?.avatar_url, session?.user?.id]);
 
   useEffect(() => {
     fetchProfile();
     const unsubscribe = subscribeToConnectEvents((event) => {
-      if (event.type === 'XP_UPDATED' || event.type === 'LEVEL_UP') {
-        fetchProfile();
+      if (event.type === 'XP_UPDATED') {
+        if (!profileRef.current || profileRef.current.xp !== event.xp || profileRef.current.level !== event.level) {
+          fetchProfile();
+        }
+      } else if (event.type === 'LEVEL_UP') {
+        if (!profileRef.current || profileRef.current.level !== event.level) {
+          fetchProfile();
+        }
       }
     });
 
@@ -691,7 +693,7 @@ export const useProfile = (targetUserId?: string) => {
     }
 
     return unsubscribe;
-  }, [userId]);
+  }, [userId, fetchProfile]);
 
   const updateProfile = async (updates: Partial<ConnectProfile>) => {
     if (!profile || !isOwnProfile) return false;

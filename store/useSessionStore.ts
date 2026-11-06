@@ -56,20 +56,52 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ isLoadingSessions: true });
 
     try {
-      // Fetch user metadata
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-      if (error || !user)
-        throw error || new Error("No authenticated user found");
+      // Use active in-memory session user first, with safe fallback to auth API
+      let user = session?.user;
+      if (!user && typeof supabase?.auth?.getUser === 'function') {
+        try {
+          const authUserRes = await supabase.auth.getUser();
+          user = authUserRes?.data?.user || null;
+        } catch (_) {}
+      }
+      if (!user) {
+        throw new Error("No authenticated user found");
+      }
 
-      let sessions: UserSession[] = user.user_metadata?.sessions || [];
+      let rawSessions = user.user_metadata?.sessions;
+      if (typeof rawSessions === 'string') {
+        try {
+          rawSessions = JSON.parse(rawSessions);
+        } catch (_) {
+          rawSessions = [];
+        }
+      }
+      let sessions: UserSession[] = Array.isArray(rawSessions) ? [...rawSessions] : [];
+
+      // If user_metadata does not have sessions, try reading from profiles.settings
+      if (sessions.length === 0 && user.id) {
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("settings")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (profile?.settings?.sessions) {
+            let pSessions = profile.settings.sessions;
+            if (typeof pSessions === 'string') {
+              try { pSessions = JSON.parse(pSessions); } catch (_) {}
+            }
+            if (Array.isArray(pSessions)) {
+              sessions = [...pSessions];
+            }
+          }
+        } catch (_) {}
+      }
 
       // Check if we were revoked remotely
-      const previousSessions = get().activeSessions;
-      if (previousSessions.length > 0) {
-        const amIStillAlive = sessions.some((s) => s.id === deviceId);
+      const previousSessions = Array.isArray(get().activeSessions) ? get().activeSessions : [];
+      if (previousSessions.length > 0 && sessions.length > 0) {
+        const amIStillAlive = sessions.some((s) => s && s.id === deviceId);
         if (!amIStillAlive) {
           // Force logout immediately
           useAuthStore.getState().signOut();
@@ -101,55 +133,57 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
       const currentSessionData: UserSession = {
         id: deviceId,
-        device: Device.modelName || "Unknown Device",
-        os: `${Device.osName} ${Device.osVersion}`,
+        device: Device?.modelName || "Unknown Device",
+        os: `${Device?.osName || "Unknown OS"} ${Device?.osVersion || ""}`.trim(),
         location: locationStr,
         last_active: now,
         created_at: now,
         suspicious: false,
       };
 
-      const existingIndex = sessions.findIndex((s) => s.id === deviceId);
+      const existingIndex = sessions.findIndex((s) => s && s.id === deviceId);
       if (existingIndex >= 0) {
-        currentSessionData.created_at = sessions[existingIndex].created_at; // Preserve original creation date
+        currentSessionData.created_at = sessions[existingIndex]?.created_at || now; // Preserve original creation date
         sessions[existingIndex] = currentSessionData;
       } else {
         sessions.push(currentSessionData);
       }
 
       // Flag suspicious logins (e.g. if IP changed drastically, or we have >5 sessions)
-      // For now, let's just mark if there are more than 5 sessions active to warn user
       if (sessions.length > 5) {
         sessions = sessions.map((s) => ({
           ...s,
           suspicious:
+            Boolean(s &&
             s.id !== deviceId &&
-            new Date(s.last_active).getTime() <
-              Date.now() - 30 * 24 * 60 * 60 * 1000,
+            new Date(s.last_active || 0).getTime() <
+              Date.now() - 30 * 24 * 60 * 60 * 1000),
         }));
       }
 
       // Cleanup expired sessions (older than 30 days)
       const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
       sessions = sessions.filter((s) => {
-        const age = Date.now() - new Date(s.last_active).getTime();
+        if (!s || !s.id) return false;
+        const age = Date.now() - new Date(s.last_active || 0).getTime();
         return age < THIRTY_DAYS || s.id === deviceId;
       });
 
       // Update backend metadata if changed
-      await supabase.auth.updateUser({
-        data: { sessions },
-      });
+      if (typeof supabase?.auth?.updateUser === 'function') {
+        await supabase.auth.updateUser({
+          data: { sessions },
+        });
+      }
 
-      set({
-        activeSessions: sessions.sort(
-          (a, b) =>
-            new Date(b.last_active).getTime() -
-            new Date(a.last_active).getTime(),
-        ),
-      });
-    } catch (e) {
-      console.warn("[SessionStore] Error syncing sessions", e);
+      const sortedSessions = [...sessions].sort(
+        (a, b) =>
+          new Date(b?.last_active || 0).getTime() -
+          new Date(a?.last_active || 0).getTime(),
+      );
+      set({ activeSessions: sortedSessions });
+    } catch (e: any) {
+      console.warn("[SessionStore] Error syncing sessions", e?.message || e);
     } finally {
       set({ isLoadingSessions: false });
     }
@@ -159,13 +193,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const { deviceId, activeSessions } = get();
     if (!deviceId) return;
 
+    const currentSessions = Array.isArray(activeSessions) ? activeSessions : [];
     // Filter it out
-    const updatedSessions = activeSessions.filter((s) => s.id !== sessionId);
+    const updatedSessions = currentSessions.filter((s) => s && s.id !== sessionId);
 
     // Update backend
-    await supabase.auth.updateUser({
-      data: { sessions: updatedSessions },
-    });
+    if (typeof supabase?.auth?.updateUser === 'function') {
+      await supabase.auth.updateUser({
+        data: { sessions: updatedSessions },
+      });
+    }
 
     set({ activeSessions: updatedSessions });
   },
@@ -176,7 +213,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     try {
       // Supabase native global sign out (logs out other sessions from the server side)
-      await supabase.auth.signOut({ scope: "others" });
+      if (typeof supabase?.auth?.signOut === 'function') {
+        await supabase.auth.signOut({ scope: "others" });
+      }
     } catch (e) {
       console.warn(
         "Failed to call signOut with scope: others, but continuing manual revoke",
@@ -184,13 +223,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       );
     }
 
+    const currentSessions = Array.isArray(activeSessions) ? activeSessions : [];
     // Keep only this device
-    const updatedSessions = activeSessions.filter((s) => s.id === deviceId);
+    const updatedSessions = currentSessions.filter((s) => s && s.id === deviceId);
 
     // Update metadata
-    await supabase.auth.updateUser({
-      data: { sessions: updatedSessions },
-    });
+    if (typeof supabase?.auth?.updateUser === 'function') {
+      await supabase.auth.updateUser({
+        data: { sessions: updatedSessions },
+      });
+    }
 
     set({ activeSessions: updatedSessions });
   },

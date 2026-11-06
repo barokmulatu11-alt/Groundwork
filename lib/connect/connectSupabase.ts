@@ -36,7 +36,7 @@ class NeonConnectClient {
           data: {
             publicUrl: filePath.startsWith('http') || filePath.startsWith('data:') 
               ? filePath 
-              : `https://yevrsmlwmegovfwdxpjw.supabase.co/storage/v1/object/public/${bucket}/${filePath}`
+              : `${process.env.EXPO_PUBLIC_NEON_S3_ENDPOINT || 'https://br-billowing-wind-b4lz1az2.storage.c-6.us-east-2.aws.neon.tech'}/${bucket}/${filePath}`
           }
         }),
         upload: async (filePath: string, _fileData: any, _options?: any) => {

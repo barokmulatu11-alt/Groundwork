@@ -20,3 +20,8 @@ export const hapticSelection = () => {
   if (Platform.OS === 'web') return;
   Haptics.selectionAsync().catch(() => {});
 };
+
+export const hapticError = () => {
+  if (Platform.OS === 'web') return;
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+};

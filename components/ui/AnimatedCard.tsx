@@ -3,10 +3,10 @@ import { hapticLight } from '@/lib/haptics';
 import React, { useEffect } from 'react';
 import { Pressable, ViewProps } from 'react-native';
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -28,11 +28,11 @@ export function AnimatedCard({ onPress, onLongPress, children, style, ...props }
   }, []);
 
   const handlePressIn = () => {
-    scale.value = withTiming(0.985, { duration: 100 });
+    scale.value = withTiming(0.97, { duration: 120 });
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 20, stiffness: 400 });
+    scale.value = withSpring(1, { damping: 18, stiffness: 350 });
   };
 
   const animatedStyle = useAnimatedStyle(() => ({

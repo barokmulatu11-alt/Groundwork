@@ -39,8 +39,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.style.setProperty('--bg-secondary', variant.cardSolid);
     document.documentElement.style.setProperty('--border-color', variant.cardBorder);
     document.documentElement.style.setProperty('--glass-bg', variant.card);
-    document.documentElement.style.setProperty('--text-primary', activeTheme === 'dark' ? '#f9fafb' : '#0f172a');
-    document.documentElement.style.setProperty('--text-secondary', activeTheme === 'dark' ? '#9ca3af' : '#64748b');
+    document.documentElement.style.setProperty('--text-primary', activeTheme === 'dark' ? '#F5F2EB' : '#141312');
+    document.documentElement.style.setProperty('--text-secondary', activeTheme === 'dark' ? '#A3A099' : '#686662');
+    document.documentElement.style.setProperty('--text-tertiary', activeTheme === 'dark' ? '#787571' : '#8E8C87');
+    document.documentElement.style.setProperty('--accent', '#0066FF');
   };
 
   useEffect(() => {

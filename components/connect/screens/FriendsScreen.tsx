@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  Image,
 } from 'react-native';
 import { Search, ChevronRight, Check, X, UserPlus, ArrowRight, ArrowLeft } from 'lucide-react-native';
 import { AppText as Text } from '@/components/ui/AppText';
@@ -14,6 +15,7 @@ import { useFriends } from '@/hooks/connect/useFriends';
 import { useTheme } from '@/lib/ThemeContext';
 import { useRouter } from 'expo-router';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
 
 interface FriendsScreenProps {
   onNavigateLeaderboard?: () => void;
@@ -170,9 +172,13 @@ export default function FriendsScreen({
                       }
                       style={styles.requestAvatarCircle}
                     >
-                      <Text style={styles.requestAvatarText}>
-                        {(req.full_name || req.username || 'U').charAt(0).toUpperCase()}
-                      </Text>
+                      {resolveAvatarUrl(req.avatar_url) ? (
+                        <Image source={{ uri: resolveAvatarUrl(req.avatar_url)! }} style={styles.requestAvatarImg} />
+                      ) : (
+                        <Text style={styles.requestAvatarText}>
+                          {(req.full_name || req.username || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      )}
                     </TouchableOpacity>
 
                     <View style={styles.requestInfoCol}>
@@ -231,9 +237,13 @@ export default function FriendsScreen({
                       }
                       style={styles.requestAvatarCircle}
                     >
-                      <Text style={styles.requestAvatarText}>
-                        {(req.full_name || req.username || 'U').charAt(0).toUpperCase()}
-                      </Text>
+                      {resolveAvatarUrl(req.avatar_url) ? (
+                        <Image source={{ uri: resolveAvatarUrl(req.avatar_url)! }} style={styles.requestAvatarImg} />
+                      ) : (
+                        <Text style={styles.requestAvatarText}>
+                          {(req.full_name || req.username || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      )}
                     </TouchableOpacity>
 
                     <View style={styles.requestInfoCol}>
@@ -335,12 +345,23 @@ export default function FriendsScreen({
                             params: { userId: user.user_id },
                           } as any)
                         }
-                        style={styles.userResultInfo}
+                        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}
                       >
-                        <Text style={styles.userResultName}>
-                          {user.full_name || user.username}
-                        </Text>
-                        <Text style={styles.userResultSub}>@{user.username}</Text>
+                        <View style={[styles.friendAvatar, { width: 36, height: 36, borderRadius: 18, marginRight: 10 }]}>
+                          {resolveAvatarUrl(user.avatar_url) ? (
+                            <Image source={{ uri: resolveAvatarUrl(user.avatar_url)! }} style={{ width: '100%', height: '100%', borderRadius: 18 }} />
+                          ) : (
+                            <Text style={[styles.friendAvatarText, { fontSize: 13 }]}>
+                              {(user.full_name || user.username || 'U').charAt(0).toUpperCase()}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={styles.userResultInfo}>
+                          <Text style={styles.userResultName}>
+                            {user.full_name || user.username}
+                          </Text>
+                          <Text style={styles.userResultSub}>@{user.username}</Text>
+                        </View>
                       </TouchableOpacity>
 
                       {isFriend ? (
@@ -411,9 +432,13 @@ export default function FriendsScreen({
                     activeOpacity={0.7}
                   >
                     <View style={styles.friendAvatar}>
-                      <Text style={styles.friendAvatarText}>
-                        {(friend.full_name || friend.username || 'U').charAt(0).toUpperCase()}
-                      </Text>
+                      {resolveAvatarUrl(friend.avatar_url) ? (
+                        <Image source={{ uri: resolveAvatarUrl(friend.avatar_url)! }} style={styles.friendAvatarImg} />
+                      ) : (
+                        <Text style={styles.friendAvatarText}>
+                          {(friend.full_name || friend.username || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      )}
                     </View>
 
                     <View style={styles.friendInfoCol}>
@@ -499,8 +524,8 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 8,
     },
     circleLabel: {
-      fontSize: 13,
-      fontFamily: 'PlayfairDisplay_600SemiBold',
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
       letterSpacing: 1.5,
       color: theme.primaryText,
       textTransform: 'uppercase',
@@ -523,15 +548,15 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 20,
     },
     connectionsNumber: {
-      fontSize: 60,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 54,
+      fontFamily: 'Inter_800ExtraBold',
       color: theme.primaryText,
       letterSpacing: -1,
-      lineHeight: 64,
+      lineHeight: 58,
     },
     connectionsWord: {
-      fontSize: 34,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 30,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       letterSpacing: -0.5,
     },
@@ -659,10 +684,10 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 16,
     },
     emptyHeading: {
-      fontSize: 38,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 34,
+      fontFamily: 'Inter_800ExtraBold',
       color: theme.primaryText,
-      lineHeight: 44,
+      lineHeight: 40,
       letterSpacing: -0.8,
       marginBottom: 10,
     },
@@ -705,6 +730,13 @@ function createStyles(theme: any, isDark: boolean) {
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 14,
+      overflow: 'hidden',
+      flexShrink: 0,
+    },
+    friendAvatarImg: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 21,
     },
     friendAvatarText: {
       fontSize: 16,
@@ -713,6 +745,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     friendInfoCol: {
       flex: 1,
+      minWidth: 0,
       paddingRight: 10,
     },
     friendName: {
@@ -745,13 +778,13 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 20,
     },
     momentumIndex: {
-      fontSize: 20,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
       color: theme.accent,
     },
     momentumLabel: {
-      fontSize: 12,
-      fontFamily: 'PlayfairDisplay_600SemiBold',
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
       letterSpacing: 1.5,
       color: theme.secondaryText,
     },
@@ -796,8 +829,8 @@ function createStyles(theme: any, isDark: boolean) {
       color: theme.accent,
     },
     requestsMainTitle: {
-      fontSize: 32,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 30,
+      fontFamily: 'Inter_800ExtraBold',
       color: theme.primaryText,
       marginBottom: 6,
     },
@@ -840,6 +873,13 @@ function createStyles(theme: any, isDark: boolean) {
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 12,
+      overflow: 'hidden',
+      flexShrink: 0,
+    },
+    requestAvatarImg: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 20,
     },
     requestAvatarText: {
       fontSize: 15,
@@ -848,6 +888,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     requestInfoCol: {
       flex: 1,
+      minWidth: 0,
       paddingRight: 10,
     },
     requestName: {
@@ -865,6 +906,7 @@ function createStyles(theme: any, isDark: boolean) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
+      flexShrink: 0,
     },
     acceptButton: {
       width: 32,

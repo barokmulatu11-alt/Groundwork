@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform, StatusBar, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, MoreHorizontal } from 'lucide-react-native';
 import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useResponsive } from '@/hooks/useResponsive';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
 
 interface BrandHeaderProps {
   title?: string;
@@ -15,6 +17,7 @@ interface BrandHeaderProps {
   onRightPress?: () => void;
   showMoreMenu?: boolean;
   showAvatar?: boolean;
+  includeTopInset?: boolean;
 }
 
 export function BrandHeader({
@@ -25,6 +28,7 @@ export function BrandHeader({
   onRightPress,
   showMoreMenu = false,
   showAvatar = true,
+  includeTopInset = true,
 }: BrandHeaderProps) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -49,8 +53,22 @@ export function BrandHeader({
     'G'
   ).toUpperCase();
 
+  const rawAvatarUrl =
+    profile?.avatar_url ||
+    (session?.user?.user_metadata as any)?.avatar_url ||
+    (session?.user?.user_metadata as any)?.picture;
+  const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
+  const [avatarError, setAvatarError] = React.useState(false);
+  const showImage = Boolean(avatarUrl) && !avatarError;
+
+  const insets = useSafeAreaInsets();
+  const rawTop = Platform.OS === 'android'
+    ? Math.max(insets.top, (StatusBar.currentHeight ?? 0) + 10)
+    : Math.max(insets.top, 16);
+  const topInset = includeTopInset ? rawTop + (Platform.OS === 'android' ? 8 : 4) : 0;
+
   return (
-    <View style={[styles.wrapper, { backgroundColor: theme.background }]}>
+    <View style={[styles.wrapper, { backgroundColor: theme.background, paddingTop: topInset }]}>
       <View
         style={[
           styles.container,
@@ -81,6 +99,7 @@ export function BrandHeader({
             onPress={() => router.replace('/')}
             accessibilityRole="link"
             accessibilityLabel="Groundwork home"
+            style={{ flexDirection: 'row', alignItems: 'center' }}
           >
             <Text style={[styles.wordmark, { color: theme.primaryText }]}>
               {title || (!isDesktop ? 'groundwork.' : isBackVisible ? 'groundwork.' : '')}
@@ -104,15 +123,23 @@ export function BrandHeader({
             </TouchableOpacity>
           ) : showAvatar && !isDesktop ? (
             <TouchableOpacity
-              onPress={onRightPress || (() => router.push('/settings' as any))}
+              onPress={onRightPress || (() => router.push('/profile' as any))}
               style={[styles.avatarCircle, { borderColor: theme.separator, backgroundColor: theme.cardSolid }]}
               accessibilityRole="button"
-              accessibilityLabel="Account and settings"
+              accessibilityLabel="Profile"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={[styles.avatarText, { color: theme.primaryText }]}>
-                {avatarInitial}
-              </Text>
+              {showImage ? (
+                <Image
+                  source={{ uri: avatarUrl! }}
+                  style={styles.avatarImg}
+                  onError={() => setAvatarError(true)}
+                />
+              ) : (
+                <Text style={[styles.avatarText, { color: theme.primaryText }]}>
+                  {avatarInitial}
+                </Text>
+              )}
             </TouchableOpacity>
           ) : null}
         </View>
@@ -138,11 +165,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   container: {
-    height: 48,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
+    paddingVertical: 4,
   },
   leftCol: {
     flexDirection: 'row',
@@ -172,6 +200,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   avatarCircle: {
     width: 28,
@@ -180,6 +209,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
   },
   avatarText: {
     fontSize: 12,

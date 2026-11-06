@@ -230,13 +230,13 @@ const styles = StyleSheet.create({
   mainRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
   checkboxContainer: { padding: 4, marginRight: 12, flexShrink: 0 },
   checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  infoContainer: { flex: 1, justifyContent: 'center' },
-  priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  title: { fontSize: 15, fontFamily: 'Inter_800ExtraBold' },
+  infoContainer: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, flexShrink: 0 },
+  title: { fontSize: 15, fontFamily: 'Inter_800ExtraBold', flex: 1, minWidth: 0 },
   titleDone: { textDecorationLine: 'line-through', opacity: 0.6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  metaText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'] },
   doneBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   doneText: { fontSize: 10, fontFamily: 'Inter_800ExtraBold' },
   expandBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -250,5 +250,5 @@ const styles = StyleSheet.create({
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   actionText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   subTasksContainer: { marginBottom: 16 },
-  sectionTitle: { fontSize: 10, fontFamily: 'System', fontWeight: '800', letterSpacing: 0.5, marginBottom: 8, opacity: 0.6 } 
+  sectionTitle: { fontSize: 10, fontFamily: 'Inter_800ExtraBold', letterSpacing: 0.5, marginBottom: 8, opacity: 0.6 } 
 });

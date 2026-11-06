@@ -1,8 +1,21 @@
 import { clearLocalData } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Session } from "@supabase/supabase-js";
 import { create } from "zustand";
+
+export interface Session {
+  access_token: string;
+  token_type?: string;
+  expires_in?: number;
+  refresh_token?: string;
+  user: {
+    id: string;
+    email?: string;
+    user_metadata?: Record<string, any>;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
 
 const IS_GUEST_KEY = "groundwork_is_guest";
 
@@ -25,19 +38,30 @@ interface AuthState {
   handleAuthEvent: (event: string, data: { user?: any; session?: any } | null) => Promise<void>;
   initialize: () => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<boolean>;
   getUserId: () => string;
 }
 
 const isOnline = async (): Promise<boolean> => {
   try {
     const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const ping = await fetch("https://clients3.google.com/generate_204", {
+      method: "HEAD",
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (ping.status === 204 || ping.ok) {
+      return true;
+    }
+  } catch (_) {}
+
+  try {
+    const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, 3000);
-    const isSupabase = process.env.EXPO_PUBLIC_USE_SUPABASE === 'true';
-    const apiUrl = isSupabase 
-      ? (process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || "https://yevrsmlwmegovfwdxpjw.supabase.co/rest/v1") 
-      : (process.env.EXPO_PUBLIC_NEON_API_URL || "https://ep-gentle-night-b4oacb89.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1");
+    const apiUrl = process.env.EXPO_PUBLIC_NEON_API_URL || "https://ep-gentle-night-b4oacb89.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1";
     
     const response = await fetch(
       apiUrl,
@@ -182,17 +206,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { data } = await supabase.auth.getSession();
         session = data?.session || null;
 
-        // Offline fallback: if no session, check if we have groundwork_offline_session cached
+        // Persistent storage fallback: restore cached session if available
         if (!session) {
           const offlineSessionStr = await AsyncStorage.getItem(
             "groundwork_offline_session",
           );
           if (offlineSessionStr) {
             try {
-              const online = await isOnline();
-              if (!online) {
-                session = JSON.parse(offlineSessionStr);
-                console.log("[AuthStore] Restored session from offline cache");
+              const parsed = JSON.parse(offlineSessionStr);
+              if (parsed?.user?.id && (parsed?.access_token || parsed?.token)) {
+                session = parsed;
+                console.log("[AuthStore] Restored session from persistent storage");
               }
             } catch (err) {
               console.warn("[AuthStore] Session restoration failed:", err);
@@ -205,6 +229,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             "groundwork_offline_session",
             JSON.stringify(session),
           );
+          const tok = session.access_token || session.token;
+          if (tok) {
+            try {
+              const { persistSessionToken } = require('@/lib/neon');
+              await persistSessionToken(tok);
+            } catch (_) {}
+          }
         }
       } else {
         console.log("[AuthStore] Manual signout flag active, skipping session restoration");
@@ -416,9 +447,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const isManual = await AsyncStorage.getItem(
           "groundwork_manual_signout",
         );
-        const online = await isOnline();
-        if (!online && isManual !== "true") {
-          console.log("[AuthStore] Ignored offline automatic SIGNED_OUT event");
+        if (isManual !== "true") {
+          console.log("[AuthStore] Ignored automatic non-manual SIGNED_OUT event");
           return;
         }
         await AsyncStorage.removeItem("groundwork_manual_signout");
@@ -560,5 +590,59 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await initializeAccountRewards('guest');
     } catch (_) {}
     console.log("[AuthStore] Successfully completed sign out.");
+  },
+
+  deleteAccount: async (): Promise<boolean> => {
+    const userId = get().getUserId();
+    const { session, isGuest } = get();
+    console.log("[AuthStore] Deleting account for user:", userId);
+    set({ isSigningOut: true });
+
+    try {
+      if (!isGuest && session?.user?.id) {
+        // 1. Delete user cloud records across relational tables
+        try {
+          const { neonData } = require('@/lib/neon');
+          await Promise.allSettled([
+            neonData.from('tasks').delete().eq('user_id', userId),
+            neonData.from('habits').delete().eq('user_id', userId),
+            neonData.from('notes').delete().eq('user_id', userId),
+            neonData.from('focus_sessions').delete().eq('user_id', userId),
+            neonData.from('day_notes').delete().eq('user_id', userId),
+            neonData.from('connect_profiles').delete().eq('user_id', userId),
+            neonData.from('profiles').delete().eq('id', userId),
+          ]);
+        } catch (cloudErr) {
+          console.warn('[AuthStore] Cloud account deletion partial error:', cloudErr);
+        }
+      }
+
+      // 2. Clear local SQLite database for this user
+      try {
+        clearLocalData(userId);
+      } catch (dbErr) {
+        console.warn('[AuthStore] Local DB clear error:', dbErr);
+      }
+
+      // 3. Clear all cached keys for this user
+      try {
+        await AsyncStorage.multiRemove([
+          `profile_${userId}`,
+          `settings_${userId}`,
+          'groundwork_offline_session',
+          'neon_auth_jwt',
+          'neon_auth_jwt_exp',
+          'groundwork_manual_signout',
+        ]);
+      } catch (_) {}
+
+      // 4. Sign out cleanly
+      await get().signOut();
+      return true;
+    } catch (e) {
+      console.error('[AuthStore] Delete account failed:', e);
+      set({ isSigningOut: false });
+      return false;
+    }
   },
 }));

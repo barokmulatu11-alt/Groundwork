@@ -6,12 +6,15 @@
     "start": "expo start --offline",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "node --max-old-space-size=4096 node_modules/expo/bin/cli start --web",
+    "web": "node --max-old-space-size=4096 --max-http-header-size=131072 node_modules/expo/bin/cli start --web",
     "export:web": "expo export -p web",
     "export:web:pwa": "expo export -p web && node pwa/generate-precache-sw.mjs",
+    "build": "npm run export:web:pwa",
+    "vercel-build": "npm run export:web:pwa",
     "migrate:neon": "node scripts/apply_neon_schema.js",
     "migrate:neon:test-rollback": "node scripts/apply_neon_schema.js --test-rollback",
-    "migrate:data": "node scripts/migrate_supabase_to_neon.js"
+    "migrate:data": "node scripts/migrate_supabase_to_neon.js",
+    "postinstall": "node -e \"try{if(require('fs').existsSync('scripts/patch-expo-av.js'))require('child_process').execSync('node scripts/patch-expo-av.js',{stdio:'inherit'})}catch(e){}\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
@@ -25,7 +28,7 @@
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-community/slider": "5.2.0",
     "@react-navigation/native": "^7.1.8",
-    "@supabase/supabase-js": "^2.105.1",
+    "@supabase/postgrest-js": "^1.21.4",
     "date-fns": "^4.1.0",
     "expo": "57",
     "expo-auth-session": "~57.0.15",

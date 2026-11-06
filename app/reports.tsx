@@ -40,6 +40,7 @@ import {
 } from "react-native";
 import Animated, { FadeInDown, FadeInLeft } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useResponsive } from "@/hooks/useResponsive";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -384,14 +385,21 @@ export default function ReportsScreen() {
 
   const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
+  const { isDesktop, horizontalPadding } = useResponsive();
+
   return (
     <View style={styles.container}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
+
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 16,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: 16,
           paddingBottom: 100,
+          maxWidth: isDesktop ? 860 : undefined,
+          alignSelf: isDesktop ? 'center' : undefined,
+          width: '100%',
         }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -402,8 +410,6 @@ export default function ReportsScreen() {
           />
         }
       >
-        <BrandHeader title="groundwork." onBack={() => router.back()} />
-
         <View style={{ marginBottom: 28, marginTop: 8 }}>
           <Text style={styles.mainTitle}>
             Reports.

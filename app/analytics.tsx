@@ -577,6 +577,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: "Inter_800ExtraBold",
     marginBottom: 2,
+    fontVariant: ['tabular-nums'],
   },
   metricTitle: {
     fontSize: 10,
@@ -623,6 +624,7 @@ const styles = StyleSheet.create({
   focusScoreNumber: {
     fontSize: 28,
     fontFamily: "Inter_800ExtraBold",
+    fontVariant: ['tabular-nums'],
   },
   focusScoreLabel: {
     fontSize: 14,

@@ -29,15 +29,50 @@ export function ReportSheet({ visible, onClose }: ReportSheetProps) {
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('reports').insert({
-        user_id: session?.user?.id,
-        title: title.trim(),
-        description: description.trim(),
-        type: type,
-        status: 'pending'
-      });
+      let inserted = false;
 
-      if (error) throw error;
+      // 1. If user is logged in, try direct PostgREST insert
+      if (session?.user?.id) {
+        try {
+          const { error } = await supabase.from('reports').insert({
+            user_id: session.user.id,
+            title: title.trim(),
+            description: description.trim(),
+            type: type,
+            status: 'pending'
+          });
+          if (!error) {
+            inserted = true;
+          }
+        } catch (postgrestErr) {
+          console.warn('PostgREST insert error, using admin API fallback:', postgrestErr);
+        }
+      }
+
+      // 2. Fallback to HTTPS API endpoint (works for guests, offline sync, or if RLS restricts anon)
+      if (!inserted) {
+        const response = await fetch('https://barok-labs.pro.et/api/admin/db', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            table: 'reports',
+            data: {
+              user_id: session?.user?.id || null,
+              title: title.trim(),
+              description: description.trim(),
+              type: type,
+              status: 'pending'
+            }
+          })
+        });
+
+        const resJson = await response.json();
+        if (resJson.error) {
+          throw new Error(resJson.error.message || 'Insert failed');
+        }
+      }
 
       setIsSuccess(true);
       setTimeout(() => {
@@ -47,9 +82,9 @@ export function ReportSheet({ visible, onClose }: ReportSheetProps) {
         setType('bug');
         onClose();
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting report:', error);
-      Alert.alert('Error', 'Failed to submit report. Please try again later.');
+      Alert.alert('Error', error?.message || 'Failed to submit report. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }

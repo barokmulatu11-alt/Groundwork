@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   getStartedText: {
     fontSize: 17,
     
-    fontFamily: 'System', lineHeight: 24,
+    fontFamily: 'Inter_400Regular', lineHeight: 24,
     textAlign: 'center' },
   helpContainer: {
     marginTop: 15,

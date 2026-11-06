@@ -10,7 +10,6 @@ export const SecurityProvider = ({ children }: { children: React.ReactNode }) =>
   }
 
   const { 
-    appPin, 
     faceIdEnabled, 
     autoLockTimeout, 
     isLocked, 
@@ -23,7 +22,7 @@ export const SecurityProvider = ({ children }: { children: React.ReactNode }) =>
   const appState = useRef(AppState.currentState);
 
   const shouldLock = () => {
-    if (!appPin && !faceIdEnabled) return false;
+    if (!faceIdEnabled) return false;
     if (!session) return false;
     
     if (autoLockTimeout === 0) return true;
@@ -37,7 +36,7 @@ export const SecurityProvider = ({ children }: { children: React.ReactNode }) =>
   useEffect(() => {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [appPin, faceIdEnabled, autoLockTimeout, lastActive, session]);
+  }, [faceIdEnabled, autoLockTimeout, lastActive, session]);
 
   const handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {

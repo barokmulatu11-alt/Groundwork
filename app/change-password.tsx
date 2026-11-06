@@ -4,6 +4,7 @@ import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { neonAuth } from '@/lib/neon';
 import { useRouter } from 'expo-router';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { ChevronLeft, Eye, EyeOff, Lock, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
@@ -147,14 +148,12 @@ export default function ChangePasswordScreen() {
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-            <ChevronLeft size={24} color={theme.accent} />
-            <Text style={[styles.backText, { color: theme.accent }]}>Settings</Text>
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Change Password</Text>
-          <View style={{ width: 80 }} /> {/* Spacer */}
-        </View>
+        <BrandHeader 
+          title="Change Password" 
+          showBack 
+          onBack={() => router.back()} 
+          showAvatar={false} 
+        />
 
         <ScrollView 
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}

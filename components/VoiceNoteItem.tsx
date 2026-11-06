@@ -233,8 +233,7 @@ const styles = StyleSheet.create({
   },
   titleText: {
     fontSize: 13,
-    fontFamily: 'System',
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
   },
   deleteBtn: {
     padding: 4,
@@ -297,8 +296,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 11,
-    fontFamily: 'System',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     padding: 0,
     margin: 0,
     height: 14,

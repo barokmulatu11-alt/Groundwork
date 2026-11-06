@@ -6,6 +6,7 @@ import { CustomAlert } from '@/components/ui/CustomAlert';
 import { BrandHeader } from '@/components/ui/BrandHeader';
 import { WeeklyBarChart } from '@/components/WeeklyBarChart';
 import { useTheme } from '@/lib/ThemeContext';
+import { getLocalDateString } from '@/lib/dateUtils';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'expo-router';
 import { CheckCircle2 } from 'lucide-react-native';
@@ -209,7 +210,7 @@ export default function RecapScreen() {
   const { tasks, habits, focusSessions, loadAllTasks, loadHabits, loadFocusSessions } = useStore();
   const { theme, isDark } = useTheme();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const [popup, setPopup] = useState<{ visible: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'warning' }>({ visible: false, title: '', message: '', type: 'info' });
   const [showConfetti, setShowConfetti] = useState(false);
 
@@ -258,7 +259,7 @@ export default function RecapScreen() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dStr = d.toISOString().split('T')[0];
+      const dStr = getLocalDateString(d);
       const count = tasks.filter(t => t.date === dStr && t.completed).length;
       data.push({ day: days[d.getDay()], value: count });
     }
@@ -299,13 +300,13 @@ export default function RecapScreen() {
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       {showConfetti && <Confetti onComplete={() => setShowConfetti(false)} />}
 
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
+
       <ScrollView
         style={{ flex: 1, paddingHorizontal: 24 }}
-        contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top + 24 }}
+        contentContainerStyle={{ paddingBottom: 100, paddingTop: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        <BrandHeader title="groundwork." onBack={() => router.back()} />
-
         <View style={{ marginBottom: 28, marginTop: 8 }}>
           <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
             Daily recap.

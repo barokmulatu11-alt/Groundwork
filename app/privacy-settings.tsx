@@ -31,7 +31,6 @@ import React, { useEffect, useState } from 'react';
 import { Dimensions, Linking, Modal, Platform, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LockScreen } from '@/components/security/LockScreen';
 import { MFAEnrollment } from '@/components/security/MFAEnrollment';
 import { SecurityUtils } from '@/lib/security';
 
@@ -144,11 +143,17 @@ export default function PrivacySettingsScreen() {
 
   const [biometricType, setBiometricType] = useState<string>('Fingerprint/Face ID');
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
-  const [showPinSetup, setShowPinSetup] = useState(false);
-  const [pinMode, setPinMode] = useState<'setup' | 'verify' | 'change_step1' | 'change_step2' | 'change_step3'>('setup');
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false);
   const [isMFAActive, setIsMFAActive] = useState(false);
   const [isMFASupported, setIsMFASupported] = useState(false);
+
+  // Automatically clear any legacy app PIN if set
+  useEffect(() => {
+    if (appPin) {
+      setAppPin(null);
+      SecurityUtils.clearPin().catch(() => {});
+    }
+  }, [appPin, setAppPin]);
 
   const [permissions, setPermissions] = useState({
     camera: 'undetermined',
@@ -231,62 +236,15 @@ export default function PrivacySettingsScreen() {
 
   const handleRevokeSession = async (action: () => void, promptMessage: string) => {
     // Check if security is enabled
-    if (faceIdEnabled || appPin) {
+    if (faceIdEnabled) {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage,
-        fallbackLabel: 'Use PIN',
       });
       if (!result.success) return; // User canceled or failed
     }
 
     // Proceed if successful or no security enabled
     action();
-  };
-
-  const handlePinToggle = (value: boolean) => {
-    if (value) {
-      setPinMode('setup');
-      setShowPinSetup(true);
-    } else {
-      setPinMode('verify'); // Require current PIN to disable
-      setShowPinSetup(true);
-    }
-  };
-
-  const handlePinSetupSuccess = async (pin?: string) => {
-    if (pinMode === 'setup') {
-      if (pin) {
-        await SecurityUtils.savePin(pin);
-        setAppPin('active');
-        setShowPinSetup(false);
-        showAlert({ title: 'PIN Set', message: 'Your app PIN has been successfully enabled.', primaryButton: { text: 'Great', onPress: () => {} }});
-      }
-    } else if (pinMode === 'verify') {
-      // Disabling PIN
-      await SecurityUtils.clearPin();
-      setAppPin(null);
-      setShowPinSetup(false);
-      showAlert({ title: 'Security Disabled', message: 'App PIN lock has been turned off.', primaryButton: { text: 'OK', onPress: () => {} }});
-    } else if (pinMode === 'change_step1') {
-      // Current PIN verified, move to step 2
-      setPinMode('change_step2');
-    } else if (pinMode === 'change_step2') {
-      // New PIN entered, move to step 3 (confirmation)
-      setPinMode('change_step3');
-    } else if (pinMode === 'change_step3') {
-      // New PIN confirmed
-      if (pin) {
-        await SecurityUtils.savePin(pin);
-        setAppPin('active');
-        setShowPinSetup(false);
-        showAlert({ title: 'PIN Changed', message: 'Your security PIN has been updated.', primaryButton: { text: 'Done', onPress: () => {} }});
-      }
-    }
-  };
-
-  const handleChangePin = () => {
-    setPinMode('change_step1');
-    setShowPinSetup(true);
   };
 
   const handle2FASetup = async () => {
@@ -317,11 +275,11 @@ export default function PrivacySettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+        <View style={{ marginBottom: 24, marginTop: 4 }}>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
             Privacy.
           </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
             App lock, sessions and permissions.
           </Text>
         </View>
@@ -396,58 +354,10 @@ export default function PrivacySettingsScreen() {
               />
             </SettingRow>
 
-            <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-
-            <SettingRow
-              icon={Lock}
-              title="App PIN Lock"
-              subtitle="Protect your app with a secure PIN"
-              theme={theme}
-            >
-              <Switch
-                value={!!appPin}
-                onValueChange={handlePinToggle}
-                trackColor={{ true: accentColor, false: theme.switchTrackFalse }}
-                thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
-              />
-            </SettingRow>
           </Card>
 
-          {appPin && (
+          {faceIdEnabled && (
             <Animated.View entering={FadeInDown.duration(400)}>
-              {/* Main Visual PIN Card */}
-              <View style={[styles.mainPinCard, { backgroundColor: theme.card }]}>
-                <View style={styles.pinDotsContainer}>
-                  {[...Array(4)].map((_, i) => (
-                    <View 
-                      key={i} 
-                      style={[
-                        styles.visualDot, 
-                        { borderColor: theme.cardBorder + '80', backgroundColor: accentColor } 
-                      ]} 
-                    />
-                  ))}
-                </View>
-                <Text style={[styles.pinIndicatorLabel, { color: theme.secondaryText }]}>PIN Security Active</Text>
-              </View>
-
-              {/* Secondary Actions Card */}
-              <Card theme={theme}>
-                <SettingRow
-                  icon={Shield}
-                  title="Change PIN"
-                  theme={theme}
-                  onPress={handleChangePin}
-                />
-                <View style={[styles.separator, { backgroundColor: theme.separator }]} />
-                <SettingRow
-                  icon={ShieldCheck}
-                  title="Disable PIN"
-                  theme={theme}
-                  onPress={() => handlePinToggle(false)}
-                />
-              </Card>
-
               {/* Timeout Setting */}
               <View style={{ marginTop: 12 }}>
                 <Card theme={theme}>
@@ -557,7 +467,7 @@ export default function PrivacySettingsScreen() {
               icon={Shield}
               title="Privacy Policy"
               theme={theme}
-              onPress={() => Linking.openURL('https://v0-barok-labs.vercel.app/privacy')}
+              onPress={() => Linking.openURL('https://barok-labs.pro.et/privacy')}
               rightIcon={ExternalLink}
             />
             <View style={[styles.separator, { backgroundColor: theme.separator }]} />
@@ -565,7 +475,7 @@ export default function PrivacySettingsScreen() {
               icon={FileJson}
               title="Terms of Service"
               theme={theme}
-              onPress={() => Linking.openURL('https://v0-barok-labs.vercel.app/terms')}
+              onPress={() => Linking.openURL('https://barok-labs.pro.et/terms')}
               rightIcon={ExternalLink}
             />
           </Card>
@@ -605,14 +515,6 @@ export default function PrivacySettingsScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* PIN Flow Modal */}
-      <Modal visible={showPinSetup} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent>
-        <LockScreen 
-          mode={pinMode} 
-          onSuccess={handlePinSetupSuccess}
-          onCancel={() => setShowPinSetup(false)}
-        />
-      </Modal>
 
       {/* MFA Enrollment Modal */}
       <Modal visible={showMFAEnrollment} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent>
@@ -713,32 +615,6 @@ const styles = StyleSheet.create({
     height: 1,
     marginVertical: 12,
     opacity: 0.1,
-  },
-  mainPinCard: {
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  pinDotsContainer: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
-  },
-  visualDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 1.5,
-  },
-  pinIndicatorLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    opacity: 0.5,
   },
   sessionRow: {
     flexDirection: 'row',

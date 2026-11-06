@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Play, Pause, RotateCcw, Check, Sparkles, Clock, Target } from 'lucide-react-native';
+import { Play, Pause, RotateCcw, Check, Sparkles, Clock, Compass } from 'lucide-react-native';
 import { AppText as Text } from '@/components/ui/AppText';
 import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useTheme } from '@/lib/ThemeContext';
@@ -23,6 +23,7 @@ import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { Svg, Circle } from 'react-native-svg';
 import { getLocalDateString } from '@/lib/dateUtils';
 import { useResponsive } from '@/hooks/useResponsive';
+import { DurationWheelPickerModal } from '@/components/focus/DurationWheelPickerModal';
 
 const PRESET_DURATIONS = [15, 25, 45, 60];
 
@@ -52,7 +53,7 @@ export default function FocusScreen() {
 
   const [selectedDuration, setSelectedDuration] = useState<number>(focusTimerDurationMinutes || 25);
   const [isCustom, setIsCustom] = useState<boolean>(!PRESET_DURATIONS.includes(selectedDuration));
-  const [customMinutesInput, setCustomMinutesInput] = useState<string>(selectedDuration.toString());
+  const [customPickerVisible, setCustomPickerVisible] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(focusTimerSelectedTaskId);
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
 
@@ -90,13 +91,18 @@ export default function FocusScreen() {
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
-          const next = prev - 1;
-          setFocusTimerTimeLeft(next);
-          if (next <= 0) {
+          if (prev <= 1) {
             clearInterval(interval);
-            handleSessionFinished();
+            setTimeout(() => {
+              setFocusTimerTimeLeft(0);
+              handleSessionFinished();
+            }, 0);
             return 0;
           }
+          const next = prev - 1;
+          setTimeout(() => {
+            setFocusTimerTimeLeft(next);
+          }, 0);
           return next;
         });
       }, 1000);
@@ -130,9 +136,7 @@ export default function FocusScreen() {
 
   const handleStart = () => {
     hapticLight();
-    const durationToUse = isCustom
-      ? Math.max(1, parseInt(customMinutesInput, 10) || 25)
-      : selectedDuration;
+    const durationToUse = selectedDuration;
     const initialSeconds = timeLeft > 0 ? timeLeft : durationToUse * 60;
     setTimeLeft(initialSeconds);
     setIsRunning(true);
@@ -155,9 +159,7 @@ export default function FocusScreen() {
     setIsRunning(false);
     setFocusTimerActive(false);
     setFocusTimerStartTime(null);
-    const durationToUse = isCustom
-      ? Math.max(1, parseInt(customMinutesInput, 10) || 25)
-      : selectedDuration;
+    const durationToUse = selectedDuration;
     const initialSeconds = durationToUse * 60;
     setTimeLeft(initialSeconds);
     setFocusTimerTimeLeft(initialSeconds);
@@ -171,17 +173,6 @@ export default function FocusScreen() {
     setTimeLeft(mins * 60);
     setFocusTimerDurationMinutes(mins);
     setFocusTimerTimeLeft(mins * 60);
-  };
-
-  const handleSetCustom = (text: string) => {
-    setCustomMinutesInput(text);
-    const val = parseInt(text, 10);
-    if (!isNaN(val) && val > 0 && !isRunning) {
-      setSelectedDuration(val);
-      setTimeLeft(val * 60);
-      setFocusTimerDurationMinutes(val);
-      setFocusTimerTimeLeft(val * 60);
-    }
   };
 
   // Timer formatted MM:SS
@@ -337,7 +328,11 @@ export default function FocusScreen() {
         accessibilityLabel="Select intention task"
       >
         <View style={styles.taskPickerLeft}>
-          <Target size={18} color="#0066FF" strokeWidth={2} />
+          {selectedTaskObj ? (
+            <Sparkles size={18} color={theme.accent} strokeWidth={2} />
+          ) : (
+            <Compass size={18} color={theme.accent} strokeWidth={2} />
+          )}
           <Text style={styles.selectedTaskTitle} numberOfLines={1}>
             {selectedTaskObj ? selectedTaskObj.title : 'Free focus (no task linked)'}
           </Text>
@@ -360,8 +355,11 @@ export default function FocusScreen() {
               !selectedTaskId && styles.taskDropdownItemActive,
             ]}
           >
-            <Text style={styles.taskDropdownText}>Free focus (no task linked)</Text>
-            {!selectedTaskId && <Check size={16} color="#0066FF" />}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Compass size={15} color={!selectedTaskId ? theme.accent : theme.textSecondary} />
+              <Text style={styles.taskDropdownText}>Free focus (no task linked)</Text>
+            </View>
+            {!selectedTaskId && <Check size={16} color={theme.accent} strokeWidth={2.5} />}
           </TouchableOpacity>
 
           {activeTasksList.map((t) => (
@@ -377,10 +375,13 @@ export default function FocusScreen() {
                 selectedTaskId === t.id && styles.taskDropdownItemActive,
               ]}
             >
-              <Text style={styles.taskDropdownText} numberOfLines={1}>
-                {t.title}
-              </Text>
-              {selectedTaskId === t.id && <Check size={16} color="#0066FF" />}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+                <Sparkles size={15} color={selectedTaskId === t.id ? theme.accent : theme.textSecondary} />
+                <Text style={styles.taskDropdownText} numberOfLines={1}>
+                  {t.title}
+                </Text>
+              </View>
+              {selectedTaskId === t.id && <Check size={16} color={theme.accent} strokeWidth={2.5} />}
             </TouchableOpacity>
           ))}
         </View>
@@ -422,7 +423,8 @@ export default function FocusScreen() {
         <TouchableOpacity
           onPress={() => {
             if (isRunning) return;
-            setIsCustom(true);
+            hapticLight();
+            setCustomPickerVisible(true);
           }}
           disabled={isRunning}
           style={[
@@ -439,24 +441,10 @@ export default function FocusScreen() {
               isCustom && styles.presetPillTextActive,
             ]}
           >
-            Custom
+            {isCustom ? `${selectedDuration}m` : 'Custom'}
           </Text>
         </TouchableOpacity>
       </View>
-
-      {isCustom && !isRunning && (
-        <View style={styles.customInputRow}>
-          <Text style={styles.customInputLabel}>Minutes:</Text>
-          <TextInput
-            value={customMinutesInput}
-            onChangeText={handleSetCustom}
-            keyboardType="number-pad"
-            maxLength={3}
-            style={styles.customTextInput}
-            accessibilityLabel="Custom duration in minutes"
-          />
-        </View>
-      )}
     </View>
   );
 
@@ -465,7 +453,7 @@ export default function FocusScreen() {
       <View style={styles.historyHeaderRow}>
         <Text style={styles.fieldLabel}>TODAY'S RHYTHM</Text>
         <Text style={styles.dailyTotalStat}>
-          {todayTotalMinutes}m focused · {todaySessions.length} sessions
+          {todayTotalMinutes}m focused · {todaySessions.length} {todaySessions.length === 1 ? 'session' : 'sessions'}
         </Text>
       </View>
 
@@ -502,9 +490,7 @@ export default function FocusScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={{ paddingTop: insets.top }}>
-        <BrandHeader showBack showMoreMenu onRightPress={() => router.push('/settings' as any)} />
-      </View>
+      <BrandHeader showBack={!isDesktop} showMoreMenu onRightPress={() => router.push('/settings' as any)} />
 
       <ScrollView
         style={{ flex: 1, width: '100%' }}
@@ -569,6 +555,19 @@ export default function FocusScreen() {
           </View>
         )}
       </ScrollView>
+
+      <DurationWheelPickerModal
+        visible={customPickerVisible}
+        initialMinutes={selectedDuration}
+        onClose={() => setCustomPickerVisible(false)}
+        onConfirm={(mins) => {
+          setIsCustom(true);
+          setSelectedDuration(mins);
+          setTimeLeft(mins * 60);
+          setFocusTimerDurationMinutes(mins);
+          setFocusTimerTimeLeft(mins * 60);
+        }}
+      />
     </View>
   );
 }
@@ -580,17 +579,17 @@ function createStyles(theme: any, isDark: boolean) {
       backgroundColor: theme.background,
     },
     pageHeading: {
-      fontSize: 44,
+      fontSize: 28,
       fontFamily: 'Inter_800ExtraBold',
-      letterSpacing: -1,
+      letterSpacing: -0.6,
       color: theme.text,
       marginBottom: 4,
     },
     pageSubline: {
-      fontSize: 16,
+      fontSize: 14,
       fontFamily: 'Inter_400Regular',
       color: theme.textSecondary,
-      marginBottom: 20,
+      marginBottom: 16,
     },
     thinDivider: {
       height: 1,
@@ -649,7 +648,7 @@ function createStyles(theme: any, isDark: boolean) {
       borderBottomColor: theme.separator,
     },
     taskDropdownItemActive: {
-      backgroundColor: isDark ? 'rgba(0, 102, 255, 0.12)' : 'rgba(0, 102, 255, 0.08)',
+      backgroundColor: theme.accent + (isDark ? '22' : '15'),
     },
     taskDropdownText: {
       fontSize: 14,
@@ -758,8 +757,8 @@ function createStyles(theme: any, isDark: boolean) {
     },
     serifTimerDisplay: {
       fontSize: 54,
-      fontFamily: 'PlayfairDisplay_700Bold',
-      letterSpacing: -1,
+      fontFamily: 'Inter_800ExtraBold',
+      letterSpacing: -1.5,
       color: theme.text,
       lineHeight: 60,
       fontVariant: ['tabular-nums'],

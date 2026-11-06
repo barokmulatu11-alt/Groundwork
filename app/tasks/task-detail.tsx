@@ -49,17 +49,25 @@ export default function TaskDetailScreen() {
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const loadedTaskIdRef = React.useRef<string | null>(null);
   useEffect(() => {
-    if (task) {
+    return () => {
+      loadedTaskIdRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (task && loadedTaskIdRef.current !== task.id) {
+      loadedTaskIdRef.current = task.id;
       setTitle(task.title || '');
       setNote(task.note || '');
       setPriority(task.priority || 'medium');
       setDate(task.date || '');
-      setDueTime(task.due_time || '');
+      setDueTime(task.due_time || (task as any).time_block || '');
       setSubtasks(task.sub_tasks || []);
       setTitleError(null);
     }
-  }, [task]);
+  }, [task?.id]);
 
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
@@ -91,7 +99,7 @@ export default function TaskDetailScreen() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = title.trim();
     if (!trimmed) {
       setTitleError('Task title cannot be blank');
@@ -99,19 +107,66 @@ export default function TaskDetailScreen() {
     }
     setTitleError(null);
     hapticSuccess();
-    updateTask(task.id, {
+    const cleanTime = dueTime.trim() || null;
+    const cleanDate = date.trim() || task.date || getLocalDateString();
+
+    let finalSubs = [...subtasks];
+    if (newSubtaskTitle.trim()) {
+      finalSubs.push({
+        id: 'st_' + Date.now(),
+        task_id: task.id,
+        title: newSubtaskTitle.trim(),
+        completed: false,
+        order_index: finalSubs.length,
+        created_at: new Date().toISOString(),
+      });
+      setNewSubtaskTitle('');
+      setSubtasks(finalSubs);
+    }
+
+    await updateTask(task.id, {
       title: trimmed,
       note: note.trim(),
       priority,
-      date: date.trim() || undefined,
-      due_time: dueTime.trim() || undefined,
-      sub_tasks: subtasks,
+      date: cleanDate,
+      due_time: cleanTime,
+      time_block: cleanTime,
+      sub_tasks: finalSubs,
     });
     setSavedFeedback(true);
     setTimeout(() => {
       setSavedFeedback(false);
       router.back();
-    }, 400);
+    }, 250);
+  };
+
+  const handleBackWithAutoSave = async () => {
+    const trimmed = title.trim();
+    if (trimmed && task) {
+      let finalSubs = [...subtasks];
+      if (newSubtaskTitle.trim()) {
+        finalSubs.push({
+          id: 'st_' + Date.now(),
+          task_id: task.id,
+          title: newSubtaskTitle.trim(),
+          completed: false,
+          order_index: finalSubs.length,
+          created_at: new Date().toISOString(),
+        });
+      }
+      const cleanTime = dueTime.trim() || null;
+      const cleanDate = date.trim() || task.date || getLocalDateString();
+      await updateTask(task.id, {
+        title: trimmed,
+        note: note.trim(),
+        priority,
+        date: cleanDate,
+        due_time: cleanTime,
+        time_block: cleanTime,
+        sub_tasks: finalSubs,
+      });
+    }
+    router.back();
   };
 
   const handleDeleteConfirmed = () => {
@@ -122,32 +177,34 @@ export default function TaskDetailScreen() {
 
   const handleToggleSubtask = (subtaskId: string) => {
     hapticLight();
-    setSubtasks((prev) =>
-      prev.map((st) => (st.id === subtaskId ? { ...st, completed: !st.completed } : st))
-    );
+    const nextSubs = subtasks.map((st) => (st.id === subtaskId ? { ...st, completed: !st.completed } : st));
+    setSubtasks(nextSubs);
+    updateTask(task.id, { sub_tasks: nextSubs });
   };
 
   const handleAddSubtask = () => {
     const stTitle = newSubtaskTitle.trim();
     if (!stTitle) return;
     hapticLight();
-    setSubtasks((prev) => [
-      ...prev,
-      {
-        id: 'st_' + Date.now(),
-        task_id: task.id,
-        title: stTitle,
-        completed: false,
-        order_index: prev.length,
-        created_at: new Date().toISOString(),
-      },
-    ]);
+    const newSub: SubTask = {
+      id: 'st_' + Date.now(),
+      task_id: task.id,
+      title: stTitle,
+      completed: false,
+      order_index: subtasks.length,
+      created_at: new Date().toISOString(),
+    };
+    const nextSubs = [...subtasks, newSub];
+    setSubtasks(nextSubs);
     setNewSubtaskTitle('');
+    updateTask(task.id, { sub_tasks: nextSubs });
   };
 
   const handleRemoveSubtask = (subtaskId: string) => {
     hapticLight();
-    setSubtasks((prev) => prev.filter((st) => st.id !== subtaskId));
+    const nextSubs = subtasks.filter((st) => st.id !== subtaskId);
+    setSubtasks(nextSubs);
+    updateTask(task.id, { sub_tasks: nextSubs });
   };
 
   const todayStr = getLocalDateString();
@@ -432,7 +489,17 @@ export default function TaskDetailScreen() {
   return (
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top }}>
-        <BrandHeader showBack />
+        <BrandHeader
+          showBack
+          onBack={handleBackWithAutoSave}
+          rightAction={
+            <TouchableOpacity onPress={handleSave} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ color: theme.accent, fontSize: 16, fontFamily: 'Inter_600SemiBold' }}>
+                {savedFeedback ? 'Saved' : 'Save'}
+              </Text>
+            </TouchableOpacity>
+          }
+        />
       </View>
 
       <KeyboardAvoidingView
@@ -747,6 +814,7 @@ function createStyles(theme: any, isDark: boolean) {
       borderColor: isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.22)',
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     smallCheckboxCompleted: {
       backgroundColor: theme.accent,
@@ -757,6 +825,7 @@ function createStyles(theme: any, isDark: boolean) {
       fontFamily: 'Inter_500Medium',
       color: theme.text,
       flex: 1,
+      minWidth: 0,
     },
     subtaskTitleCompleted: {
       color: theme.textMuted,

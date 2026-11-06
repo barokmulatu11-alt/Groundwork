@@ -177,6 +177,58 @@ export const displayTestNotification = async (): Promise<void> => {
   });
 };
 
+export const testTaskReminderNotification = async (taskTitle: string = "Finish Project Proposal"): Promise<void> => {
+  await requestNotificationPermissions();
+  await notifee.displayNotification({
+    title: "Task Reminder",
+    body: `"${taskTitle}" is starting in 15 minutes. You've got this!`,
+    android: {
+      channelId: "groundwork",
+      color: "#007AFF",
+      pressAction: { id: "default" },
+    },
+  });
+};
+
+export const testHabitStreakNotification = async (habitTitle: string = "Morning Workout"): Promise<void> => {
+  await requestNotificationPermissions();
+  await notifee.displayNotification({
+    title: "Streak Alert",
+    body: `Keep your 5-day streak alive! Complete "${habitTitle}" today.`,
+    android: {
+      channelId: "groundwork",
+      color: "#007AFF",
+      pressAction: { id: "default" },
+    },
+  });
+};
+
+export const testFocusCompleteNotification = async (): Promise<void> => {
+  await requestNotificationPermissions();
+  await notifee.displayNotification({
+    title: "Focus Session Complete",
+    body: "25 minutes of deep focus done. Take a well-earned 5-minute break!",
+    android: {
+      channelId: "groundwork",
+      color: "#007AFF",
+      pressAction: { id: "default" },
+    },
+  });
+};
+
+export const testDailySummaryNotification = async (): Promise<void> => {
+  await requestNotificationPermissions();
+  await notifee.displayNotification({
+    title: "Good Morning",
+    body: "You have 3 tasks scheduled for today. Make today count!",
+    android: {
+      channelId: "groundwork",
+      color: "#007AFF",
+      pressAction: { id: "default" },
+    },
+  });
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -721,6 +773,25 @@ export const rescheduleAll = async (
     );
   }
   if (prefs.dailyTips) jobs.push(scheduleDailyTip());
+
+  if (prefs.taskReminders) {
+    try {
+      const { useStore } = require('@/store/useStore');
+      const tasks = useStore.getState().tasks || [];
+      const now = new Date();
+      for (const t of tasks) {
+        if (t.completed || t.deleted_at) continue;
+        const timeStr = t.due_time || t.time_block;
+        if (!timeStr) continue;
+        const dateStr = t.date || now.toISOString().split('T')[0];
+        const formattedTime = timeStr.includes(':') && timeStr.length <= 5 ? timeStr + ':00' : timeStr;
+        const parsed = new Date(`${dateStr}T${formattedTime}`);
+        if (!isNaN(parsed.getTime()) && parsed > now) {
+          jobs.push(scheduleTaskReminder(t.id, t.title || 'Task', parsed, t.reminder_offset || 15));
+        }
+      }
+    } catch (_) {}
+  }
 
   await Promise.allSettled(jobs);
 };

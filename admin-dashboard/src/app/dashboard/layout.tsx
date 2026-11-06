@@ -36,13 +36,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (loading || !profileReady) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-950' : 'bg-slate-50'}`}>
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#000000] text-[#F5F2EB]' : 'bg-[#FAF9F6] text-[#141312]'}`}>
         <div className="flex flex-col items-center gap-4">
-          <svg className="animate-spin w-8 h-8 text-[#007AFF]" fill="none" viewBox="0 0 24 24">
+          <svg className="animate-spin w-8 h-8 text-[#0066FF]" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <p className="text-gray-500 text-sm">Verifying access...</p>
+          <p className={isDark ? 'text-[#A3A099] text-sm' : 'text-[#686662] text-sm'}>Verifying access...</p>
         </div>
       </div>
     );
@@ -50,34 +50,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (accessDenied) {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-6 ${isDark ? 'bg-gray-950' : 'bg-slate-50'}`}>
+      <div className={`min-h-screen flex items-center justify-center p-6 ${isDark ? 'bg-[#000000] text-[#F5F2EB]' : 'bg-[#FAF9F6] text-[#141312]'}`}>
         <div className="max-w-md text-center space-y-3">
-          <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Access denied</p>
-          <p className="text-gray-500 text-sm">
+          <p className="text-sm font-bold">Access denied</p>
+          <p className={isDark ? 'text-[#A3A099] text-sm' : 'text-[#686662] text-sm'}>
             {profileError ||
               (profile
                 ? `Your role is "${profile.role}". Owner or admin is required.`
                 : 'No profile loaded for this account.')}
           </p>
-          <p className="text-gray-600 text-xs">Redirecting to login…</p>
+          <p className={isDark ? 'text-[#787571] text-xs' : 'text-[#8E8C87] text-xs'}>Redirecting to login…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
-      <header className={`md:hidden flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 ${isDark ? 'bg-[#0a0a0a] border-white/10' : 'bg-white border-slate-200'}`}>
+    <div className={`min-h-screen flex flex-col md:flex-row overflow-hidden ${isDark ? 'bg-[#000000] text-[#F5F2EB]' : 'bg-[#FAF9F6] text-[#141312]'}`}>
+      <header className={`md:hidden flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 ${isDark ? 'bg-[#000000] border-white/10' : 'bg-[#FAF9F6] border-black/8'}`}>
         <button
           onClick={() => setIsMobileMenuOpen(true)}
-          className={`p-2 rounded-lg ${isDark ? 'bg-white/5 text-white' : 'bg-slate-100 text-slate-900'}`}
+          className={`p-2 rounded-xl ${isDark ? 'bg-white/5 text-[#F5F2EB]' : 'bg-white border border-black/8 text-[#141312]'}`}
           aria-label="Open menu"
         >
           <Menu size={20} />
         </button>
         <div className="flex items-baseline gap-0.5">
-          <span className="text-xl font-black text-[#007AFF]">g</span>
-          <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>roundwork.</span>
+          <span className="text-xl font-black text-[#0066FF]">g</span>
+          <span className={`text-lg font-black ${isDark ? 'text-[#F5F2EB]' : 'text-[#141312]'}`}>roundwork.</span>
         </div>
       </header>
 

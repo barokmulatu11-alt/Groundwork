@@ -42,75 +42,37 @@ function LoginForm() {
       return;
     }
 
-    const { data: { session } } = await (await import('@/lib/supabase')).supabase.auth.getSession();
-    if (!session?.user) {
-      setError('Session could not be established.');
-      setLoading(false);
-      return;
-    }
-
-    const { data: prof, error: profError } = await (await import('@/lib/supabase')).supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .maybeSingle();
-
-    if (profError) {
-      setError(`Could not load profile: ${profError.message}`);
-      setLoading(false);
-      return;
-    }
-
-    if (!prof) {
-      setError(
-        'No profile row found for this login. In Supabase → profiles, add a row where id matches your auth user UUID and role is owner or admin.'
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (prof.is_banned === true) {
-      setError('This account is banned.');
-      await (await import('@/lib/supabase')).supabase.auth.signOut();
-      setLoading(false);
-      return;
-    }
-
-    if (!isAdminRole(prof.role)) {
-      setError(`This account has role "${prof.role}". Only owner or admin can access the dashboard.`);
-      await (await import('@/lib/supabase')).supabase.auth.signOut();
-      setLoading(false);
-      return;
-    }
-
     const redirect = searchParams.get('redirect') || '/dashboard';
-    // Full navigation so middleware receives auth cookies from @supabase/ssr browser client
     window.location.href = redirect;
   };
 
   return (
-    <div className={clsx('min-h-screen flex items-center justify-center px-4', isDark ? 'bg-gray-950' : 'bg-slate-100')}>
+    <div className={clsx('min-h-screen flex items-center justify-center px-4', isDark ? 'bg-[#000000] text-[#F5F2EB]' : 'bg-[#FAF9F6] text-[#141312]')}>
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#0066FF]/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-md">
-        <div className="text-center mb-10">
-          <Link href="/" className="inline-flex items-baseline gap-0.5 mb-3">
-            <span className="text-4xl font-black text-[#007AFF]">g</span>
-            <span className={clsx('text-3xl font-bold', isDark ? 'text-white' : 'text-slate-900')}>roundwork.</span>
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-baseline gap-0.5 mb-2">
+            <span className="text-4xl font-black text-[#0066FF]">g</span>
+            <span className={clsx('text-3xl font-black', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>roundwork.</span>
           </Link>
-          <p className="text-gray-400 text-sm font-medium tracking-wider uppercase">Admin Dashboard</p>
+          <p className={clsx('text-xs font-mono tracking-widest uppercase font-bold', isDark ? 'text-[#A3A099]' : 'text-[#686662]')}>
+            Barok Labs · Admin Access
+          </p>
         </div>
 
-        <div className="glass rounded-2xl p-8 shadow-2xl">
-          <h1 className={clsx('text-xl font-bold mb-1', isDark ? 'text-white' : 'text-slate-900')}>Sign in</h1>
-          <p className="text-gray-400 text-sm mb-8">Admin or owner accounts only.</p>
+        <div className={clsx('glass rounded-3xl p-8 shadow-2xl border', isDark ? 'border-white/10 bg-[#0A0A0C]/80' : 'border-black/8 bg-white')}>
+          <h1 className={clsx('text-xl font-bold mb-1', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>Sign in</h1>
+          <p className={clsx('text-xs mb-6 font-medium', isDark ? 'text-[#A3A099]' : 'text-[#686662]')}>
+            Administrative console for Groundwork
+          </p>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Email
+              <label htmlFor="email" className={clsx('block text-[11px] font-bold uppercase tracking-wider mb-1.5', isDark ? 'text-[#A3A099]' : 'text-[#686662]')}>
+                Admin Email
               </label>
               <input
                 id="email"
@@ -120,14 +82,14 @@ function LoginForm() {
                 placeholder="admin@groundwork.app"
                 required
                 className={clsx(
-                  'w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]/50 transition-all',
-                  isDark ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-600' : 'bg-white border-slate-200 text-slate-900'
+                  'w-full border rounded-xl px-4 py-3 text-xs font-medium focus:outline-none focus:border-[#0066FF] focus:ring-2 focus:ring-[#0066FF]/30 transition-all',
+                  isDark ? 'bg-black/40 border-white/10 text-[#F5F2EB] placeholder-[#787571]' : 'bg-slate-50 border-black/10 text-[#141312]'
                 )}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              <label htmlFor="password" className={clsx('block text-[11px] font-bold uppercase tracking-wider mb-1.5', isDark ? 'text-[#A3A099]' : 'text-[#686662]')}>
                 Password
               </label>
               <input
@@ -138,30 +100,32 @@ function LoginForm() {
                 placeholder="••••••••"
                 required
                 className={clsx(
-                  'w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]/50 transition-all',
-                  isDark ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-600' : 'bg-white border-slate-200 text-slate-900'
+                  'w-full border rounded-xl px-4 py-3 text-xs font-medium focus:outline-none focus:border-[#0066FF] focus:ring-2 focus:ring-[#0066FF]/30 transition-all',
+                  isDark ? 'bg-black/40 border-white/10 text-[#F5F2EB] placeholder-[#787571]' : 'bg-slate-50 border-black/10 text-[#141312]'
                 )}
               />
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
-                <p className="text-red-400 text-sm">{error}</p>
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-xs text-red-400 font-medium">
+                {error}
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="btn-accent w-full py-3.5 rounded-xl text-white font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl bg-[#0066FF] hover:bg-[#0052cc] text-white font-bold text-xs uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 transition-all"
             >
-              {loading ? 'Signing in…' : 'Sign In'}
+              {loading ? 'Authenticating…' : 'Sign In to Dashboard'}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-gray-600 text-xs mt-6">
-          <Link href="/" className="hover:text-[#007AFF] transition-colors">← Back to website</Link>
+        <p className="text-center text-xs mt-6">
+          <Link href="/" className={clsx('hover:text-[#0066FF] transition-colors font-medium', isDark ? 'text-[#787571]' : 'text-[#8E8C87]')}>
+            ← Back to Barok Labs
+          </Link>
         </p>
       </div>
     </div>
@@ -170,7 +134,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-950" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[#000000]" />}>
       <LoginForm />
     </Suspense>
   );

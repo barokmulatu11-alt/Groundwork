@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/ThemeContext';
 import { BackgroundGradient } from '@/components/BackgroundGradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { ChevronLeft } from 'lucide-react-native';
 import AchievementsScreen from '@/components/connect/screens/AchievementsScreen';
 
@@ -16,16 +17,12 @@ export default function AppAchievementsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <Stack.Screen options={{ headerShown: false }} />
-      
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
-        <Pressable 
-          onPress={() => router.back()} 
-          style={[styles.iconBoxStandard, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}
-        >
-          <ChevronLeft size={20} color={theme.text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Achievements</Text>
-      </View>
+      <BrandHeader
+        title="Achievements"
+        showBack
+        onBack={() => router.back()}
+        showAvatar={false}
+      />
 
       <View style={styles.content}>
         <AchievementsScreen />

@@ -11,7 +11,6 @@ export interface SettingsState {
   notificationsEnabled: boolean;
   tasksLayout: 'list' | 'grid';
   habitsLayout: 'list' | 'grid';
-  notesLayout: 'list' | 'grid';
   fontSize: 'small' | 'medium' | 'large';
   isUpdateBannerDismissed: boolean;
   defaultFocusDuration: number;
@@ -59,7 +58,6 @@ export interface SettingsState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setTasksLayout: (layout: 'list' | 'grid') => void;
   setHabitsLayout: (layout: 'list' | 'grid') => void;
-  setNotesLayout: (layout: 'list' | 'grid') => void;
   setFontSize: (size: 'small' | 'medium' | 'large') => void;
   setUpdateBannerDismissed: (dismissed: boolean) => void;
   setDefaultFocusDuration: (duration: number) => void;
@@ -86,13 +84,12 @@ export interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  theme: 'system',
+  theme: 'light',
   accentColor: '#007AFF',
   premiumThemeId: 'default',
   notificationsEnabled: false,
   tasksLayout: 'list',
   habitsLayout: 'grid',
-  notesLayout: 'grid',
   fontSize: 'medium',
   isUpdateBannerDismissed: false,
   defaultFocusDuration: 25,
@@ -126,11 +123,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   
   setTheme: (theme) => {
     set({ theme });
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      AsyncStorage.setItem('groundwork_theme_pref', theme);
+    } catch (_) {}
     get().saveSettings();
+    try {
+      const { syncWidgetData } = require('@/lib/widgetSync');
+      syncWidgetData();
+    } catch (_) {}
   },
   setAccentColor: (accentColor) => {
     set({ accentColor });
     get().saveSettings();
+    try {
+      const { syncWidgetData } = require('@/lib/widgetSync');
+      syncWidgetData();
+    } catch (_) {}
   },
   setPremiumThemeId: (premiumThemeId) => {
     set({ premiumThemeId });
@@ -142,10 +151,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setHabitsLayout: (habitsLayout) => {
     set({ habitsLayout });
-    get().saveSettings();
-  },
-  setNotesLayout: (notesLayout) => {
-    set({ notesLayout });
     get().saveSettings();
   },
   setFontSize: (fontSize) => {
@@ -302,15 +307,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       }
 
       if (cloudSettings) {
-        // Guard visual fields
-        if (!cloudSettings.accentColor) cloudSettings.accentColor = '#007AFF';
-        if (!cloudSettings.premiumThemeId) cloudSettings.premiumThemeId = 'default';
+        // Guard visual fields - never overwrite local theme with a blank/default fallback
+        if (!cloudSettings.accentColor) cloudSettings.accentColor = localSettings?.accentColor || '#007AFF';
+        if (!cloudSettings.premiumThemeId) cloudSettings.premiumThemeId = localSettings?.premiumThemeId || 'default';
+        if (!cloudSettings.theme) cloudSettings.theme = localSettings?.theme || 'light';
         const cloudTime = cloudSettings.updated_at ? new Date(cloudSettings.updated_at).getTime() : 0;
         const localTime = localSettings?.updated_at ? new Date(localSettings.updated_at).getTime() : 0;
 
         if (cloudTime > localTime) {
           set(cloudSettings);
           db.saveUserSettings(userId, cloudSettings);
+          try {
+            db.saveUserSettings('__device_theme', {
+              accentColor: cloudSettings.accentColor,
+              premiumThemeId: cloudSettings.premiumThemeId,
+              theme: cloudSettings.theme,
+              updated_at: cloudSettings.updated_at || new Date().toISOString(),
+            });
+          } catch (_) {}
         }
       }
     } catch (e) {
@@ -342,13 +356,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch (_) {}
 
     if (userId === 'guest') return;
+
+    // Sync to user_settings table in Neon so legacy queries also see current values
+    try {
+      const { neonData } = require('@/lib/neon');
+      neonData.from('user_settings').upsert({
+        user_id: userId,
+        theme: state.theme,
+        accent_color: state.accentColor,
+        premium_theme_id: state.premiumThemeId,
+        updated_at: now,
+      });
+    } catch (_) {}
     
     // Sync to cloud (Supabase)
     if (!state.offlineMode) {
       const { 
         loadSettings, saveSettings, setTheme, setAccentColor, setPremiumThemeId,
         setNotificationsEnabled, setTasksLayout, setHabitsLayout, 
-        setNotesLayout, setFontSize, setUpdateBannerDismissed,
+        setFontSize, setUpdateBannerDismissed,
         setDefaultFocusDuration, setDailyGoal, setFocusTimerActive,
         setFocusTimerTimeLeft, setFocusTimerMode, setFocusTimerDurationMinutes,
         setFocusTimerSelectedTaskId, setFocusTimerStartTime,
@@ -392,18 +418,18 @@ try {
   const _device = _db.getUserSettings('__device_theme');
   if (_device?.accentColor || _device?.premiumThemeId || _device?.theme) {
     useSettingsStore.setState({
-      accentColor: _device.accentColor,
-      premiumThemeId: _device.premiumThemeId,
-      theme: _device.theme,
+      accentColor: _device.accentColor || '#007AFF',
+      premiumThemeId: _device.premiumThemeId || 'default',
+      theme: _device.theme || 'light',
     });
   } else {
     // 2. Fallback: try guest settings
     const _guest = _db.getUserSettings('guest');
     if (_guest?.accentColor || _guest?.premiumThemeId || _guest?.theme) {
       useSettingsStore.setState({
-        accentColor: _guest.accentColor,
-        premiumThemeId: _guest.premiumThemeId,
-        theme: _guest.theme,
+        accentColor: _guest.accentColor || '#007AFF',
+        premiumThemeId: _guest.premiumThemeId || 'default',
+        theme: _guest.theme || 'light',
       });
     }
   }

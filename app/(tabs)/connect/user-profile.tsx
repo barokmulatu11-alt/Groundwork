@@ -12,7 +12,7 @@ import { useTheme } from '@/lib/ThemeContext';
 import { useProfile } from '@/hooks/connect/useProfile';
 import { useFriends } from '@/hooks/connect/useFriends';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandHeader } from '@/components/ui/BrandHeader';
 import { ArrowLeft, UserPlus, Check, X, Shield, Award, UserMinus } from 'lucide-react-native';
 import { useAuthStore } from '@/store/useAuthStore';
 import { resolveAvatarUrl } from '@/lib/avatarUtils';
@@ -144,6 +144,23 @@ export default function UserProfileScreen() {
 
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
+  const filteredAchievements = React.useMemo(() => {
+    return (unlockedAchievements || []).filter((ach) => {
+      const cat = (ach.category || '').toLowerCase();
+      if (cat === 'notes' || cat === 'study' || cat === 'pro') return false;
+      if (
+        ach.key.includes('note') ||
+        ach.key.includes('revision') ||
+        ach.key.includes('formula') ||
+        ach.key.includes('folder') ||
+        ach.key.includes('tag')
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [unlockedAchievements]);
+
   if (loading && !profile) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
@@ -163,37 +180,14 @@ export default function UserProfileScreen() {
       })
     : null;
 
-  const filteredAchievements = React.useMemo(() => {
-    return unlockedAchievements.filter((ach) => {
-      const cat = (ach.category || '').toLowerCase();
-      if (cat === 'notes' || cat === 'study' || cat === 'pro') return false;
-      if (
-        ach.key.includes('note') ||
-        ach.key.includes('revision') ||
-        ach.key.includes('formula') ||
-        ach.key.includes('folder') ||
-        ach.key.includes('tag')
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [unlockedAchievements]);
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      {/* Top back navigation bar */}
-      <View style={styles.navBar}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-          accessibilityLabel="Go back"
-        >
-          <ArrowLeft size={20} color={theme.accent} strokeWidth={2.2} />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <BrandHeader
+        showBack
+        onBack={() => router.back()}
+        showAvatar={false}
+        title={username ? `@${username}` : 'Profile'}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -324,7 +318,7 @@ export default function UserProfileScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -395,8 +389,8 @@ function createStyles(theme: any, isDark: boolean) {
       height: '100%',
     },
     avatarInitial: {
-      fontSize: 28,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 26,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
     },
     actionBtnPrimary: {
@@ -458,10 +452,11 @@ function createStyles(theme: any, isDark: boolean) {
       justifyContent: 'center',
     },
     fullName: {
-      fontSize: 28,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 26,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       letterSpacing: -0.5,
+      lineHeight: 32,
       marginBottom: 2,
     },
     handle: {
@@ -500,7 +495,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     statValue: {
       fontSize: 20,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       marginBottom: 2,
     },
@@ -526,13 +521,13 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 16,
     },
     sectionIndex: {
-      fontSize: 18,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
       color: theme.accent,
     },
     sectionTitle: {
-      fontSize: 12,
-      fontFamily: 'PlayfairDisplay_600SemiBold',
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
       letterSpacing: 1.5,
       color: theme.secondaryText,
     },
@@ -570,7 +565,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     achName: {
       fontSize: 15,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontFamily: 'Inter_600SemiBold',
       color: theme.primaryText,
       marginBottom: 2,
     },

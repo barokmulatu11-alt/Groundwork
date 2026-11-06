@@ -147,9 +147,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   } = useSettingsStore();
 
   const isDark =
-    storedTheme === "system"
-      ? systemColorScheme === "dark"
-      : storedTheme === "dark";
+    storedTheme === "dark" ? true : storedTheme === "light" ? false : storedTheme === "system" ? systemColorScheme === "dark" : false;
 
   const baseTheme = isDark ? darkTheme : lightTheme;
 

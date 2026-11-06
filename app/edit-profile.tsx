@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -29,21 +30,30 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const isOnline = async (): Promise<boolean> => {
   try {
+    // 1. Primary check: standard global generate_204 connectivity test
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    const isSupabase = process.env.EXPO_PUBLIC_USE_SUPABASE === 'true';
-    const apiUrl = isSupabase 
-      ? (process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || "https://yevrsmlwmegovfwdxpjw.supabase.co/rest/v1") 
-      : (process.env.EXPO_PUBLIC_NEON_API_URL || "https://ep-gentle-night-b4oacb89.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1");
-    const response = await fetch(
-      apiUrl,
-      {
-        method: "HEAD",
-        signal: controller.signal,
-      },
-    );
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const ping = await fetch("https://clients3.google.com/generate_204", {
+      method: "HEAD",
+      signal: controller.signal,
+    });
     clearTimeout(timeoutId);
-    return response.ok;
+    if (ping.status === 204 || ping.ok) {
+      return true;
+    }
+  } catch (_) {}
+
+  try {
+    // 2. Fallback check: Neon API responds (any HTTP status > 0 proves internet connectivity)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const apiUrl = process.env.EXPO_PUBLIC_NEON_API_URL || "https://ep-gentle-night-b4oacb89.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1";
+    const response = await fetch(apiUrl, {
+      method: "HEAD",
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response.status > 0;
   } catch (e) {
     return false;
   }
@@ -226,29 +236,18 @@ export default function EditProfileScreen() {
 
   const handlePickImage = async () => {
     try {
-      const { granted, status } = await requestIntelligentPermission("media");
-      if (!granted) {
-        // Fail-safe: Try requesting directly via ImagePicker
-        const directReq =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!directReq.granted) {
-          if (status === "denied" || directReq.status === "denied") {
-            showAlert({
-              title: "Permission Denied",
-              message:
-                "Photo access is currently denied in your device settings. Please allow access to change your profile photo.",
-              primaryButton: { text: "Open Settings", onPress: openSettings },
-              secondaryButton: { text: "Cancel", onPress: () => {} },
-            });
-          } else {
+      if (Platform.OS === "ios") {
+        const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          const req = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!req.granted) {
             showAlert({
               title: "Access Needed",
-              message:
-                "We need access to your photos to change your profile picture.",
+              message: "Please allow photo access to choose a profile picture.",
               primaryButton: { text: "OK", onPress: () => {} },
             });
+            return;
           }
-          return;
         }
       }
 
@@ -263,27 +262,8 @@ export default function EditProfileScreen() {
         setAvatarUri(result.assets[0].uri);
       }
     } catch (err) {
-      console.warn(
-        "[EditProfile] handlePickImage failed, trying direct launch fail-safe:",
-        err,
-      );
-      try {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [1, 1],
-          quality: 0.5,
-        });
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          setAvatarUri(result.assets[0].uri);
-        }
-      } catch (innerErr) {
-        console.error(
-          "[EditProfile] Direct launch fail-safe failed:",
-          innerErr,
-        );
-        Alert.alert("Error", "Could not open image library.");
-      }
+      console.warn("[EditProfile] handlePickImage failed:", err);
+      Alert.alert("Error", "Could not open photo picker.");
     }
   };
 
@@ -436,21 +416,62 @@ export default function EditProfileScreen() {
         }
       }
 
-      // 3. Update auth.users metadata
-      const { data, error } = await supabase.auth.updateUser({
-        email: email !== session?.user?.email ? email : undefined,
-        data: {
-          full_name: name,
-          username: username.trim(),
-          bio: bio,
-          avatar_url: finalAvatarUrl,
-        },
+      const updatedProfileObj = {
+        ...(profile || {}),
+        full_name: name,
+        username: username.trim(),
+        bio: bio,
+        avatar_url: finalAvatarUrl,
+        updated_at: new Date().toISOString(),
+      };
+
+      // 3. Local-first: Update Zustand store immediately for instant UI refresh
+      useAuthStore.setState({
+        profile: updatedProfileObj as any,
       });
 
-      if (error) throw error;
+      // 3.1. Save to local SQLite
+      try {
+        const now = new Date().toISOString();
+        db.runSync(
+          "INSERT OR REPLACE INTO connect_profiles (id, user_id, username, bio, avatar_url, institution, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [
+            session!.user.id,
+            session!.user.id,
+            username.trim(),
+            bio,
+            finalAvatarUrl,
+            institution.trim() || null,
+            now,
+          ],
+        );
+      } catch (dbErr: any) {
+        console.warn("[EditProfile] Local SQLite profile update warning:", dbErr);
+      }
 
-      if (data?.user) {
-        // 4. Direct update to profiles table (authoritative source)
+      // 3.2. Save to local cache
+      await AsyncStorage.setItem(
+        `profile_${session.user.id}`,
+        JSON.stringify(updatedProfileObj),
+      );
+
+      // 4. Update auth metadata & Neon Cloud in background / online
+      try {
+        await supabase.auth.updateUser({
+          email: email !== session?.user?.email ? email : undefined,
+          data: {
+            full_name: name,
+            username: username.trim(),
+            bio: bio,
+            avatar_url: finalAvatarUrl,
+          },
+        });
+      } catch (authErr: any) {
+        console.warn("[EditProfile] Auth updateUser warning:", authErr?.message);
+      }
+
+      // 4.1. Push to profiles table in Neon PostgREST
+      try {
         const { error: profileError } = await supabase
           .from("profiles")
           .update({
@@ -463,71 +484,46 @@ export default function EditProfileScreen() {
           .eq("id", session!.user.id);
 
         if (profileError) {
-          throw new Error(
-            `Failed to update primary profile: ${profileError.message}`,
-          );
+          console.warn("[EditProfile] Cloud profile sync warning:", profileError.message);
         }
-
-        // 4.5. Direct update to connect_profiles table (SQLite & Supabase connect)
-        try {
-          const now = new Date().toISOString();
-          db.runSync(
-            "UPDATE connect_profiles SET username = ?, bio = ?, avatar_url = ?, institution = ?, updated_at = ? WHERE user_id = ?",
-            [
-              username.trim(),
-              bio,
-              finalAvatarUrl,
-              institution.trim() || null,
-              now,
-              session!.user.id,
-            ],
-          );
-          const { error: connectError } = await connectSupabase
-            .from("connect_profiles")
-            .update({
-              username: username.trim(),
-              bio,
-              avatar_url: finalAvatarUrl,
-              institution: institution.trim() || null,
-              updated_at: now,
-            })
-            .eq("user_id", session!.user.id);
-
-          if (connectError) {
-            throw new Error(
-              `Failed to update connect profile: ${connectError.message}`,
-            );
-          }
-        } catch (dbErr: any) {
-          throw new Error(`Profile sync failed: ${dbErr.message}`);
-        }
-
-        // 5. Update Zustand store immediately for instant UI refresh
-        useAuthStore.setState({
-          profile: {
-            ...useAuthStore.getState().profile,
-            full_name: name,
-            username: username.trim(),
-            bio: bio,
-            avatar_url: finalAvatarUrl,
-            updated_at: new Date().toISOString(),
-          } as any,
-        });
-
-        // 6. Refresh session
-        const { data: sessionData } = await supabase.auth.getSession();
-        setSession(sessionData.session);
-
-        showAlert({
-          title: "Profile Updated",
-          message: "Your changes have been saved.",
-          primaryButton: {
-            text: "Done",
-            onPress: () => router.back(),
-          },
-        });
+      } catch (cloudErr: any) {
+        console.warn("[EditProfile] Cloud profile sync exception:", cloudErr);
       }
-    } catch (e: any) {
+
+      // 4.2. Push to connect_profiles in Neon Cloud
+      try {
+        const now = new Date().toISOString();
+        await connectSupabase
+          .from("connect_profiles")
+          .upsert({
+            user_id: session!.user.id,
+            username: username.trim(),
+            bio,
+            avatar_url: finalAvatarUrl,
+            institution: institution.trim() || null,
+            updated_at: now,
+          });
+      } catch (connectErr: any) {
+        console.warn("[EditProfile] Connect cloud profile sync warning:", connectErr);
+      }
+
+      // 5. Refresh session if possible
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          setSession(sessionData.session);
+        }
+      } catch (_) {}
+
+      showAlert({
+        title: "Profile Updated",
+        message: "Your changes have been saved.",
+        primaryButton: {
+          text: "Done",
+          onPress: () => router.back(),
+        },
+      });
+      } catch (e: any) {
       console.error("[EditProfile] Save error:", e);
       showAlert({
         title: "Update Failed",
@@ -542,6 +538,11 @@ export default function EditProfileScreen() {
   const inputBg = theme.cardSolid;
   const inputBorder = theme.separator;
 
+  const rawTop = Platform.OS === 'android'
+    ? Math.max(insets.top, (StatusBar.currentHeight ?? 0) + 10)
+    : Math.max(insets.top, 16);
+  const headerTopPadding = rawTop + (Platform.OS === 'android' ? 8 : 4);
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
@@ -549,7 +550,7 @@ export default function EditProfileScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 8 : 0}
       >
-        <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+        <View style={[styles.header, { paddingTop: headerTopPadding }]}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backBtn}

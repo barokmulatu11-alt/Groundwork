@@ -8,6 +8,7 @@ import { Quote as QuoteIcon, X, Share2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import { getLocalDateString } from '@/lib/dateUtils';
 import { GlobalShareSheet } from './GlobalShareSheet';
 
 const STORAGE_KEY = '@groundwork_last_quote_shown_date';
@@ -23,7 +24,7 @@ export function DailyQuoteBanner() {
   useEffect(() => {
     const load = async () => {
       try {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalDateString();
         const dismissed = await AsyncStorage.getItem(DISMISS_KEY);
         if (dismissed === todayStr) return;
 
@@ -49,7 +50,7 @@ export function DailyQuoteBanner() {
   }, []);
 
   const dismiss = async () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     await AsyncStorage.setItem(DISMISS_KEY, todayStr);
     setModalOpen(false);
     setVisible(false);

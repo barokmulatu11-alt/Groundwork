@@ -4,21 +4,31 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   Platform,
-  useWindowDimensions,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Check, ChevronDown, ChevronRight, ChevronUp, CornerDownLeft, Plus, Timer } from 'lucide-react-native';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Plus,
+  Timer,
+  CheckCircle2,
+  Sparkles,
+  ListTodo,
+  Calendar,
+} from 'lucide-react-native';
 import { AppText as Text } from '@/components/ui/AppText';
 import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useTheme } from '@/lib/ThemeContext';
 import { useStore } from '@/store/useStore';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
-import { getLocalDateString, getTomorrowDateString, formatHeaderDate } from '@/lib/dateUtils';
-
+import { getLocalDateString, formatHeaderDate } from '@/lib/dateUtils';
+import { TaskComposer, TaskComposerModal } from '@/components/tasks/TaskComposer';
+import { TaskRow } from '@/components/tasks/TaskRow';
 import { useResponsive } from '@/hooks/useResponsive';
 
 type TabView = 'Today' | 'Upcoming' | 'All';
@@ -29,21 +39,19 @@ export default function TasksScreen() {
   const { theme, isDark } = useTheme();
   const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
-  const { tasks, loadAllTasks, addTask, toggleTask } = useStore();
+  const { tasks, loadAllTasks, toggleTask } = useStore();
 
   const { create } = useLocalSearchParams<{ create?: string }>();
   const [activeTab, setActiveTab] = useState<TabView>('Today');
-  const [quickTitle, setQuickTitle] = useState('');
   const [completedExpanded, setCompletedExpanded] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const quickInputRef = useRef<TextInput>(null);
+  const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
 
-  // Focus quick-add input if navigated with create=true
+  // Open composer modal if navigated with create=true
   useEffect(() => {
     if (create === 'true') {
       const timer = setTimeout(() => {
-        quickInputRef.current?.focus();
-      }, 200);
+        setIsComposerModalOpen(true);
+      }, 150);
       return () => clearTimeout(timer);
     }
   }, [create]);
@@ -64,6 +72,15 @@ export default function TasksScreen() {
   let currentPendingTasks = activeAllTasks.filter((t) => !t.completed);
   let currentCompletedTasks = activeAllTasks.filter((t) => t.completed);
 
+  // Counts for tabs
+  const todayPendingCount = activeAllTasks.filter(
+    (t) => !t.completed && (t.date === todayStr || !t.date)
+  ).length;
+  const upcomingPendingCount = activeAllTasks.filter(
+    (t) => !t.completed && t.date && t.date > todayStr
+  ).length;
+  const allPendingCount = activeAllTasks.filter((t) => !t.completed).length;
+
   if (activeTab === 'Today') {
     currentPendingTasks = currentPendingTasks.filter((t) => t.date === todayStr || !t.date);
     currentCompletedTasks = currentCompletedTasks.filter((t) => t.date === todayStr || !t.date);
@@ -72,48 +89,281 @@ export default function TasksScreen() {
     currentCompletedTasks = currentCompletedTasks.filter((t) => t.date && t.date > todayStr);
   }
 
-  const handleQuickAdd = async () => {
-    const trimmed = quickTitle.trim();
-    if (!trimmed) {
-      quickInputRef.current?.focus();
-      return;
-    }
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    hapticSuccess();
-    setQuickTitle('');
-    // For Upcoming tab, default to tomorrow's date so task immediately satisfies t.date > todayStr
-    const taskDate = activeTab === 'Today'
-      ? todayStr
-      : activeTab === 'Upcoming'
-      ? getTomorrowDateString()
-      : todayStr;
-
-    try {
-      await addTask({
-        title: trimmed,
-        date: taskDate,
-        completed: false,
-        priority: 'medium',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const totalTabTasks = currentPendingTasks.length + currentCompletedTasks.length;
+  const completionPercentage = totalTabTasks > 0
+    ? Math.round((currentCompletedTasks.length / totalTabTasks) * 100)
+    : 0;
 
   const getSectionTitle = () => {
     if (activeTab === 'Today') return 'Your day';
-    if (activeTab === 'Upcoming') return 'Upcoming';
+    if (activeTab === 'Upcoming') return 'Upcoming tasks';
     return 'All tasks';
   };
 
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
+  const renderTaskListContent = () => (
+    <>
+      {/* ── 1. Hero Date & Heading ──────────────────────── */}
+      <View style={styles.headerSection}>
+        <Text style={styles.dateLabel}>{todayFormatted.toUpperCase()}</Text>
+        <View style={styles.headingRow}>
+          <Text style={styles.pageHeading}>Tasks</Text>
+          {totalTabTasks > 0 && (
+            <View style={styles.completionPill}>
+              <Text style={styles.completionPillText}>
+                {currentCompletedTasks.length}/{totalTabTasks} done · {completionPercentage}%
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Momentum Progress Track */}
+        {totalTabTasks > 0 && (
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${completionPercentage}%`, backgroundColor: theme.accent },
+              ]}
+            />
+          </View>
+        )}
+      </View>
+
+      {/* ── 2. Tactile Segmented Control Tabs (Apple Style) ──────── */}
+      <View style={styles.segmentedControl}>
+        {(
+          [
+            { key: 'Today', label: 'Today', count: todayPendingCount },
+            { key: 'Upcoming', label: 'Upcoming', count: upcomingPendingCount },
+            { key: 'All', label: 'All', count: allPendingCount },
+          ] as const
+        ).map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              onPress={() => {
+                hapticLight();
+                setActiveTab(tab.key);
+              }}
+              style={[styles.segmentItem, isActive && styles.segmentItemActive]}
+              activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  isActive && [styles.segmentTextActive, { color: theme.accent }],
+                ]}
+              >
+                {tab.label}
+              </Text>
+              {tab.count > 0 && (
+                <View
+                  style={[
+                    styles.segmentBadge,
+                    isActive
+                      ? { backgroundColor: theme.accent }
+                      : { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.segmentBadgeText,
+                      isActive ? { color: '#FFFFFF' } : { color: theme.secondaryText },
+                    ]}
+                  >
+                    {tab.count}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* ── 3. Quick Task Composer Card ────────────────────── */}
+      <View style={styles.composerWrapper}>
+        <TaskComposer
+          mode="compact"
+          initialContext={activeTab}
+          onRequestExpand={() => setIsComposerModalOpen(true)}
+        />
+      </View>
+
+      {/* ── 4. Section Header ────────────────────────────── */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleGroup}>
+          <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
+          <View style={styles.countTag}>
+            <Text style={styles.countTagText}>
+              {currentPendingTasks.length} {currentPendingTasks.length === 1 ? 'task' : 'tasks'}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={() => setIsComposerModalOpen(true)}
+          style={styles.addTaskButton}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Add new task"
+        >
+          <Plus size={14} color="#FFFFFF" strokeWidth={2.8} />
+          <Text style={styles.addTaskButtonText}>New task</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── 5. Tasks List / Clean Empty State ─────────────── */}
+      {currentPendingTasks.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <View
+            style={[
+              styles.emptyIconCircle,
+              { backgroundColor: isDark ? 'rgba(0, 102, 255, 0.15)' : 'rgba(0, 102, 255, 0.08)' },
+            ]}
+          >
+            {activeTab === 'Upcoming' ? (
+              <Calendar size={28} color={theme.accent} strokeWidth={2.2} />
+            ) : (
+              <CheckCircle2 size={28} color={theme.accent} strokeWidth={2.2} />
+            )}
+          </View>
+          <Text style={styles.emptyTitle}>
+            {activeTab === 'Today'
+              ? 'All clear for today'
+              : activeTab === 'Upcoming'
+              ? 'No upcoming tasks'
+              : 'No tasks found'}
+          </Text>
+          <Text style={styles.emptySubtitle}>
+            {activeTab === 'Today'
+              ? "You've finished everything on your plate. Take a breather or plan ahead."
+              : 'Everything is up to date. Tap below to capture your next goal.'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setIsComposerModalOpen(true)}
+            style={[styles.emptyActionBtn, { backgroundColor: theme.accent }]}
+            activeOpacity={0.85}
+          >
+            <Plus size={16} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 6 }} />
+            <Text style={styles.emptyActionBtnText}>Add a Task</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.tasksGroupCard}>
+          {currentPendingTasks.map((task, idx) => {
+            const isLast = idx === currentPendingTasks.length - 1;
+            return (
+              <TaskRow
+                key={task.id}
+                task={task}
+                isLast={isLast}
+                todayStr={todayStr}
+                theme={theme}
+                isDark={isDark}
+                onToggle={() => toggleTask(task.id, task.completed)}
+                onPress={() =>
+                  router.push({
+                    pathname: '/tasks/task-detail',
+                    params: { id: task.id },
+                  } as any)
+                }
+              />
+            );
+          })}
+        </View>
+      )}
+
+      {/* ── 6. Completed Collapsible Inset Card ───────────── */}
+      {currentCompletedTasks.length > 0 && (
+        <View style={styles.completedSection}>
+          <TouchableOpacity
+            onPress={() => setCompletedExpanded(!completedExpanded)}
+            style={styles.completedHeaderCard}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <View style={styles.completedHeaderLeft}>
+              <View
+                style={[
+                  styles.completedCheckCircle,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+                ]}
+              >
+                <Check size={12} color={theme.secondaryText} strokeWidth={2.8} />
+              </View>
+              <Text style={styles.completedHeaderText}>
+                Completed ({currentCompletedTasks.length})
+              </Text>
+            </View>
+            {completedExpanded ? (
+              <ChevronUp size={18} color={theme.secondaryText} />
+            ) : (
+              <ChevronDown size={18} color={theme.secondaryText} />
+            )}
+          </TouchableOpacity>
+
+          {completedExpanded && (
+            <View style={styles.completedGroupCard}>
+              {currentCompletedTasks.map((task, idx) => {
+                const isLast = idx === currentCompletedTasks.length - 1;
+                return (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    isLast={isLast}
+                    todayStr={todayStr}
+                    theme={theme}
+                    isDark={isDark}
+                    onToggle={() => toggleTask(task.id, task.completed)}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/tasks/task-detail',
+                        params: { id: task.id },
+                      } as any)
+                    }
+                  />
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ── 7. Focus Mode Action Card ──────────────────────── */}
+      <TouchableOpacity
+        onPress={() => router.push('/focus' as any)}
+        style={styles.focusModeCard}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+      >
+        <View style={styles.focusCardLeft}>
+          <View
+            style={[
+              styles.focusIconBox,
+              { backgroundColor: isDark ? 'rgba(0, 102, 255, 0.16)' : 'rgba(0, 102, 255, 0.1)' },
+            ]}
+          >
+            <Timer size={20} color={theme.accent} strokeWidth={2.2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.focusCardTitle}>Deep Focus Mode</Text>
+            <Text style={styles.focusCardSubtitle}>
+              Dedicate a distraction-free block to knock out your top tasks.
+            </Text>
+          </View>
+        </View>
+        <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <View style={styles.root}>
-      <View style={{ paddingTop: insets.top }}>
-        <BrandHeader showBack showMoreMenu onRightPress={() => router.push('/settings' as any)} />
-      </View>
+      <BrandHeader showBack showMoreMenu onRightPress={() => router.push('/settings' as any)} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -123,7 +373,7 @@ export default function TasksScreen() {
           style={{ flex: 1, width: '100%' }}
           contentContainerStyle={{
             paddingHorizontal: horizontalPadding,
-            paddingTop: 24,
+            paddingTop: 20,
             paddingBottom: Math.max(insets.bottom, 16) + 80,
             maxWidth: contentMaxWidth,
             alignSelf: 'center',
@@ -133,214 +383,16 @@ export default function TasksScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {isDesktop ? (
-            /* ── Desktop 2-Column Task Workspace Composition ─────────────── */
+            /* ── Desktop 2-Column Responsive Workspace ───────────────── */
             <View style={styles.desktopColumnsRow}>
-              {/* Left Column: Primary Task Workspace */}
-              <View style={styles.desktopMainCol}>
-                {/* Date Stamp */}
-                <Text style={styles.dateLabel}>{todayFormatted}</Text>
+              {/* Left Primary Column */}
+              <View style={styles.desktopMainCol}>{renderTaskListContent()}</View>
 
-                {/* Heading */}
-                <Text style={styles.pageHeading}>Tasks.</Text>
-                <Text style={styles.pageSubline}>One thing at a time.</Text>
-
-                {/* Tabs: Today / Upcoming / All */}
-                <View style={styles.tabsRow}>
-                  {(['Today', 'Upcoming', 'All'] as TabView[]).map((tab) => {
-                    const isActive = activeTab === tab;
-                    return (
-                      <TouchableOpacity
-                        key={tab}
-                        onPress={() => {
-                          hapticLight();
-                          setActiveTab(tab);
-                        }}
-                        style={styles.tabItem}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected: isActive }}
-                      >
-                        <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                          {tab}
-                        </Text>
-                        {isActive && <View style={styles.tabUnderline} />}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <View style={styles.tabsBottomLine} />
-
-                {/* Quick Add Input */}
-                <View style={[styles.quickAddRow, { marginBottom: 20 }]}>
-                  <Plus size={18} color="#0066FF" strokeWidth={2.4} style={styles.plusIcon} />
-                  <TextInput
-                    ref={quickInputRef}
-                    value={quickTitle}
-                    onChangeText={setQuickTitle}
-                    onSubmitEditing={handleQuickAdd}
-                    placeholder="What needs to get done?"
-                    placeholderTextColor="#0066FF"
-                    style={styles.quickAddInput}
-                    returnKeyType="done"
-                    editable={!isSubmitting}
-                  />
-                  {quickTitle.trim().length > 0 && (
-                    <TouchableOpacity
-                      onPress={handleQuickAdd}
-                      style={styles.returnBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel="Submit task"
-                    >
-                      <CornerDownLeft size={16} color="#0066FF" strokeWidth={2.4} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Section: 01 Your day */}
-                <View style={styles.sectionHeaderRow}>
-                  <View style={styles.sectionTitleGroup}>
-                    <Text style={styles.sectionIndex}>01</Text>
-                    <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      quickInputRef.current?.focus();
-                    }}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add task"
-                  >
-                    <Text style={styles.blueActionText}>+ Add task</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Zero tasks planned empty state */}
-                {currentPendingTasks.length === 0 ? (
-                  <View style={styles.emptyContainer}>
-                    <View style={styles.zeroNumeralRow}>
-                      <Text style={styles.hugeZeroNumeral}>0</Text>
-                      <Text style={styles.numeralUnitText}>tasks planned</Text>
-                    </View>
-                    <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
-                    <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
-                  </View>
-                ) : (
-                  /* Populated task rows */
-                  <View style={styles.tasksListWrap}>
-                    {currentPendingTasks.map((task, idx) => {
-                      const isLast = idx === currentPendingTasks.length - 1;
-                      return (
-                        <View
-                          key={task.id}
-                          style={[styles.taskItemRow, !isLast && styles.taskItemRowBorder]}
-                        >
-                          <TouchableOpacity
-                            onPress={() => {
-                              hapticSuccess();
-                              toggleTask(task.id, task.completed);
-                            }}
-                            style={styles.taskCheckbox}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityRole="checkbox"
-                            accessibilityState={{ checked: false }}
-                          >
-                            {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            onPress={() =>
-                              router.push({
-                                pathname: '/tasks/task-detail',
-                                params: { id: task.id },
-                              } as any)
-                            }
-                            style={styles.taskTitleWrap}
-                          >
-                            <Text style={styles.taskTitleText} numberOfLines={2}>
-                              {task.title || 'Untitled task'}
-                            </Text>
-                            <View style={styles.taskMetaRow}>
-                              {task.due_time ? (
-                                <Text style={styles.taskMetaText}>
-                                  {task.date === todayStr ? 'Today' : task.date || 'Today'} · {task.due_time}
-                                </Text>
-                              ) : null}
-                              {task.priority && task.priority !== 'medium' && (
-                                <Text
-                                  style={[
-                                    styles.priorityBadgeText,
-                                    { color: task.priority === 'high' ? '#EF4444' : '#8E8C87' },
-                                  ]}
-                                >
-                                  {task.priority.toUpperCase()}
-                                </Text>
-                              )}
-                            </View>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            onPress={() =>
-                              router.push({
-                                pathname: '/tasks/task-detail',
-                                params: { id: task.id },
-                              } as any)
-                            }
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <ChevronRight size={16} color="#8E8C87" />
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                <View style={styles.thinDivider} />
-
-                {/* Completed collapsible section */}
-                <TouchableOpacity
-                  onPress={() => setCompletedExpanded(!completedExpanded)}
-                  style={styles.completedHeaderRow}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.completedHeaderText}>
-                    {currentCompletedTasks.length} Completed
-                  </Text>
-                  {completedExpanded ? (
-                    <ChevronUp size={18} color="#8E8C87" />
-                  ) : (
-                    <ChevronDown size={18} color="#8E8C87" />
-                  )}
-                </TouchableOpacity>
-
-                {completedExpanded && currentCompletedTasks.length > 0 && (
-                  <View style={styles.completedListWrap}>
-                    {currentCompletedTasks.map((task) => (
-                      <View key={task.id} style={styles.completedItemRow}>
-                        <TouchableOpacity
-                          onPress={() => {
-                            hapticSuccess();
-                            toggleTask(task.id, task.completed);
-                          }}
-                          style={[styles.taskCheckbox, styles.taskCheckboxCompleted]}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Check size={13} color="#FFFFFF" strokeWidth={3} />
-                        </TouchableOpacity>
-                        <Text style={styles.completedTitleText} numberOfLines={1}>
-                          {task.title || 'Untitled task'}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-
-              {/* Right Column: Supporting Overview, Priorities, and Focus Launcher */}
+              {/* Right Supporting Sidebar */}
               <View style={styles.desktopSideCol}>
                 {/* 1. Tasks Summary Card */}
                 <View style={styles.desktopCard}>
-                  <Text style={styles.desktopCardTitle}>Overview</Text>
+                  <Text style={styles.desktopCardTitle}>Day at a Glance</Text>
                   <View style={styles.summaryStatsGrid}>
                     <View style={styles.summaryStatBox}>
                       <Text style={styles.summaryStatNumber}>{currentPendingTasks.length}</Text>
@@ -351,14 +403,7 @@ export default function TasksScreen() {
                       <Text style={styles.summaryStatLabel}>Completed</Text>
                     </View>
                     <View style={styles.summaryStatBox}>
-                      <Text style={styles.summaryStatNumber}>
-                        {Math.round(
-                          (currentCompletedTasks.length /
-                            Math.max(1, currentPendingTasks.length + currentCompletedTasks.length)) *
-                            100
-                        )}
-                        %
-                      </Text>
+                      <Text style={styles.summaryStatNumber}>{completionPercentage}%</Text>
                       <Text style={styles.summaryStatLabel}>Done</Text>
                     </View>
                   </View>
@@ -366,21 +411,15 @@ export default function TasksScreen() {
                     <View
                       style={[
                         styles.progressFill,
-                        {
-                          width: `${Math.round(
-                            (currentCompletedTasks.length /
-                              Math.max(1, currentPendingTasks.length + currentCompletedTasks.length)) *
-                              100
-                          )}%`,
-                        },
+                        { width: `${completionPercentage}%`, backgroundColor: theme.accent },
                       ]}
                     />
                   </View>
                 </View>
 
-                {/* 2. Priority Legend Card */}
+                {/* 2. Priority Guide Card */}
                 <View style={styles.desktopCard}>
-                  <Text style={styles.desktopCardTitle}>Priority guide</Text>
+                  <Text style={styles.desktopCardTitle}>Priority Breakdown</Text>
                   <View style={{ gap: 10, marginTop: 12 }}>
                     <View style={styles.priorityGuideRow}>
                       <View style={[styles.priorityDot, { backgroundColor: '#EF4444' }]} />
@@ -421,12 +460,19 @@ export default function TasksScreen() {
                   style={styles.desktopCard}
                   activeOpacity={0.8}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: 8,
+                    }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Timer size={18} color="#0066FF" strokeWidth={2.2} />
+                      <Timer size={18} color={theme.accent} strokeWidth={2.2} />
                       <Text style={styles.desktopCardTitle}>Focus mode</Text>
                     </View>
-                    <ChevronRight size={16} color="#0066FF" />
+                    <ChevronRight size={16} color={theme.accent} />
                   </View>
                   <Text style={styles.focusCardDesc}>
                     Dedicate a distraction-free timer block to power through your top task.
@@ -438,227 +484,17 @@ export default function TasksScreen() {
               </View>
             </View>
           ) : (
-            /* ── Mobile / Tablet Sequential Task List ────────────────────── */
-            <View>
-              {/* Date Stamp */}
-              <Text style={styles.dateLabel}>{todayFormatted}</Text>
-
-              {/* Heading */}
-              <Text style={styles.pageHeading}>Tasks.</Text>
-              <Text style={styles.pageSubline}>One thing at a time.</Text>
-
-              {/* Tabs: Today / Upcoming / All */}
-              <View style={styles.tabsRow}>
-                {(['Today', 'Upcoming', 'All'] as TabView[]).map((tab) => {
-                  const isActive = activeTab === tab;
-                  return (
-                    <TouchableOpacity
-                      key={tab}
-                      onPress={() => {
-                        hapticLight();
-                        setActiveTab(tab);
-                      }}
-                      style={styles.tabItem}
-                      accessibilityRole="tab"
-                      accessibilityState={{ selected: isActive }}
-                    >
-                      <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                        {tab}
-                      </Text>
-                      {isActive && <View style={styles.tabUnderline} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <View style={styles.tabsBottomLine} />
-
-              {/* Section: 01 Your day */}
-              <View style={styles.sectionHeaderRow}>
-                <View style={styles.sectionTitleGroup}>
-                  <Text style={styles.sectionIndex}>01</Text>
-                  <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    quickInputRef.current?.focus();
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add task"
-                >
-                  <Text style={styles.blueActionText}>+ Add task</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Zero tasks planned empty state */}
-              {currentPendingTasks.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <View style={styles.zeroNumeralRow}>
-                    <Text style={styles.hugeZeroNumeral}>0</Text>
-                    <Text style={styles.numeralUnitText}>tasks planned</Text>
-                  </View>
-                  <Text style={styles.emptyPrimaryPrompt}>A clear page.</Text>
-                  <Text style={styles.emptySecondaryPrompt}>Start with what matters today.</Text>
-                </View>
-              ) : (
-                /* Populated task rows */
-                <View style={styles.tasksListWrap}>
-                  {currentPendingTasks.map((task, idx) => {
-                    const isLast = idx === currentPendingTasks.length - 1;
-                    return (
-                      <View
-                        key={task.id}
-                        style={[styles.taskItemRow, !isLast && styles.taskItemRowBorder]}
-                      >
-                        <TouchableOpacity
-                          onPress={() => {
-                            hapticSuccess();
-                            toggleTask(task.id, task.completed);
-                          }}
-                          style={styles.taskCheckbox}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: false }}
-                        >
-                          {task.completed && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          onPress={() =>
-                            router.push({
-                              pathname: '/tasks/task-detail',
-                              params: { id: task.id },
-                            } as any)
-                          }
-                          style={styles.taskTitleWrap}
-                        >
-                          <Text style={styles.taskTitleText} numberOfLines={2}>
-                            {task.title || 'Untitled task'}
-                          </Text>
-                          <View style={styles.taskMetaRow}>
-                            {task.due_time ? (
-                              <Text style={styles.taskMetaText}>
-                                {task.date === todayStr ? 'Today' : task.date || 'Today'} · {task.due_time}
-                              </Text>
-                            ) : null}
-                            {task.priority && task.priority !== 'medium' && (
-                              <Text
-                                style={[
-                                  styles.priorityBadgeText,
-                                  { color: task.priority === 'high' ? '#EF4444' : '#8E8C87' },
-                                ]}
-                              >
-                                {task.priority.toUpperCase()}
-                              </Text>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          onPress={() =>
-                            router.push({
-                              pathname: '/tasks/task-detail',
-                              params: { id: task.id },
-                            } as any)
-                          }
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <ChevronRight size={16} color="#8E8C87" />
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-
-              <View style={styles.thinDivider} />
-
-              {/* Quick Add Input matching mockup: + What needs to get done? ↵ */}
-              <View style={styles.quickAddRow}>
-                <Plus size={18} color="#0066FF" strokeWidth={2.4} style={styles.plusIcon} />
-                <TextInput
-                  ref={quickInputRef}
-                  value={quickTitle}
-                  onChangeText={setQuickTitle}
-                  onSubmitEditing={handleQuickAdd}
-                  placeholder="What needs to get done?"
-                  placeholderTextColor="#0066FF"
-                  style={styles.quickAddInput}
-                  returnKeyType="done"
-                  editable={!isSubmitting}
-                />
-                {quickTitle.trim().length > 0 && (
-                  <TouchableOpacity
-                    onPress={handleQuickAdd}
-                    style={styles.returnBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Submit task"
-                  >
-                    <CornerDownLeft size={16} color="#0066FF" strokeWidth={2.4} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <View style={styles.thinDivider} />
-
-              {/* Completed collapsible section matching mockup: 0 Completed v */}
-              <TouchableOpacity
-                onPress={() => setCompletedExpanded(!completedExpanded)}
-                style={styles.completedHeaderRow}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-              >
-                <Text style={styles.completedHeaderText}>
-                  {currentCompletedTasks.length} Completed
-                </Text>
-                {completedExpanded ? (
-                  <ChevronUp size={18} color="#8E8C87" />
-                ) : (
-                  <ChevronDown size={18} color="#8E8C87" />
-                )}
-              </TouchableOpacity>
-
-              {completedExpanded && currentCompletedTasks.length > 0 && (
-                <View style={styles.completedListWrap}>
-                  {currentCompletedTasks.map((task) => (
-                    <View key={task.id} style={styles.completedItemRow}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          hapticSuccess();
-                          toggleTask(task.id, task.completed);
-                        }}
-                        style={[styles.taskCheckbox, styles.taskCheckboxCompleted]}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Check size={13} color="#FFFFFF" strokeWidth={3} />
-                      </TouchableOpacity>
-                      <Text style={styles.completedTitleText} numberOfLines={1}>
-                        {task.title || 'Untitled task'}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <View style={styles.thinDivider} />
-
-              {/* Action linking to Focus: Make time for a task -> */}
-              <TouchableOpacity
-                onPress={() => router.push('/focus' as any)}
-                style={styles.makeTimeRow}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-              >
-                <View style={styles.makeTimeLeft}>
-                  <Timer size={19} color="#0066FF" strokeWidth={2} />
-                  <Text style={styles.makeTimeText}>Make time for a task</Text>
-                </View>
-                <ChevronRight size={18} color="#0066FF" strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
+            /* ── Mobile / Tablet Layout ─────────────────────────────── */
+            <View>{renderTaskListContent()}</View>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <TaskComposerModal
+        visible={isComposerModalOpen}
+        initialContext={activeTab}
+        onClose={() => setIsComposerModalOpen(false)}
+      />
     </View>
   );
 }
@@ -669,249 +505,291 @@ const createStyles = (theme: any, isDark: boolean) =>
       flex: 1,
       backgroundColor: theme.background,
     },
-    dateLabel: {
-      fontSize: 11,
-      fontFamily: 'Inter_600SemiBold',
-      letterSpacing: 2,
-      color: theme.secondaryText,
-      marginBottom: 6,
-    },
-    pageHeading: {
-      fontSize: 44,
-      fontFamily: 'Inter_800ExtraBold',
-      letterSpacing: -1,
-      color: theme.primaryText,
-      marginBottom: 4,
-    },
-    pageSubline: {
-      fontSize: 16,
-      fontFamily: 'Inter_400Regular',
-      color: theme.secondaryText,
+    // Header & Momentum
+    headerSection: {
       marginBottom: 20,
     },
-
-    // Tabs
-    tabsRow: {
+    dateLabel: {
+      fontSize: 12,
+      fontFamily: 'Inter_600SemiBold',
+      letterSpacing: 1.5,
+      color: theme.secondaryText,
+      marginBottom: 4,
+    },
+    headingRow: {
       flexDirection: 'row',
-      gap: 28,
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
     },
-    tabItem: {
-      paddingBottom: 10,
-      position: 'relative',
+    pageHeading: {
+      fontSize: 32,
+      fontFamily: 'Inter_800ExtraBold',
+      letterSpacing: -0.8,
+      color: theme.primaryText,
     },
-    tabText: {
-      fontSize: 16,
+    completionPill: {
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.separator,
+    },
+    completionPillText: {
+      fontSize: 12,
       fontFamily: 'Inter_600SemiBold',
       color: theme.secondaryText,
     },
-    tabTextActive: {
-      color: theme.accent,
-      fontFamily: 'Inter_700Bold',
+    progressTrack: {
+      height: 4,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      borderRadius: 2,
+      overflow: 'hidden',
+      width: '100%',
+      marginTop: 2,
     },
-    tabUnderline: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 2.5,
-      backgroundColor: theme.accent,
-    },
-    tabsBottomLine: {
-      height: 1,
-      backgroundColor: theme.separator,
-      marginBottom: 24,
+    progressFill: {
+      height: '100%',
+      borderRadius: 2,
     },
 
-    // Section 01
+    // Segmented Control (Apple iOS Style)
+    segmentedControl: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
+      borderRadius: 14,
+      padding: 3,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
+    },
+    segmentItem: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      borderRadius: 11,
+      gap: 6,
+    },
+    segmentItemActive: {
+      backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.3 : 0.08,
+      shadowRadius: 3,
+      elevation: 2,
+    },
+    segmentText: {
+      fontSize: 13,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.secondaryText,
+    },
+    segmentTextActive: {
+      fontFamily: 'Inter_700Bold',
+    },
+    segmentBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1.5,
+      borderRadius: 10,
+      minWidth: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    segmentBadgeText: {
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
+    },
+
+    // Composer
+    composerWrapper: {
+      marginBottom: 22,
+    },
+
+    // Section Header
     sectionHeaderRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'baseline',
-      marginBottom: 16,
+      alignItems: 'center',
+      marginBottom: 12,
     },
     sectionTitleGroup: {
       flexDirection: 'row',
-      alignItems: 'baseline',
-      gap: 10,
-    },
-    sectionIndex: {
-      fontSize: 15,
-      fontFamily: 'Inter_700Bold',
-      color: theme.accent,
+      alignItems: 'center',
+      gap: 8,
     },
     sectionTitle: {
-      fontSize: 22,
+      fontSize: 20,
       fontFamily: 'Inter_700Bold',
       letterSpacing: -0.4,
       color: theme.primaryText,
     },
-    blueActionText: {
-      fontSize: 14,
+    countTag: {
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    countTagText: {
+      fontSize: 12,
       fontFamily: 'Inter_600SemiBold',
-      color: theme.accent,
+      color: theme.secondaryText,
+    },
+    addTaskButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.accent,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
+      gap: 4,
+    },
+    addTaskButtonText: {
+      fontSize: 13,
+      fontFamily: 'Inter_700Bold',
+      color: '#FFFFFF',
     },
 
-    // Empty state
-    emptyContainer: {
-      paddingVertical: 10,
+    // Tasks Group Card (Inset Grouped)
+    tasksGroupCard: {
+      backgroundColor: theme.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      overflow: 'hidden',
+      marginBottom: 24,
     },
-    zeroNumeralRow: {
+
+    // Empty Card
+    emptyCard: {
+      backgroundColor: theme.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      padding: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 24,
+    },
+    emptyIconCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontFamily: 'Inter_700Bold',
+      color: theme.primaryText,
+      marginBottom: 6,
+      textAlign: 'center',
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      fontFamily: 'Inter_400Regular',
+      color: theme.secondaryText,
+      textAlign: 'center',
+      lineHeight: 20,
+      maxWidth: 280,
+      marginBottom: 20,
+    },
+    emptyActionBtn: {
       flexDirection: 'row',
-      alignItems: 'baseline',
-      gap: 12,
-      marginBottom: 10,
+      alignItems: 'center',
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 20,
     },
-    hugeZeroNumeral: {
-      fontSize: 58,
-      fontFamily: 'PlayfairDisplay_700Bold',
-      color: theme.primaryText,
-      lineHeight: 62,
+    emptyActionBtnText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontFamily: 'Inter_700Bold',
     },
-    numeralUnitText: {
-      fontSize: 22,
-      fontFamily: 'PlayfairDisplay_400Regular_Italic',
-      color: theme.primaryText,
+
+    // Completed Collapsible Card
+    completedSection: {
+      marginBottom: 24,
     },
-    emptyPrimaryPrompt: {
-      fontSize: 16,
+    completedHeaderCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      backgroundColor: theme.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      marginBottom: 8,
+    },
+    completedHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    completedCheckCircle: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    completedHeaderText: {
+      fontSize: 14,
+      fontFamily: 'Inter_600SemiBold',
+      color: theme.secondaryText,
+    },
+    completedGroupCard: {
+      backgroundColor: theme.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      overflow: 'hidden',
+    },
+
+    // Focus Mode Action Card
+    focusModeCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: theme.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      padding: 16,
+      marginBottom: 16,
+    },
+    focusCardLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      flex: 1,
+      paddingRight: 10,
+    },
+    focusIconBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    focusCardTitle: {
+      fontSize: 15,
       fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       marginBottom: 2,
     },
-    emptySecondaryPrompt: {
-      fontSize: 14,
-      fontFamily: 'Inter_400Regular',
-      color: theme.secondaryText,
-      marginBottom: 16,
-    },
-
-    // Populated task list
-    tasksListWrap: {
-      width: '100%',
-    },
-    taskItemRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 13,
-    },
-    taskItemRowBorder: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.separator,
-    },
-    taskCheckbox: {
-      width: 22,
-      height: 22,
-      borderRadius: 6,
-      borderWidth: 1.6,
-      borderColor: theme.checkboxBorder,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    taskCheckboxCompleted: {
-      backgroundColor: theme.accent,
-      borderColor: theme.accent,
-    },
-    taskTitleWrap: {
-      flex: 1,
-      marginLeft: 14,
-    },
-    taskTitleText: {
-      fontSize: 15,
-      fontFamily: 'Inter_500Medium',
-      color: theme.primaryText,
-    },
-    taskMetaRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginTop: 2,
-    },
-    taskMetaText: {
+    focusCardSubtitle: {
       fontSize: 12,
       fontFamily: 'Inter_400Regular',
       color: theme.secondaryText,
-    },
-    priorityBadgeText: {
-      fontSize: 10,
-      fontFamily: 'Inter_700Bold',
-      letterSpacing: 0.5,
+      lineHeight: 17,
     },
 
-    thinDivider: {
-      height: 1,
-      backgroundColor: theme.separator,
-      marginVertical: 18,
-    },
-
-    // Quick add input: + What needs to get done? ↵
-    quickAddRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 8,
-    },
-    plusIcon: {
-      marginRight: 10,
-    },
-    quickAddInput: {
-      flex: 1,
-      fontSize: 15,
-      fontFamily: 'Inter_500Medium',
-      color: theme.accent,
-      padding: 0,
-    },
-    returnBtn: {
-      padding: 4,
-    },
-
-    // Completed Section: 0 Completed v
-    completedHeaderRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 8,
-    },
-    completedHeaderText: {
-      fontSize: 15,
-      fontFamily: 'Inter_500Medium',
-      color: theme.secondaryText,
-    },
-    completedListWrap: {
-      paddingTop: 8,
-      gap: 10,
-    },
-    completedItemRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 8,
-    },
-    completedTitleText: {
-      fontSize: 14,
-      fontFamily: 'Inter_500Medium',
-      color: theme.secondaryText,
-      textDecorationLine: 'line-through',
-      marginLeft: 12,
-      flex: 1,
-    },
-
-    // Make time for a task ->
-    makeTimeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 10,
-    },
-    makeTimeLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
-    makeTimeText: {
-      fontSize: 15,
-      fontFamily: 'Inter_600SemiBold',
-      color: theme.accent,
-    },
-
-    // Desktop layout styles
+    // Desktop 2-Column Mode
     desktopColumnsRow: {
       flexDirection: 'row',
       gap: 36,
@@ -929,10 +807,10 @@ const createStyles = (theme: any, isDark: boolean) =>
     },
     desktopCard: {
       borderWidth: 1,
-      borderColor: theme.separator,
-      borderRadius: 14,
-      padding: 18,
-      backgroundColor: isDark ? '#080808' : '#FFFFFF',
+      borderColor: theme.cardBorder,
+      borderRadius: 18,
+      padding: 20,
+      backgroundColor: theme.card,
     },
     desktopCardTitle: {
       fontSize: 15,
@@ -951,13 +829,13 @@ const createStyles = (theme: any, isDark: boolean) =>
       alignItems: 'center',
       paddingVertical: 10,
       paddingHorizontal: 6,
-      borderRadius: 8,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+      borderRadius: 10,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
     },
     summaryStatNumber: {
-      fontSize: 17,
+      fontSize: 18,
       fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       marginBottom: 2,
@@ -966,18 +844,6 @@ const createStyles = (theme: any, isDark: boolean) =>
       fontSize: 11,
       fontFamily: 'Inter_500Medium',
       color: theme.secondaryText,
-    },
-    progressTrack: {
-      height: 4,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-      borderRadius: 2,
-      overflow: 'hidden',
-      width: '100%',
-    },
-    progressFill: {
-      height: '100%',
-      backgroundColor: theme.accent,
-      borderRadius: 2,
     },
     priorityGuideRow: {
       flexDirection: 'row',
@@ -1017,7 +883,7 @@ const createStyles = (theme: any, isDark: boolean) =>
       backgroundColor: isDark ? 'rgba(0, 102, 255, 0.15)' : 'rgba(0, 102, 255, 0.1)',
       paddingHorizontal: 12,
       paddingVertical: 6,
-      borderRadius: 6,
+      borderRadius: 8,
     },
     focusActionPillText: {
       fontSize: 12,

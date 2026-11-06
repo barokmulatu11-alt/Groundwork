@@ -227,10 +227,12 @@ export default function CalendarScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
+
       <ScrollView
         style={{ flex: 1, paddingHorizontal: horizontalPadding }}
         contentContainerStyle={{
-          paddingTop: insets.top + 24,
+          paddingTop: 16,
           paddingBottom: insets.bottom + 120,
           maxWidth: isDesktop ? contentMaxWidth : undefined,
           alignSelf: isDesktop ? 'center' : undefined,
@@ -238,16 +240,14 @@ export default function CalendarScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <BrandHeader title="groundwork." onBack={() => router.back()} />
-
         <View style={isDesktop ? styles.desktopTwoColLayout : undefined}>
           {/* Main Column */}
           <View style={isDesktop ? styles.desktopMainCol : undefined}>
-            <View style={{ marginBottom: 28, marginTop: 8 }}>
-              <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            <View style={{ marginBottom: 24, marginTop: 4 }}>
+              <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
                 Calendar.
               </Text>
-              <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
                 {format(currentDate, 'MMMM yyyy')}
               </Text>
             </View>

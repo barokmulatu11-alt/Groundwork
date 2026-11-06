@@ -410,22 +410,28 @@ export function GlobalShareSheet({
   // Image Upload handler
   const handleUploadImage = async () => {
     hapticLight();
-    const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!granted) {
-      Alert.alert(
-        "Permission Denied",
-        "Please grant library permissions in settings to select backgrounds.",
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 1.0,
-    });
-    if (!result.canceled && result.assets?.[0]) {
-      setBgImageUri(result.assets[0].uri);
-      captureHistoryState();
+    try {
+      if (Platform.OS === "ios") {
+        const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!granted) {
+          Alert.alert(
+            "Permission Denied",
+            "Please grant photo library permissions in settings to select backgrounds.",
+          );
+          return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 1.0,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        setBgImageUri(result.assets[0].uri);
+        captureHistoryState();
+      }
+    } catch (e) {
+      console.warn("[GlobalShareSheet] Failed to pick background image:", e);
     }
   };
 

@@ -13,7 +13,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useStore } from '@/store/useStore';
 import { parseHabitDates } from '@/lib/habitUtils';
 
 export type RewardId =
@@ -389,6 +388,7 @@ export function isSessionGenuinelyCompleted(s: any): boolean {
  * records never lowers the user's earned milestone progress.
  */
 export function getMilestoneProgress(): UserProgress {
+  const { useStore } = require('@/store/useStore');
   const state = useStore.getState();
   const userId = useAuthStore.getState().session?.user?.id || 'guest';
 

@@ -162,5 +162,4 @@ const styles = StyleSheet.create({
     width: '100%' },
   author: {
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'System' } });
+    fontFamily: 'Inter_600SemiBold' } });

@@ -19,6 +19,9 @@ import {
     canAddTask,
     type GateResult,
 } from "@/lib/subscriptionService";
+
+export type TaskCreationResult = GateResult & { success?: boolean; error?: string; task?: Task };
+export type HabitCreationResult = GateResult & { success?: boolean; error?: string; habit?: Habit };
 import { neonData, neonAuth } from "@/lib/neon";
 import { AppState as RNAppState } from "react-native";
 import { create } from "zustand";
@@ -57,13 +60,13 @@ interface AppState {
   syncPartialFailures: string[];
 
   loadAllTasks: () => Promise<void>;
-  addTask: (task: Partial<Task>) => Promise<GateResult>;
+  addTask: (task: Partial<Task>) => Promise<TaskCreationResult>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   toggleTask: (id: string, currentStatus: boolean) => Promise<void>;
 
   loadHabits: () => Promise<void>;
-  addHabit: (habit: Partial<Habit>) => Promise<GateResult>;
+  addHabit: (habit: Partial<Habit>) => Promise<HabitCreationResult>;
   toggleHabit: (id: string, date: string) => Promise<void>;
   updateHabit: (id: string, updates: Partial<Habit>) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
@@ -216,20 +219,22 @@ const pushToCloud = async (table: string, data: any): Promise<boolean> => {
       cloudData = {
         user_id: userId,
         theme: data.theme || "light",
-        notifications_enabled: data.notificationsEnabled ? 1 : 0,
-        tasks_layout: data.tasksLayout || "list",
-        habits_layout: data.habitsLayout || "grid",
-        notes_layout: data.notesLayout || "grid",
-        is_update_banner_dismissed: data.isUpdateBannerDismissed ? 1 : 0,
-        default_focus_duration: data.defaultFocusDuration || 25,
-        daily_goal: data.dailyGoal || 5,
-        focus_timer_active: data.focusTimerActive ? 1 : 0,
-        focus_timer_time_left: data.focusTimerTimeLeft || 1500,
-        focus_timer_mode: data.focusTimerMode || "Study",
-        focus_timer_duration_minutes: data.focusTimerDurationMinutes || 25,
-        focus_timer_selected_task_id: data.focusTimerSelectedTaskId || null,
-        focus_timer_start_time: data.focusTimerStartTime || null,
-        default_task_priority: data.defaultTaskPriority || "Medium",
+        accent_color: data.accentColor || data.accent_color || "#007AFF",
+        premium_theme_id: data.premiumThemeId || data.premium_theme_id || "default",
+        notifications_enabled: (data.notificationsEnabled || data.notifications_enabled) ? 1 : 0,
+        tasks_layout: data.tasksLayout || data.tasks_layout || "list",
+        habits_layout: data.habitsLayout || data.habits_layout || "grid",
+        notes_layout: data.notesLayout || data.notes_layout || "grid",
+        is_update_banner_dismissed: (data.isUpdateBannerDismissed || data.is_update_banner_dismissed) ? 1 : 0,
+        default_focus_duration: data.defaultFocusDuration || data.default_focus_duration || 25,
+        daily_goal: data.dailyGoal || data.daily_goal || 5,
+        focus_timer_active: (data.focusTimerActive || data.focus_timer_active) ? 1 : 0,
+        focus_timer_time_left: data.focusTimerTimeLeft || data.focus_timer_time_left || 1500,
+        focus_timer_mode: data.focusTimerMode || data.focus_timer_mode || "Study",
+        focus_timer_duration_minutes: data.focusTimerDurationMinutes || data.focus_timer_duration_minutes || 25,
+        focus_timer_selected_task_id: data.focusTimerSelectedTaskId || data.focus_timer_selected_task_id || null,
+        focus_timer_start_time: data.focusTimerStartTime || data.focus_timer_start_time || null,
+        default_task_priority: data.defaultTaskPriority || data.default_task_priority || "Medium",
         default_reminder_time: data.defaultReminderTime ?? 10,
         week_start_day: data.weekStartDay || "Monday",
         auto_sort_tasks: data.autoSortTasks ? 1 : 0,
@@ -252,6 +257,18 @@ const pushToCloud = async (table: string, data: any): Promise<boolean> => {
         note_text: data.note_text || "",
         created_at: data.created_at || new Date().toISOString(),
         updated_at: data.updated_at || new Date().toISOString(),
+      };
+    } else if (table === "sub_tasks") {
+      cloudData = {
+        id: data.id,
+        task_id: data.task_id,
+        user_id: userId,
+        title: data.title || "",
+        completed: Boolean(data.completed),
+        order_index: Number(data.order_index) || 0,
+        created_at: data.created_at || new Date().toISOString(),
+        updated_at: data.updated_at || new Date().toISOString(),
+        deleted_at: data.deleted_at || null,
       };
     } else {
       cloudData = { ...data, user_id: userId };
@@ -297,6 +314,84 @@ const pushToCloud = async (table: string, data: any): Promise<boolean> => {
   }
 };
 
+const pushBatchToCloud = async (table: string, items: any[]): Promise<boolean> => {
+  if (!items || items.length === 0) return true;
+  try {
+    const userId = getUserId();
+    if (!userId || userId === "guest") return false;
+
+    const prepared = items.map((item) => {
+      if (table === "sub_tasks") {
+        return {
+          id: item.id,
+          task_id: item.task_id,
+          user_id: userId,
+          title: item.title || "",
+          completed: Boolean(item.completed),
+          order_index: Number(item.order_index) || 0,
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString(),
+          deleted_at: item.deleted_at || null,
+        };
+      }
+      if (table === "day_notes") {
+        return {
+          id: item.id || item.date,
+          user_id: userId,
+          date: item.date,
+          note_text: item.note_text || "",
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString(),
+        };
+      }
+      const cloudData = { ...item, user_id: userId };
+      const keysToSerialize = [
+        "dates_completed",
+        "tags",
+        "audio_uris",
+        "drawing_uris",
+        "image_uris",
+      ];
+      keysToSerialize.forEach((key) => {
+        if (cloudData[key] && Array.isArray(cloudData[key])) {
+          cloudData[key] = JSON.stringify(cloudData[key]);
+        }
+      });
+      return cloudData;
+    });
+
+    const chunkSize = 25;
+    for (let i = 0; i < prepared.length; i += chunkSize) {
+      const chunk = prepared.slice(i, i + chunkSize);
+      let { error } = await neonData.from(table).upsert(chunk);
+      if (
+        error &&
+        table === "notes" &&
+        /flashcards|formulas|schema cache/i.test(error.message || "")
+      ) {
+        const slim = chunk.map((c) => {
+          const s = { ...c };
+          delete s.flashcards;
+          delete s.formulas;
+          delete s.study_hours;
+          delete s.revision_score;
+          delete s.last_reviewed_at;
+          return s;
+        });
+        ({ error } = await neonData.from(table).upsert(slim));
+      }
+      if (error) {
+        console.warn(`[Cloud] Push batch to ${table} failed:`, error.message);
+        return false;
+      }
+    }
+    return true;
+  } catch (e: any) {
+    console.warn(`[Cloud] Push batch to ${table} failed (offline or error):`, e?.message || e);
+    return false;
+  }
+};
+
 const getUserId = () => {
   const { session, isGuest } = useAuthStore.getState();
   if (session?.user?.id) return session.user.id;
@@ -324,11 +419,15 @@ export const useStore = create<AppState>((set, get) => ({
     const userId = getUserId();
     const tasks = await db.getTasks(userId);
     set({ tasks: tasks || [] });
+    try {
+      const { syncWidgetData } = require('@/lib/widgetSync');
+      syncWidgetData(tasks || []);
+    } catch (_) {}
   },
 
   addTask: async (taskData) => {
     const gate = canAddTask();
-    if (!gate.allowed) return gate;
+    if (!gate.allowed) return { ...gate, success: false, error: gate.reason || 'Pro limit reached' };
 
     const userId = getUserId();
     const order_index = get().tasks.length;
@@ -340,24 +439,102 @@ export const useStore = create<AppState>((set, get) => ({
     if (newTask) {
       set({ tasks: [...get().tasks, newTask] });
       pushToCloud("tasks", newTask);
+      if (Array.isArray(newTask.sub_tasks)) {
+        for (const st of newTask.sub_tasks) {
+          pushToCloud("sub_tasks", {
+            ...st,
+            task_id: newTask.id,
+            user_id: userId,
+          });
+        }
+      }
       db.updateConnectProfileStats(userId);
       // Track analytics event
       try { trackTask.created(newTask.id, newTask.title || "", newTask.priority); } catch (_) {}
+      // Sync to Native Android Home Screen Widget
+      try {
+        const { syncWidgetData } = require('@/lib/widgetSync');
+        syncWidgetData([...get().tasks, newTask]);
+      } catch (_) {}
+      // Auto-schedule notification if task has due time and notifications are allowed
+      try {
+        const { useSettingsStore } = require('@/store/useSettingsStore');
+        if (useSettingsStore.getState().notificationsEnabled) {
+          const timeStr = newTask.due_time || newTask.time_block;
+          if (timeStr && !newTask.completed) {
+            const { scheduleTaskReminder } = require('@/lib/notifications');
+            const now = new Date();
+            const dateStr = newTask.date || now.toISOString().split('T')[0];
+            const formattedTime = timeStr.includes(':') && timeStr.length <= 5 ? timeStr + ':00' : timeStr;
+            const parsed = new Date(`${dateStr}T${formattedTime}`);
+            if (!isNaN(parsed.getTime()) && parsed > now) {
+              scheduleTaskReminder(newTask.id, newTask.title || 'Task', parsed, newTask.reminder_offset || 15);
+            }
+          }
+        }
+      } catch (_) {}
+      return { allowed: true, success: true, task: newTask };
     }
-    return { allowed: true };
+    return { allowed: true, success: false, error: 'Failed to create task in local database' };
   },
 
   updateTask: async (id, updates) => {
+    // 1. Immediate optimistic update in Zustand store
+    set((state) => ({
+      tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t)),
+    }));
+    // 2. Persist to SQLite
     await db.updateTask(id, updates);
-    const updatedTasks = get().tasks.map((t) =>
-      t.id === id ? { ...t, ...updates } : t,
-    );
-    set({ tasks: updatedTasks });
-    const task = updatedTasks.find((t) => t.id === id);
+    // 3. Reconcile with SQLite fresh tasks
+    const userId = getUserId();
+    const freshTasks = db.getTasks(userId);
+    if (freshTasks && freshTasks.length > 0) {
+      const merged = freshTasks.map((ft) => (ft.id === id ? { ...ft, ...updates } : ft));
+      set({ tasks: merged });
+    }
+    const task = get().tasks.find((t) => t.id === id);
     if (task) {
       pushToCloud("tasks", task);
-      db.updateConnectProfileStats(task.user_id || getUserId());
+      db.updateConnectProfileStats(task.user_id || userId);
     }
+    if (Array.isArray(updates.sub_tasks)) {
+      for (const st of (task?.sub_tasks || updates.sub_tasks)) {
+        pushToCloud("sub_tasks", {
+          ...st,
+          task_id: id,
+          user_id: task?.user_id || userId,
+        });
+      }
+    }
+    // Sync to Native Android Home Screen Widget
+    try {
+      const { syncWidgetData } = require('@/lib/widgetSync');
+      syncWidgetData(get().tasks);
+    } catch (_) {}
+    // Auto-schedule or cancel notification on task updates
+    try {
+      const { useSettingsStore } = require('@/store/useSettingsStore');
+      if (useSettingsStore.getState().notificationsEnabled) {
+        const { scheduleTaskReminder, cancelTaskReminder } = require('@/lib/notifications');
+        const updated = get().tasks.find((t) => t.id === id);
+        if (updated) {
+          if (updated.completed || updated.deleted_at) {
+            cancelTaskReminder(id);
+          } else {
+            const timeStr = updated.due_time || updated.time_block;
+            if (timeStr) {
+              const now = new Date();
+              const dateStr = updated.date || now.toISOString().split('T')[0];
+              const formattedTime = timeStr.includes(':') && timeStr.length <= 5 ? timeStr + ':00' : timeStr;
+              const parsed = new Date(`${dateStr}T${formattedTime}`);
+              if (!isNaN(parsed.getTime()) && parsed > now) {
+                scheduleTaskReminder(updated.id, updated.title || 'Task', parsed, updated.reminder_offset || 15);
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
   },
 
   deleteTask: async (id) => {
@@ -374,6 +551,14 @@ export const useStore = create<AppState>((set, get) => ({
       pushToCloud("tasks", { id, deleted_at: now, updated_at: now });
     }
     db.updateConnectProfileStats(getUserId());
+    try {
+      const { cancelTaskReminder } = require('@/lib/notifications');
+      cancelTaskReminder(id);
+    } catch (_) {}
+    try {
+      const { syncWidgetData } = require('@/lib/widgetSync');
+      syncWidgetData(get().tasks);
+    } catch (_) {}
   },
 
   toggleTask: async (id, currentStatus) => {
@@ -385,6 +570,30 @@ export const useStore = create<AppState>((set, get) => ({
     );
     set({ tasks: updatedTasks });
     const task = updatedTasks.find((t) => t.id === id);
+    try {
+      const { syncWidgetData } = require('@/lib/widgetSync');
+      syncWidgetData(updatedTasks);
+    } catch (_) {}
+    try {
+      const { scheduleTaskReminder, cancelTaskReminder } = require('@/lib/notifications');
+      if (completed) {
+        cancelTaskReminder(id);
+      } else if (task) {
+        const { useSettingsStore } = require('@/store/useSettingsStore');
+        if (useSettingsStore.getState().notificationsEnabled) {
+          const timeStr = task.due_time || task.time_block;
+          if (timeStr) {
+            const now = new Date();
+            const dateStr = task.date || now.toISOString().split('T')[0];
+            const formattedTime = timeStr.includes(':') && timeStr.length <= 5 ? timeStr + ':00' : timeStr;
+            const parsed = new Date(`${dateStr}T${formattedTime}`);
+            if (!isNaN(parsed.getTime()) && parsed > now) {
+              scheduleTaskReminder(task.id, task.title || 'Task', parsed, task.reminder_offset || 15);
+            }
+          }
+        }
+      }
+    } catch (_) {}
     if (task) {
       pushToCloud("tasks", task);
       if (completed) {
@@ -430,11 +639,15 @@ export const useStore = create<AppState>((set, get) => ({
       return h;
     });
     set({ habits });
+    try {
+      const { syncHabitsWidgetData } = require('@/lib/widgetSync');
+      syncHabitsWidgetData(habits);
+    } catch (_) {}
   },
 
   addHabit: async (habitData) => {
     const gate = canAddHabit();
-    if (!gate.allowed) return gate;
+    if (!gate.allowed) return { ...gate, success: false, error: gate.reason || 'Pro limit reached' };
 
     const userId = getUserId();
     const newHabit = await db.addHabit({ ...habitData, user_id: userId });
@@ -443,8 +656,9 @@ export const useStore = create<AppState>((set, get) => ({
       pushToCloud("habits", newHabit);
       // Track analytics event
       try { trackHabit.created(newHabit.id, newHabit.title || "", newHabit.frequency); } catch (_) {}
+      return { allowed: true, success: true, habit: newHabit };
     }
-    return { allowed: true };
+    return { allowed: true, success: false, error: 'Failed to create habit in local database' };
   },
 
   toggleHabit: async (id, date) => {
@@ -478,6 +692,10 @@ export const useStore = create<AppState>((set, get) => ({
       set({
         habits: get().habits.map((h) => (h.id === id ? updatedHabit : h)),
       });
+      try {
+        const { syncHabitsWidgetData } = require('@/lib/widgetSync');
+        syncHabitsWidgetData(get().habits);
+      } catch (_) {}
 
       pushToCloud("habits", updatedHabit);
 
@@ -523,32 +741,45 @@ export const useStore = create<AppState>((set, get) => ({
       set({
         habits: get().habits.map((h) => (h.id === id ? updatedHabit : h)),
       });
-      pushToCloud("habits", updatedHabit);
-    } catch (e) {}
+      try {
+        const { syncHabitsWidgetData } = require('@/lib/widgetSync');
+        syncHabitsWidgetData(get().habits);
+      } catch (_) {}
+      await pushToCloud("habits", updatedHabit);
+    } catch (e) {
+      console.error("[Store] updateHabit error:", e);
+    }
   },
 
   deleteHabit: async (id) => {
     try {
       const now = new Date().toISOString();
       const habit = get().habits.find((h) => h.id === id);
-      db.db.runSync(
-        "UPDATE habits SET deleted_at = ?, updated_at = ? WHERE id = ?",
-        [now, now, id],
-      );
+      await db.deleteHabit(id);
       set({ habits: get().habits.filter((h) => h.id !== id) });
+      try {
+        const { syncHabitsWidgetData } = require('@/lib/widgetSync');
+        syncHabitsWidgetData(get().habits.filter((h) => h.id !== id));
+      } catch (_) {}
       // Soft delete in cloud — pass full object so pushToCloud has all required fields
-      if (habit) {
-        pushToCloud("habits", { ...habit, deleted_at: now, updated_at: now });
-      } else {
-        pushToCloud("habits", { id, deleted_at: now, updated_at: now });
-      }
-    } catch (e) {}
+      const habitPayload = habit
+        ? { ...habit, deleted_at: now, updated_at: now }
+        : { id, deleted_at: now, updated_at: now };
+      await pushToCloud("habits", habitPayload);
+      try { trackHabit.deleted(id, habit?.title || ""); } catch (_) {}
+    } catch (e) {
+      console.error("[Store] deleteHabit error:", e);
+    }
   },
 
   loadNotes: async () => {
     const userId = getUserId();
     const notes = await db.getNotes(userId);
     set({ notes: notes || [] });
+    try {
+      const { syncNotesWidgetData } = require('@/lib/widgetSync');
+      syncNotesWidgetData(notes || []);
+    } catch (_) {}
   },
 
   addNote: async (noteData) => {
@@ -599,6 +830,10 @@ export const useStore = create<AppState>((set, get) => ({
     const userId = getUserId();
     const sessions = await db.getFocusSessions(userId);
     set({ focusSessions: sessions || [] });
+    try {
+      const { syncFocusWidgetData } = require('@/lib/widgetSync');
+      syncFocusWidgetData();
+    } catch (_) {}
   },
 
   addFocusSession: async (sessionData) => {
@@ -728,9 +963,7 @@ export const useStore = create<AppState>((set, get) => ({
       // syncStatus drives the badge; keep 'partial' visible if previous run was partial.
       set({ isSyncing: true, syncStatus: 'syncing', syncError: false });
 
-      // --- LOCAL & SUPABASE CLOUD REPAIR ---
-      // Repair any items on local SQLite & Supabase that were accidentally soft-deleted
-      // by the corrupted local deleted_at values (like '[]', 'null', or '{}')
+      // --- LOCAL DATA REPAIR ---
       try {
         db.db.runSync(
           "UPDATE tasks SET deleted_at = NULL WHERE deleted_at = '[]' OR deleted_at = '{}' OR deleted_at = 'null' OR deleted_at = ''",
@@ -741,26 +974,8 @@ export const useStore = create<AppState>((set, get) => ({
         db.db.runSync(
           "UPDATE habits SET deleted_at = NULL WHERE deleted_at = '[]' OR deleted_at = '{}' OR deleted_at = 'null' OR deleted_at = ''",
         );
-
-        await Promise.all([
-          neonData
-            .from("tasks")
-            .update({ deleted_at: null })
-            .in("deleted_at", ["[]", "{}", "null", ""])
-            .eq("user_id", userId),
-          neonData
-            .from("notes")
-            .update({ deleted_at: null })
-            .in("deleted_at", ["[]", "{}", "null", ""])
-            .eq("user_id", userId),
-          neonData
-            .from("habits")
-            .update({ deleted_at: null })
-            .in("deleted_at", ["[]", "{}", "null", ""])
-            .eq("user_id", userId),
-        ]);
       } catch (e) {
-        console.warn("[Sync] Cloud/Local repair failed:", e);
+        console.warn("[Sync] Local repair failed:", e);
       }
 
       // --- 0. MIGRATE GUEST DATA FIRST ---
@@ -797,6 +1012,7 @@ export const useStore = create<AppState>((set, get) => ({
         notesData,
         focusSessionsData,
         dayNotesData,
+        subTasksData,
         settingsData,
       ] = await Promise.all([
         neonData.from("tasks").select("*").eq("user_id", userId),
@@ -804,6 +1020,7 @@ export const useStore = create<AppState>((set, get) => ({
         neonData.from("notes").select("*").eq("user_id", userId),
         neonData.from("focus_sessions").select("*").eq("user_id", userId),
         neonData.from("day_notes").select("*").eq("user_id", userId),
+        neonData.from("sub_tasks").select("*").eq("user_id", userId).then((r: any) => r, () => ({ data: [], error: null })),
         neonData
           .from("user_settings")
           .select("*")
@@ -838,48 +1055,69 @@ export const useStore = create<AppState>((set, get) => ({
       const counts = { tasks: 0, habits: 0, notes: 0, focus: 0 };
 
       // --- 1. BIDIRECTIONAL SYNC: PUSH LOCAL TO REMOTE ---
-      // Push unsynced or newer local tasks to the cloud
+      // Push unsynced or newer local tasks to the cloud (batched for high performance)
       try {
         const localTasks = db.getTasks(userId);
-        console.log(
-          `[Sync] Pushing ${localTasks.length} local tasks to cloud...`,
-        );
-        for (const local of localTasks) {
+        const tasksToPush = localTasks.filter((local) => {
           const remote = tasksData.data?.find((t) => t.id === local.id);
-          if (
+          return (
             !remote ||
             (local.updated_at &&
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
-          ) {
-            const ok = await pushToCloud("tasks", local);
-            if (!ok) partialFailures.push("tasks");
-            else counts.tasks++;
-          }
+          );
+        });
+        if (tasksToPush.length > 0) {
+          console.log(`[Sync] Batch pushing ${tasksToPush.length} local tasks to cloud...`);
+          const ok = await pushBatchToCloud("tasks", tasksToPush);
+          if (!ok) partialFailures.push("tasks");
+          else counts.tasks += tasksToPush.length;
         }
       } catch (e) {
         console.warn("[Sync] Push local tasks failed:", e);
         partialFailures.push("tasks");
       }
 
-      // Push unsynced or newer local habits to the cloud
+      // Push unsynced or newer local sub_tasks to the cloud (batched)
       try {
-        const localHabits = await db.getHabits(userId);
-        console.log(
-          `[Sync] Pushing ${localHabits.length} local habits to cloud...`,
+        const localSubTasks = db.db.getAllSync<any>(
+          "SELECT * FROM sub_tasks WHERE user_id = ? AND deleted_at IS NULL",
+          [userId]
         );
-        for (const local of localHabits) {
-          const remote = habitsData.data?.find((h) => h.id === local.id);
-          if (
+        const subTasksToPush = localSubTasks.filter((local) => {
+          const remote = subTasksData?.data?.find((st: any) => st.id === local.id);
+          return (
             !remote ||
             (local.updated_at &&
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
-          ) {
-            const ok = await pushToCloud("habits", local);
-            if (!ok) partialFailures.push("habits");
-            else counts.habits++;
-          }
+          );
+        });
+        if (subTasksToPush.length > 0) {
+          console.log(`[Sync] Batch pushing ${subTasksToPush.length} sub_tasks to cloud...`);
+          await pushBatchToCloud("sub_tasks", subTasksToPush);
+        }
+      } catch (e) {
+        console.warn("[Sync] Push local sub_tasks failed:", e);
+      }
+
+      // Push unsynced or newer local habits to the cloud (batched)
+      try {
+        const localHabits = await db.getHabits(userId);
+        const habitsToPush = localHabits.filter((local) => {
+          const remote = habitsData.data?.find((h) => h.id === local.id);
+          return (
+            !remote ||
+            (local.updated_at &&
+              remote.updated_at &&
+              new Date(local.updated_at) > new Date(remote.updated_at))
+          );
+        });
+        if (habitsToPush.length > 0) {
+          console.log(`[Sync] Batch pushing ${habitsToPush.length} local habits to cloud...`);
+          const ok = await pushBatchToCloud("habits", habitsToPush);
+          if (!ok) partialFailures.push("habits");
+          else counts.habits += habitsToPush.length;
         }
       } catch (e) {
         console.warn("[Sync] Push local habits failed:", e);
@@ -890,8 +1128,9 @@ export const useStore = create<AppState>((set, get) => ({
       try {
         const localNotes = await db.getNotes(userId);
         const { syncAudioToCloud } = await import('@/lib/audioStorage');
+        const notesWithAudioChanged = new Set<string>();
+
         for (const local of localNotes) {
-          // Check if any audio URIs need cloud sync
           let noteAudioUris: string[] = [];
           try {
             const rawAudioUris = (local as any).audio_uris;
@@ -902,8 +1141,8 @@ export const useStore = create<AppState>((set, get) => ({
             }
           } catch (_) {}
 
-          let hasAudioChange = false;
           if (noteAudioUris.length > 0) {
+            let hasAudioChange = false;
             const syncedUris = await Promise.all(
               noteAudioUris.map(async (uri) => {
                 if (uri && (uri.startsWith('gw_audio_') || uri.startsWith('file://'))) {
@@ -927,49 +1166,56 @@ export const useStore = create<AppState>((set, get) => ({
               if (local.media_type === 'audio') {
                 local.media_uri = syncedUris[0] || local.media_uri;
               }
-              // Update local note record safely
               db.updateNote(local.id, {
                 audio_uris: syncedUris,
                 media_uri: local.media_uri,
               });
+              notesWithAudioChanged.add(local.id);
             }
           }
+        }
 
+        const notesToPush = localNotes.filter((local) => {
           const remote = notesData.data?.find((n) => n.id === local.id);
-          if (
-            hasAudioChange ||
+          return (
+            notesWithAudioChanged.has(local.id) ||
             !remote ||
             (local.updated_at &&
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
-          ) {
-            const ok = await pushToCloud("notes", local);
-            if (!ok) partialFailures.push("notes");
-            else counts.notes++;
-          }
+          );
+        });
+
+        if (notesToPush.length > 0) {
+          console.log(`[Sync] Batch pushing ${notesToPush.length} notes to cloud...`);
+          const ok = await pushBatchToCloud("notes", notesToPush);
+          if (!ok) partialFailures.push("notes");
+          else counts.notes += notesToPush.length;
         }
       } catch (e) {
         console.warn("[Sync] Push local notes failed:", e);
         partialFailures.push("notes");
       }
 
-      // Push unsynced local focus sessions to the cloud
+      // Push unsynced local focus sessions to the cloud (batched)
       try {
         const localFocusSessions = await db.getFocusSessions(userId);
-        for (const local of localFocusSessions) {
+        const focusToPush = localFocusSessions.filter((local) => {
           const remote = focusSessionsData.data?.find((f) => f.id === local.id);
-          if (!remote) {
-            const ok = await pushToCloud("focus_sessions", local);
-            if (!ok) partialFailures.push("focus_sessions");
-            else counts.focus++;
-          }
+          return !remote;
+        });
+        if (focusToPush.length > 0) {
+          console.log(`[Sync] Batch pushing ${focusToPush.length} focus sessions to cloud...`);
+          const ok = await pushBatchToCloud("focus_sessions", focusToPush);
+          if (!ok) partialFailures.push("focus_sessions");
+          else counts.focus += focusToPush.length;
         }
       } catch (e) {
         console.warn("[Sync] Push local focus sessions failed:", e);
         partialFailures.push("focus_sessions");
       }
 
-      // Push unsynced or newer local day notes to the cloud
+      // Push unsynced or newer local day notes to the cloud (batched)
       try {
         const rows = db.db.getAllSync<{
           id: string;
@@ -981,19 +1227,21 @@ export const useStore = create<AppState>((set, get) => ({
           "SELECT id, date, note_text, created_at, updated_at FROM day_notes WHERE user_id = ?",
           [userId],
         );
-        for (const local of rows) {
+        const dayNotesToPush = rows.filter((local) => {
           const remote = dayNotesData.data?.find(
             (d) => d.id === local.id || d.date === local.date,
           );
-          if (
+          return (
             !remote ||
             (local.updated_at &&
               remote.updated_at &&
               new Date(local.updated_at) > new Date(remote.updated_at))
-          ) {
-            const ok = await pushToCloud("day_notes", local);
-            if (!ok) partialFailures.push("day_notes");
-          }
+          );
+        });
+        if (dayNotesToPush.length > 0) {
+          console.log(`[Sync] Batch pushing ${dayNotesToPush.length} day notes to cloud...`);
+          const ok = await pushBatchToCloud("day_notes", dayNotesToPush);
+          if (!ok) partialFailures.push("day_notes");
         }
       } catch (e) {
         console.warn("[Sync] Push local day notes failed:", e);
@@ -1021,12 +1269,13 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       // --- 2. BIDIRECTIONAL SYNC: HYDRATE LOCAL FROM REMOTE ---
+      // Pre-index existing local rows into memory Maps for lightning-fast O(1) checks (eliminates 200+ sequential SQL queries)
+      const localTasksRows = db.db.getAllSync<any>("SELECT * FROM tasks WHERE user_id = ? OR user_id = 'guest'", [userId]);
+      const localTasksMap = new Map<string, any>(localTasksRows.map((t) => [t.id, t]));
+
       if (tasksData.data) {
         for (const remote of tasksData.data) {
-          const local = db.db.getFirstSync<any>(
-            "SELECT * FROM tasks WHERE id = ?",
-            [remote.id],
-          );
+          const local = localTasksMap.get(remote.id);
           const remoteDeletedAt =
             remote.deleted_at === "[]" ||
             remote.deleted_at === "{}" ||
@@ -1067,12 +1316,72 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
+      const localSubTasksRows = db.db.getAllSync<any>("SELECT * FROM sub_tasks WHERE user_id = ?", [userId]);
+      const localSubTasksMap = new Map<string, any>(localSubTasksRows.map((st) => [st.id, st]));
+
+      if (subTasksData?.data && Array.isArray(subTasksData.data)) {
+        for (const remote of subTasksData.data) {
+          const local = localSubTasksMap.get(remote.id);
+          const remoteDeletedAt =
+            remote.deleted_at === "[]" ||
+            remote.deleted_at === "{}" ||
+            remote.deleted_at === "null" ||
+            remote.deleted_at === ""
+              ? null
+              : remote.deleted_at;
+          if (remoteDeletedAt) {
+            if (!local || !local.deleted_at) {
+              db.db.runSync(
+                "UPDATE sub_tasks SET deleted_at = ?, updated_at = ? WHERE id = ?",
+                [remoteDeletedAt, remote.updated_at || remoteDeletedAt, remote.id],
+              );
+            }
+          } else {
+            if (!local) {
+              db.db.runSync(
+                "INSERT INTO sub_tasks (id, task_id, user_id, title, completed, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                  remote.id,
+                  remote.task_id,
+                  userId,
+                  remote.title || "",
+                  remote.completed ? 1 : 0,
+                  remote.order_index || 0,
+                  remote.created_at || new Date().toISOString(),
+                  remote.updated_at || new Date().toISOString(),
+                ],
+              );
+            } else if (local.deleted_at) {
+              const ok = await pushToCloud("sub_tasks", {
+                ...local,
+                completed: Boolean(local.completed),
+              });
+              if (!ok) partialFailures.push("sub_tasks_delete_resolution");
+            } else if (
+              new Date(remote.updated_at as string) >
+              new Date(local.updated_at as string)
+            ) {
+              db.db.runSync(
+                "UPDATE sub_tasks SET title = ?, completed = ?, order_index = ?, updated_at = ?, deleted_at = NULL WHERE id = ?",
+                [
+                  remote.title || "",
+                  remote.completed ? 1 : 0,
+                  remote.order_index || 0,
+                  remote.updated_at || new Date().toISOString(),
+                  remote.id,
+                ],
+              );
+            }
+          }
+        }
+      }
+
+      const localHabitsRows = db.db.getAllSync<any>("SELECT * FROM habits WHERE user_id = ? OR user_id = 'guest'", [userId]);
+      const localHabitsMap = new Map<string, any>(localHabitsRows.map((h) => [h.id, h]));
+
       if (habitsData.data) {
         for (const remote of habitsData.data) {
-          const local = db.db.getFirstSync<any>(
-            "SELECT * FROM habits WHERE id = ?",
-            [remote.id],
-          );
+          const local = localHabitsMap.get(remote.id);
           const remoteDeletedAt =
             remote.deleted_at === "[]" ||
             remote.deleted_at === "{}" ||
@@ -1113,12 +1422,12 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
+      const localNotesRows = db.db.getAllSync<any>("SELECT * FROM notes WHERE user_id = ?", [userId]);
+      const localNotesMap = new Map<string, any>(localNotesRows.map((n) => [n.id, n]));
+
       if (notesData.data) {
         for (const remote of notesData.data) {
-          const local = db.db.getFirstSync<any>(
-            "SELECT * FROM notes WHERE id = ?",
-            [remote.id],
-          );
+          const local = localNotesMap.get(remote.id);
           const remoteDeletedAt =
             remote.deleted_at === "[]" ||
             remote.deleted_at === "{}" ||
@@ -1141,7 +1450,7 @@ export const useStore = create<AppState>((set, get) => ({
           } else {
             // Active remotely
             if (!local) {
-              db.addNote({ ...remote, user_id: userId });
+              await db.addNote({ ...remote, user_id: userId });
             } else if (local.deleted_at) {
               // Deleted locally but active remotely: push local deletion to cloud
               const ok = await pushToCloud("notes", {
@@ -1160,25 +1469,58 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
-      // Hydrate settings
+      // Hydrate settings safely
       if (settingsData.data) {
         const localSettings = db.getUserSettings(userId);
         if (
           !localSettings ||
-          new Date(settingsData.data.updated_at) >
-            new Date(localSettings.updated_at || 0)
+          (settingsData.data.updated_at &&
+            new Date(settingsData.data.updated_at) >
+              new Date(localSettings.updated_at || 0))
         ) {
-          db.saveUserSettings(userId, settingsData.data);
+          // Normalize snake_case before saving locally
+          db.saveUserSettings(userId, {
+            theme: settingsData.data.theme || localSettings?.theme || 'light',
+            accentColor: settingsData.data.accent_color || localSettings?.accentColor || '#007AFF',
+            premiumThemeId: settingsData.data.premium_theme_id || localSettings?.premiumThemeId || 'default',
+            notificationsEnabled: Boolean(settingsData.data.notifications_enabled),
+            tasksLayout: settingsData.data.tasks_layout || 'list',
+            habitsLayout: settingsData.data.habits_layout || 'grid',
+            notesLayout: settingsData.data.notes_layout || 'grid',
+            isUpdateBannerDismissed: Boolean(settingsData.data.is_update_banner_dismissed),
+            defaultFocusDuration: settingsData.data.default_focus_duration || 25,
+            dailyGoal: settingsData.data.daily_goal || 5,
+            focusTimerActive: Boolean(settingsData.data.focus_timer_active),
+            focusTimerTimeLeft: settingsData.data.focus_timer_time_left || 1500,
+            focusTimerMode: settingsData.data.focus_timer_mode || 'Study',
+            focusTimerDurationMinutes: settingsData.data.focus_timer_duration_minutes || 25,
+            focusTimerSelectedTaskId: settingsData.data.focus_timer_selected_task_id || null,
+            focusTimerStartTime: settingsData.data.focus_timer_start_time || null,
+            defaultTaskPriority: settingsData.data.default_task_priority || 'Medium',
+            defaultReminderTime: settingsData.data.default_reminder_time ?? 10,
+            weekStartDay: settingsData.data.week_start_day || 'Monday',
+            autoSortTasks: Boolean(settingsData.data.auto_sort_tasks),
+            pomodoroFocusDuration: settingsData.data.pomodoro_focus_duration ?? 25,
+            pomodoroBreakDuration: settingsData.data.pomodoro_break_duration ?? 5,
+            pomodoroLongBreakDuration: settingsData.data.pomodoro_long_break_duration ?? 15,
+            pomodoroAutoStartBreaks: Boolean(settingsData.data.pomodoro_auto_start_breaks),
+            smartSuggestionsEnabled: Boolean(settingsData.data.smart_suggestions_enabled),
+            offlineMode: Boolean(settingsData.data.offline_mode),
+            faceIdEnabled: Boolean(settingsData.data.face_id_enabled),
+            appPin: settingsData.data.app_pin || null,
+            autoLockTimeout: settingsData.data.auto_lock_timeout || 0,
+            updated_at: settingsData.data.updated_at,
+          });
         }
       }
 
       // Sync focus sessions
+      const localFocusRows = db.db.getAllSync<any>("SELECT * FROM focus_sessions WHERE user_id = ?", [userId]);
+      const localFocusMap = new Map<string, any>(localFocusRows.map((f) => [f.id, f]));
+
       if (focusSessionsData.data) {
         for (const remote of focusSessionsData.data) {
-          const local = db.db.getFirstSync<any>(
-            "SELECT * FROM focus_sessions WHERE id = ?",
-            [remote.id],
-          );
+          const local = localFocusMap.get(remote.id);
           if (!local) {
             db.db.runSync(
               "INSERT OR IGNORE INTO focus_sessions (id, user_id, duration_minutes, started_at, completed_at, task_id, mode, date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1205,12 +1547,12 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       // Hydrate day notes from cloud
+      const localDayNotesRows = db.db.getAllSync<any>("SELECT * FROM day_notes WHERE user_id = ?", [userId]);
+      const localDayNotesMap = new Map<string, any>(localDayNotesRows.map((d) => [d.id || d.date, d]));
+
       if (dayNotesData.data) {
         for (const remote of dayNotesData.data) {
-          const local = db.db.getFirstSync<any>(
-            "SELECT * FROM day_notes WHERE id = ? OR date = ?",
-            [remote.id, remote.date],
-          );
+          const local = localDayNotesMap.get(remote.id) || localDayNotesMap.get(remote.date);
           if (
             !local ||
             (remote.updated_at &&
@@ -1271,36 +1613,43 @@ export const useStore = create<AppState>((set, get) => ({
         get().loadDayNotes(),
       ]);
 
-      // Sync settings separately
-      if (settingsData && settingsData.data) {
-        const { useSettingsStore } = require("./useSettingsStore");
-        // Update local store state directly if data is present
-        useSettingsStore.setState({ ...settingsData.data });
-      }
+      // Refresh Android home screen widgets (tasks, habits, focus, notes) with freshly loaded data
+      try {
+        const { syncAllWidgets } = require('@/lib/widgetSync');
+        syncAllWidgets();
+      } catch (_) {}
 
-      if (partialFailures.length > 0) {
-        const uniqueFailures = Array.from(new Set(partialFailures));
-        // 'partial' — ≥1 required upload failed.
-        // CRITICAL: Do NOT overwrite lastSyncedAt; keep the last fully successful timestamp.
-        // syncError stays false because data was fetched successfully; only uploads failed.
+      // Sync settings separately via authoritative SettingsStore
+      try {
+        const { useSettingsStore } = require("./useSettingsStore");
+        await useSettingsStore.getState().loadSettings();
+      } catch (_) {}
+
+      // Only treat core entity upload failures (tasks, habits, notes) as blocking full sync status.
+      // Non-blocking background uploads (e.g. deferred local audio clips) do not prevent 'synced' state.
+      const criticalFailures = Array.from(new Set(partialFailures)).filter(
+        (f) => !['notes_audio', 'tasks_delete_resolution', 'sub_tasks_delete_resolution', 'habits_delete_resolution', 'notes_delete_resolution'].includes(f)
+      );
+
+      if (criticalFailures.length > 0) {
         set({
           isSyncing: false,
           syncStatus: 'partial',
           syncError: false,
           syncPartial: true,
-          syncPartialFailures: uniqueFailures,
+          syncPartialFailures: criticalFailures,
         });
         db.updateConnectProfileStats(userId);
-        console.warn("[Sync] Partial sync completed with upload failures:", uniqueFailures);
+        console.warn("[Sync] Partial sync completed with critical upload failures:", criticalFailures);
         return {
           success: false,
           partial: true,
-          partialFailures: uniqueFailures,
+          partialFailures: criticalFailures,
           counts,
         };
       }
 
-      // Full success — every required operation (fetch + all uploads + conflict resolution) succeeded.
+      // Full success — core required tables (tasks, habits, notes, focus, settings) synced!
       set({
         lastSyncedAt: new Date().toISOString(),
         isSyncing: false,

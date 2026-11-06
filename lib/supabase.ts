@@ -1,42 +1,24 @@
+import './cryptoPolyfill';
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { createClient } from '@supabase/supabase-js';
 import { Buffer } from 'buffer';
-import { neonData, neonAuth, NEON_S3_ENDPOINT, getNeonJWTToken, clearPersistedSession, restoreSession } from './neon';
+import { neonData, neonAuth, NEON_AUTH_URL, NEON_S3_ENDPOINT, getNeonJWTToken, persistSessionToken, getPersistedSessionToken, clearPersistedSession, restoreSession, isJwtAnonymous, parseJwtPayload } from './neon';
 
-// Rollback config: Keep Supabase credentials available for rollback until replacement is fully verified
-const supabaseUrl = 'https://yevrsmlwmegovfwdxpjw.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlldnJzbWx3bWVnb3Zmd2R4cGp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MzM3MTcsImV4cCI6MjA5MzQwOTcxN30.loonFy8rzw-HVe7ugIz8QnC_yKMTPzTQHoFdwuOE8Pc';
-
-const customStorage = {
-  getItem: async (key: string) => {
-    try {
-      return await AsyncStorage.getItem(key);
-    } catch (e) {
-      return null;
+// Dynamically resolves Node-only modules in CLI scripts/tests without Metro bundling them into client builds
+function safeNodeRequire(moduleName: string): any {
+  if (Platform.OS !== 'web' && Platform.OS !== 'android' && Platform.OS !== 'ios') {
+    if (typeof window === 'undefined' && typeof process !== 'undefined' && process.versions?.node) {
+      try {
+        const req = eval('require');
+        return req(moduleName);
+      } catch {
+        return null;
+      }
     }
-  },
-  setItem: async (key: string, value: string) => {
-    try {
-      await AsyncStorage.setItem(key, value);
-    } catch (e) {}
-  },
-  removeItem: async (key: string) => {
-    try {
-      await AsyncStorage.removeItem(key);
-    } catch (e) {}
-  },
-};
-
-const rawSupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: customStorage as any,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+  }
+  return null;
+}
 
 /**
  * Realtime channel implementation for Neon.
@@ -267,9 +249,8 @@ export class NeonRealtimeChannel {
  * Drop-in replacement for Supabase across the application.
  * Routes all database queries to Neon Data API (PostgREST) with JWT injection,
  * all authentication flows to Neon Auth, and provides real object-storage operations.
- * If EXPO_PUBLIC_USE_SUPABASE === 'true', falls back to Supabase client for rollback.
  */
-class NeonUnifiedClient {
+export class NeonUnifiedClient {
   private _authListeners = new Set<(event: string, session: any) => void>();
   private _activeChannels = new Map<string, NeonRealtimeChannel>();
 
@@ -287,8 +268,12 @@ class NeonUnifiedClient {
 
   private formatSession(data: any) {
     if (!data?.session) return null;
+    const token = data.session?.token || '';
+    if (token) {
+      persistSessionToken(token).catch(() => {});
+    }
     return {
-      access_token: data.session?.token || '',
+      access_token: token,
       token_type: 'bearer',
       user: {
         id: data.user?.id || data.session?.userId,
@@ -303,6 +288,9 @@ class NeonUnifiedClient {
   }
 
   emitAuthStateChange(event: string, session: any) {
+    if (session?.access_token) {
+      persistSessionToken(session.access_token).catch(() => {});
+    }
     this._authListeners.forEach((listener) => {
       try {
         listener(event, session);
@@ -313,28 +301,71 @@ class NeonUnifiedClient {
   }
 
   from(table: string) {
-    if (process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
-      return rawSupabaseClient.from(table);
-    }
     return (neonData as any).from(table);
   }
 
   get auth() {
-    if (process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
-      return rawSupabaseClient.auth;
-    }
-
     return {
       getSession: async () => {
         try {
-          const { data, error } = await neonAuth.getSession();
-          if (error || !data) return { data: { session: null }, error: error || null };
-          const session = this.formatSession(data);
-          if (session) {
-            const dataApiJwt = await getNeonJWTToken();
-            if (dataApiJwt) session.access_token = dataApiJwt;
+          const { data, error } = await neonAuth.getSession().catch(() => ({ data: null, error: null }));
+          if (data?.session) {
+            const session = this.formatSession(data);
+            if (session) {
+              const dataApiJwt = await getNeonJWTToken();
+              if (dataApiJwt) session.access_token = dataApiJwt;
+              return { data: { session }, error: null };
+            }
           }
-          return { data: { session }, error: null };
+
+          // Fallback for React Native & persisted sessions across restarts
+          const isManual = await AsyncStorage.getItem('groundwork_manual_signout');
+          if (isManual === 'true') {
+            return { data: { session: null }, error: null };
+          }
+
+          const offlineSessionStr = await AsyncStorage.getItem('groundwork_offline_session');
+          if (offlineSessionStr) {
+            try {
+              const parsed = JSON.parse(offlineSessionStr);
+              const token = parsed?.access_token || parsed?.token;
+              if (token) {
+                await persistSessionToken(token);
+                return { data: { session: parsed }, error: null };
+              }
+            } catch (_) {}
+          }
+
+          const persistedToken = await getPersistedSessionToken();
+          if (persistedToken && !isJwtAnonymous(persistedToken)) {
+            const payload = parseJwtPayload(persistedToken);
+            const userId = payload?.sub || payload?.user_id;
+            if (userId) {
+              let profile: any = null;
+              try {
+                const profileStr = await AsyncStorage.getItem(`profile_${userId}`);
+                if (profileStr) profile = JSON.parse(profileStr);
+              } catch (_) {}
+
+              const reconstructedSession = {
+                access_token: persistedToken,
+                token: persistedToken,
+                token_type: 'bearer',
+                user: {
+                  id: userId,
+                  email: payload?.email || profile?.email || '',
+                  user_metadata: {
+                    full_name: profile?.full_name || payload?.name || '',
+                    avatar_url: profile?.avatar_url || '',
+                  },
+                },
+              };
+              await AsyncStorage.setItem('groundwork_offline_session', JSON.stringify(reconstructedSession));
+              return { data: { session: reconstructedSession }, error: null };
+            }
+          }
+
+          return { data: { session: null }, error: error || null };
         } catch (e: any) {
           return { data: { session: null }, error: e };
         }
@@ -342,10 +373,18 @@ class NeonUnifiedClient {
 
       getUser: async () => {
         try {
-          const { data, error } = await neonAuth.getSession();
-          if (error || !data) return { data: { user: null }, error: error || null };
-          const session = this.formatSession(data);
-          return { data: { user: session?.user || null }, error: null };
+          const { data } = await this.auth.getSession();
+          if (data?.session?.user) {
+            return { data: { user: data.session.user }, error: null };
+          }
+          try {
+            const { useAuthStore } = require('@/store/useAuthStore');
+            const storeUser = useAuthStore.getState().session?.user;
+            if (storeUser) {
+              return { data: { user: storeUser }, error: null };
+            }
+          } catch (_) {}
+          return { data: { user: null }, error: null };
         } catch (e: any) {
           return { data: { user: null }, error: e };
         }
@@ -371,31 +410,133 @@ class NeonUnifiedClient {
       },
 
       signInWithPassword: async (credentials: { email: string; password: string }) => {
-        const { data, error } = await neonAuth.signIn.email(credentials);
-        if (error) return { data: { session: null, user: null }, error };
-        const session = this.formatSession(data);
-        if (session) {
-          const dataApiJwt = await getNeonJWTToken();
-          if (dataApiJwt) session.access_token = dataApiJwt;
+        try {
+          const origin = Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin
+            ? window.location.origin
+            : 'https://groundwork.app';
+
+          let jwtToken: string | null = null;
+
+          // Attempt to fetch authenticated JWT directly from Neon Auth
+          try {
+            const rawRes = await fetch(`${NEON_AUTH_URL}/sign-in/email`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Origin: origin,
+              },
+              body: JSON.stringify({
+                email: credentials.email.trim(),
+                password: credentials.password,
+              }),
+            });
+
+            const cookies = rawRes.headers.get('set-cookie');
+            if (cookies) {
+              await AsyncStorage.setItem('neon_auth_cookie', cookies).catch(() => {});
+              const tokenRes = await fetch(`${NEON_AUTH_URL}/token`, {
+                headers: {
+                  Origin: origin,
+                  Cookie: cookies,
+                },
+              });
+              if (tokenRes.ok) {
+                const tokenJson = await tokenRes.json().catch(() => null);
+                if (tokenJson?.token) {
+                  jwtToken = tokenJson.token;
+                }
+              }
+            }
+          } catch (_) {}
+
+          const { data, error } = await neonAuth.signIn.email(credentials);
+          if (error) return { data: { session: null, user: null }, error };
+          const session = this.formatSession(data);
+          if (session) {
+            if (jwtToken && !isJwtAnonymous(jwtToken)) {
+              session.access_token = jwtToken;
+              session.token = jwtToken;
+              await persistSessionToken(jwtToken);
+            } else {
+              const dataApiJwt = await getNeonJWTToken();
+              if (dataApiJwt && !isJwtAnonymous(dataApiJwt)) {
+                session.access_token = dataApiJwt;
+                session.token = dataApiJwt;
+              }
+            }
+          }
+          this.emitAuthStateChange('SIGNED_IN', session);
+          return { data: { session, user: session?.user }, error: null };
+        } catch (err: any) {
+          return { data: { session: null, user: null }, error: err };
         }
-        this.emitAuthStateChange('SIGNED_IN', session);
-        return { data: { session, user: session?.user }, error: null };
       },
 
       signUp: async (params: { email: string; password: string; options?: any }) => {
-        const { data, error } = await neonAuth.signUp.email({
-          email: params.email,
-          password: params.password,
-          name: params.options?.data?.full_name || params.email.split('@')[0],
-        });
-        if (error) return { data: { session: null, user: null }, error };
-        const session = this.formatSession(data);
-        if (session) {
-          const dataApiJwt = await getNeonJWTToken();
-          if (dataApiJwt) session.access_token = dataApiJwt;
+        try {
+          const origin = Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin
+            ? window.location.origin
+            : 'https://groundwork.app';
+
+          let jwtToken: string | null = null;
+
+          try {
+            const rawRes = await fetch(`${NEON_AUTH_URL}/sign-up/email`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Origin: origin,
+              },
+              body: JSON.stringify({
+                email: params.email.trim(),
+                password: params.password,
+                name: params.options?.data?.full_name || params.email.split('@')[0],
+              }),
+            });
+
+            const cookies = rawRes.headers.get('set-cookie');
+            if (cookies) {
+              await AsyncStorage.setItem('neon_auth_cookie', cookies).catch(() => {});
+              const tokenRes = await fetch(`${NEON_AUTH_URL}/token`, {
+                headers: {
+                  Origin: origin,
+                  Cookie: cookies,
+                },
+              });
+              if (tokenRes.ok) {
+                const tokenJson = await tokenRes.json().catch(() => null);
+                if (tokenJson?.token) {
+                  jwtToken = tokenJson.token;
+                }
+              }
+            }
+          } catch (_) {}
+
+          const { data, error } = await neonAuth.signUp.email({
+            email: params.email,
+            password: params.password,
+            name: params.options?.data?.full_name || params.email.split('@')[0],
+          });
+          if (error) return { data: { session: null, user: null }, error };
+          const session = this.formatSession(data);
+          if (session) {
+            if (jwtToken && !isJwtAnonymous(jwtToken)) {
+              session.access_token = jwtToken;
+              session.token = jwtToken;
+              await persistSessionToken(jwtToken);
+            } else {
+              const dataApiJwt = await getNeonJWTToken();
+              if (dataApiJwt && !isJwtAnonymous(dataApiJwt)) {
+                session.access_token = dataApiJwt;
+                session.token = dataApiJwt;
+              }
+            }
+          }
+          this.emitAuthStateChange('SIGNED_IN', session);
+          return { data: { session, user: session?.user }, error: null };
+        } catch (err: any) {
+          return { data: { session: null, user: null }, error: err };
         }
-        this.emitAuthStateChange('SIGNED_IN', session);
-        return { data: { session, user: session?.user }, error: null };
       },
 
       signInWithOAuth: async (params: { provider: string; options?: any }) => {
@@ -405,7 +546,7 @@ class NeonUnifiedClient {
         });
       },
 
-      signOut: async () => {
+      signOut: async (_options?: any) => {
         try {
           await neonAuth.signOut();
         } catch (e) {}
@@ -456,9 +597,15 @@ class NeonUnifiedClient {
             }
           }
           if (attributes.data) {
-            const { data: authData } = await neonAuth.getSession();
-            const userId = authData?.user?.id || authData?.session?.userId;
-            if (userId) {
+            const authRes = await neonAuth.getSession().catch(() => null);
+            let userId = authRes?.data?.user?.id || authRes?.data?.session?.userId;
+            if (!userId) {
+              try {
+                const { useAuthStore } = require('@/store/useAuthStore');
+                userId = useAuthStore.getState().session?.user?.id || useAuthStore.getState().getUserId();
+              } catch (_) {}
+            }
+            if (userId && userId !== 'guest') {
               const PROFILE_COLUMNS = new Set([
                 'id', 'username', 'full_name', 'avatar_url', 'role',
                 'pro_status', 'pro_until', 'is_banned', 'settings',
@@ -479,19 +626,30 @@ class NeonUnifiedClient {
                 }
               }
 
-              const { atomicUpdateProfileSettings } = await import('@/lib/profileSettingsService');
-              const { settings: finalSettings } = await atomicUpdateProfileSettings(
-                userId,
-                () => ({
-                  directUpdates,
-                  settingsUpdates,
-                })
-              );
+              let finalSettings: Record<string, any> = settingsUpdates;
+              try {
+                const profileService = require('@/lib/profileSettingsService');
+                const updateFn = profileService.atomicUpdateProfileSettings || profileService.default?.atomicUpdateProfileSettings;
+                if (typeof updateFn === 'function') {
+                  const res = await updateFn(
+                    userId,
+                    () => ({
+                      directUpdates,
+                      settingsUpdates,
+                    })
+                  );
+                  if (res?.settings) {
+                    finalSettings = res.settings;
+                  }
+                }
+              } catch (profileErr) {
+                console.warn('[NeonClient] Profile settings update fallback:', profileErr);
+              }
 
               return {
                 data: {
                   user: {
-                    ...(authData?.user || {}),
+                    ...(authRes?.data?.user || {}),
                     id: userId,
                     user_metadata: finalSettings,
                   },
@@ -531,9 +689,6 @@ class NeonUnifiedClient {
       },
 
       resetPassword: async (params: { token: string; newPassword: string }) => {
-        if (process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
-          return rawSupabaseClient.auth.updateUser({ password: params.newPassword });
-        }
         try {
           const res = await (neonAuth as any).resetPassword({
             token: params.token,
@@ -549,9 +704,6 @@ class NeonUnifiedClient {
   }
 
   channel(name: string) {
-    if (process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
-      return rawSupabaseClient.channel(name);
-    }
     let chan = this._activeChannels.get(name);
     if (!chan) {
       chan = new NeonRealtimeChannel(name);
@@ -561,9 +713,6 @@ class NeonUnifiedClient {
   }
 
   removeChannel(channel: any) {
-    if (process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
-      return rawSupabaseClient.removeChannel(channel);
-    }
     if (channel && typeof channel.unsubscribe === 'function') {
       channel.unsubscribe();
       if (channel.name) {
@@ -574,9 +723,6 @@ class NeonUnifiedClient {
   }
 
   removeAllChannels() {
-    if (process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
-      return (rawSupabaseClient as any).removeAllChannels?.();
-    }
     for (const [name, channel] of this._activeChannels) {
       if (channel && typeof channel.unsubscribe === 'function') {
         channel.unsubscribe();
@@ -587,9 +733,6 @@ class NeonUnifiedClient {
   }
 
   get storage() {
-    if (process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
-      return rawSupabaseClient.storage;
-    }
     const storageEndpoint = NEON_S3_ENDPOINT || 'https://br-billowing-wind-b4lz1az2.storage.c-6.us-east-2.aws.neon.tech';
 
     const getStorageApiUrl = () => {
@@ -608,25 +751,27 @@ class NeonUnifiedClient {
         const sessionRes = await neonAuth.getSession().catch(() => null);
         const callerUserId = sessionRes?.data?.user?.id || sessionRes?.data?.session?.userId;
 
-        // In Node server environments, invoke local serverStorage directly if available
+        // In Node CLI / test environments, invoke local serverStorage directly if available
         if (typeof window === 'undefined' && typeof process !== 'undefined' && process.versions?.node && !process.env.TEST_FORCE_HTTP_STORAGE) {
           try {
-            const serverStorage = require('./serverStorage');
-            if (payload.action === 'get-upload-url') {
-              return await serverStorage.authorizeAndSignUpload({
-                caller: callerUserId ? { userId: callerUserId, role: 'user' } : null,
-                bucket: payload.bucket,
-                filePath: payload.filePath,
-                contentType: payload.contentType,
-              });
-            }
-            if (payload.action === 'create-signed-url') {
-              return await serverStorage.authorizeAndSignDownload({
-                caller: callerUserId ? { userId: callerUserId, role: 'user' } : null,
-                bucket: payload.bucket,
-                filePath: payload.filePath,
-                expiresIn: payload.expiresIn,
-              });
+            const serverStorage = safeNodeRequire('./serverStorage');
+            if (serverStorage) {
+              if (payload.action === 'get-upload-url') {
+                return await serverStorage.authorizeAndSignUpload({
+                  caller: callerUserId ? { userId: callerUserId, role: 'user' } : null,
+                  bucket: payload.bucket,
+                  filePath: payload.filePath,
+                  contentType: payload.contentType,
+                });
+              }
+              if (payload.action === 'create-signed-url') {
+                return await serverStorage.authorizeAndSignDownload({
+                  caller: callerUserId ? { userId: callerUserId, role: 'user' } : null,
+                  bucket: payload.bucket,
+                  filePath: payload.filePath,
+                  expiresIn: payload.expiresIn,
+                });
+              }
             }
           } catch (_) {}
         }
@@ -750,14 +895,16 @@ class NeonUnifiedClient {
             for (const p of paths) {
               const cleanPath = p.replace(/^\/+/, '');
               const s3Key = `${bucket}/${cleanPath}`;
-              // S3 deletion can be performed via serverStorage or signed endpoint
+              // S3 deletion can be performed via serverStorage or signed endpoint in Node CLI
               if (typeof window === 'undefined' && typeof process !== 'undefined' && process.versions?.node) {
                 try {
-                  const { getS3Client } = require('./serverStorage');
-                  const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
-                  const s3 = getS3Client();
-                  if (s3) {
-                    await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: s3Key }));
+                  const serverStorage = safeNodeRequire('./serverStorage');
+                  const awsSdk = safeNodeRequire('@aws-sdk/client-s3');
+                  if (serverStorage && awsSdk) {
+                    const s3 = serverStorage.getS3Client?.();
+                    if (s3) {
+                      await s3.send(new awsSdk.DeleteObjectCommand({ Bucket: 'uploads', Key: s3Key }));
+                    }
                   }
                 } catch (_) {}
               }
@@ -773,4 +920,3 @@ class NeonUnifiedClient {
 }
 
 export const supabase = new NeonUnifiedClient();
-export { rawSupabaseClient };

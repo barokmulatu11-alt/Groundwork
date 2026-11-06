@@ -49,7 +49,7 @@ export default function ResetPasswordScreen() {
     if (extractedToken) {
       setToken(extractedToken);
     }
-    if (params.mode === 'supabase' || process.env.EXPO_PUBLIC_USE_SUPABASE === 'true') {
+    if (params.mode === 'session') {
       setIsSupabaseMode(true);
     }
   }, [params]);
@@ -233,12 +233,13 @@ export default function ResetPasswordScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
           contentContainerStyle={isDesktop ? styles.desktopContainer : styles.scrollContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           <View style={[isDesktop ? styles.desktopCard : styles.mobileCard, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
             <Pressable

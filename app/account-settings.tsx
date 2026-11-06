@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import {
   ChevronLeft,
+  ChevronRight,
   Lock,
   LogOut,
   Mail,
@@ -17,6 +18,7 @@ import {
   X,
   UserCheck,
   Sparkles,
+  Trash2,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
@@ -31,6 +33,39 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+interface SettingItemRowProps {
+  icon: any;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  isLast?: boolean;
+}
+
+function SettingItemRow({ icon: Icon, title, subtitle, onPress, isLast }: SettingItemRowProps) {
+  const { theme } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={[
+        styles.settingItemRow,
+        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.separator }
+      ]}
+    >
+      <View style={styles.settingIconBox}>
+        <Icon size={20} color={theme.accent} />
+      </View>
+      <View style={styles.settingTextCol}>
+        <Text style={[styles.settingRowTitle, { color: theme.text }]}>{title}</Text>
+        {subtitle ? (
+          <Text style={[styles.settingRowSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>
+        ) : null}
+      </View>
+      <ChevronRight size={18} color={theme.textTertiary || '#8E8C87'} />
+    </TouchableOpacity>
+  );
+}
 
 export default function AccountSettingsScreen() {
   const { theme, isDark, showAlert } = useTheme();
@@ -50,7 +85,16 @@ export default function AccountSettingsScreen() {
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
 
-  const currentFullName = profile?.full_name || session?.user?.user_metadata?.full_name || (isGuest ? 'Guest User' : '');
+  const formatDisplayName = (name?: string | null) => {
+    if (!name) return '';
+    try {
+      return decodeURIComponent(name).replace(/\+/g, ' ').trim();
+    } catch {
+      return name.replace(/\+/g, ' ').trim();
+    }
+  };
+  const rawFullName = profile?.full_name || session?.user?.user_metadata?.full_name || (isGuest ? 'Guest User' : '');
+  const currentFullName = formatDisplayName(rawFullName);
   const currentUsername = profile?.username || session?.user?.user_metadata?.username || (isGuest ? 'guest' : 'user');
   const currentEmail = session?.user?.email || (isGuest ? 'No account connected (Guest)' : 'Not set');
 
@@ -197,6 +241,38 @@ export default function AccountSettingsScreen() {
     });
   };
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteAccount = () => {
+    showAlert({
+      title: 'Delete Account',
+      message: isGuest
+        ? 'Are you sure you want to erase all local guest data and start fresh?'
+        : 'Are you sure you want to permanently delete your Groundwork account? All your tasks, habits, and profile data will be permanently erased. This action cannot be undone.',
+      primaryButton: {
+        text: 'Delete Account',
+        destructive: true,
+        onPress: async () => {
+          setIsDeleting(true);
+          try {
+            const { deleteAccount } = useAuthStore.getState();
+            await deleteAccount();
+            router.replace('/welcome' as any);
+          } catch (e: any) {
+            showAlert({
+              title: 'Error',
+              message: e.message || 'Failed to delete account. Please try again.',
+              primaryButton: { text: 'OK', onPress: () => {} },
+            });
+          } finally {
+            setIsDeleting(false);
+          }
+        },
+      },
+      secondaryButton: { text: 'Cancel', onPress: () => {} },
+    });
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <BrandHeader title="groundwork." onBack={() => router.back()} />
@@ -205,11 +281,11 @@ export default function AccountSettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+        <View style={{ marginBottom: 24, marginTop: 4 }}>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
             Account.
           </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
             Profile and sign-in.
           </Text>
         </View>
@@ -241,15 +317,15 @@ export default function AccountSettingsScreen() {
         )}
 
         <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>PERSONAL INFO</Text>
-        <View style={[styles.group, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
-          <ActionRow
-            Icon={User}
+        <View style={[styles.group, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+          <SettingItemRow
+            icon={User}
             title="Change Name"
             subtitle={currentFullName || (isGuest ? 'Guest User' : 'Not set')}
             onPress={handleOpenChangeName}
           />
-          <ActionRow
-            Icon={User}
+          <SettingItemRow
+            icon={User}
             title="Change Username"
             subtitle={`@${currentUsername}`}
             onPress={() => {
@@ -265,18 +341,19 @@ export default function AccountSettingsScreen() {
               }
             }}
           />
-          <ActionRow
-            Icon={Mail}
+          <SettingItemRow
+            icon={Mail}
             title="Change Email"
             subtitle={currentEmail}
             onPress={handleOpenChangeEmail}
+            isLast
           />
         </View>
 
         <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: 24 }]}>SECURITY</Text>
-        <View style={[styles.group, { backgroundColor: theme.cardSolid, borderColor: theme.separator, borderWidth: 1 }]}>
-          <ActionRow
-            Icon={Lock}
+        <View style={[styles.group, { backgroundColor: theme.cardSolid, borderColor: theme.separator }]}>
+          <SettingItemRow
+            icon={Lock}
             title="Change Password"
             subtitle={isGuest ? 'Available for cloud accounts' : 'Update your account password'}
             onPress={() => {
@@ -291,13 +368,14 @@ export default function AccountSettingsScreen() {
                 router.push('/change-password' as any);
               }
             }}
+            isLast
           />
         </View>
 
         <View style={styles.logoutContainer}>
           <TouchableOpacity
             onPress={handleSignOut}
-            disabled={isSigningOut}
+            disabled={isSigningOut || isDeleting}
             style={[
               styles.logoutButton,
               {
@@ -313,6 +391,30 @@ export default function AccountSettingsScreen() {
             )}
             <Text style={styles.logoutText}>{isSigningOut ? 'Signing out...' : isGuest ? 'Exit Guest Mode' : 'Sign Out'}</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleDeleteAccount}
+            disabled={isSigningOut || isDeleting}
+            style={[
+              styles.logoutButton,
+              {
+                backgroundColor: 'transparent',
+                borderColor: 'rgba(239, 68, 68, 0.35)',
+                borderWidth: 1,
+                marginTop: 12,
+                opacity: isDeleting ? 0.7 : 1,
+              },
+            ]}
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <Trash2 size={18} color="#EF4444" />
+            )}
+            <Text style={[styles.logoutText, { color: '#EF4444' }]}>
+              {isDeleting ? 'Deleting Account...' : isGuest ? 'Clear Guest Data' : 'Delete Account'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -324,7 +426,7 @@ export default function AccountSettingsScreen() {
         onRequestClose={() => !isUpdatingName && setShowNameModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <View style={[styles.modalCard, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder }]}>
@@ -403,7 +505,7 @@ export default function AccountSettingsScreen() {
         onRequestClose={() => !isUpdatingEmail && setShowEmailModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <View style={[styles.modalCard, { backgroundColor: theme.cardSolid, borderColor: theme.cardBorder }]}>
@@ -484,10 +586,41 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 16 },
   backBtn: { flexDirection: 'row', alignItems: 'center', marginLeft: -4, marginBottom: 20 },
   backText: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginLeft: 4 },
-  headerTitle: { fontSize: 34, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1 },
+  headerTitle: { fontSize: 24, fontFamily: 'Inter_800ExtraBold', letterSpacing: -0.5 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   sectionTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1, marginLeft: 4 },
-  group: { marginBottom: 8 },
+  group: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  settingItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  settingIconBox: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingTextCol: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  settingRowTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  settingRowSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    marginTop: 2,
+    opacity: 0.75,
+  },
   logoutContainer: { marginTop: 40, marginBottom: 20 },
   logoutButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, borderRadius: 20, gap: 10, width: '100%', justifyContent: 'center' },
   logoutText: { color: '#FF3B30', fontSize: 16, fontFamily: 'Inter_700Bold' },

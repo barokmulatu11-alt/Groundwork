@@ -84,6 +84,33 @@ export default function NotificationSettingsScreen() {
   const router = useRouter();
   const accentColor = theme.accent;
 
+  const handleToggleNotifications = async (val: boolean) => {
+    if (val) {
+      try {
+        const { requestNotificationPermissions } = require('@/lib/notifications');
+        const granted = await requestNotificationPermissions();
+        if (granted) {
+          await setNotificationsEnabled(true);
+          const { Alert } = require('react-native');
+          Alert.alert(
+            "Notifications Allowed",
+            "Groundwork will now automatically trigger your scheduled task reminders, streak protections, and daily agendas."
+          );
+        } else {
+          showAlert({
+            title: "Permission Required",
+            message: "Notifications are not permitted by your device. Please allow notifications in device settings.",
+            primaryButton: { text: "OK", onPress: () => {} },
+          });
+        }
+      } catch (err: any) {
+        await setNotificationsEnabled(true);
+      }
+    } else {
+      await setNotificationsEnabled(false);
+    }
+  };
+
   const { 
     notificationsEnabled, setNotificationsEnabled,
     defaultReminderTime, setDefaultReminderTime,
@@ -101,11 +128,11 @@ export default function NotificationSettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+        <View style={{ marginBottom: 24, marginTop: 4 }}>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
             Notifications.
           </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
             Choose when to be interrupted.
           </Text>
         </View>
@@ -291,6 +318,19 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 24,
     marginLeft: 4,
+  },
+  primaryTestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+  },
+  primaryTestBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
   },
   card: {
     borderRadius: 24,

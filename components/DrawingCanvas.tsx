@@ -110,7 +110,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onSave, onCancel, 
           </Pressable>
           <View style={{ alignItems: 'center' }}>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Sketchboard</Text>
-            <Text style={{ fontSize: 10,  fontFamily: 'System', color: colors.textSecondary }}>{strokes.length} strokes</Text>
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: colors.textSecondary }}>{strokes.length} strokes</Text>
           </View>
           <Pressable onPress={handleSave} style={[styles.saveBtn]}>
             <Check size={24} color="#FFF" />

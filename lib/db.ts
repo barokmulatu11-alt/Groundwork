@@ -103,9 +103,12 @@ export type FocusSession = {
  * This keeps the UI usable, but local task/notes persistence will be disabled
  * until the browser supports SharedArrayBuffer for this origin.
  */
-// Simple localStorage-backed mock database for Web to allow task/habit/note data to be saved locally & synced
+// High-performance localStorage-backed database for Web with in-memory write-through cache
 function createWebDb() {
+  const memoryCache = new Map<string, any[]>();
+
   const getStorageKey = (sql: string): string => {
+    if (sql.includes('sub_tasks')) return 'gw_sub_tasks';
     if (sql.includes('tasks')) return 'gw_tasks';
     if (sql.includes('habits')) return 'gw_habits';
     if (sql.includes('habit_checkins')) return 'gw_habit_checkins';
@@ -125,16 +128,22 @@ function createWebDb() {
   };
 
   const getTableData = (key: string): any[] => {
+    if (memoryCache.has(key)) {
+      return memoryCache.get(key)!;
+    }
     if (typeof window === 'undefined' || !window.localStorage) return [];
     try {
       const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : [];
+      const parsed = data ? JSON.parse(data) : [];
+      memoryCache.set(key, parsed);
+      return parsed;
     } catch (e) {
       return [];
     }
   };
 
   const saveTableData = (key: string, data: any[]) => {
+    memoryCache.set(key, data);
     if (typeof window === 'undefined' || !window.localStorage) return;
     try {
       localStorage.setItem(key, JSON.stringify(data));
@@ -470,11 +479,6 @@ function createWebDb() {
         return item;
       });
 
-      // Filter out soft-deleted records unless query explicitly asks for them
-      if (!sql.includes('deleted_at IS NOT NULL') && data.length > 0 && data[0] && 'deleted_at' in data[0]) {
-        data = data.filter((item) => !item.deleted_at);
-      }
-
       // Parse WHERE clause for filtering
       const whereMatch = sql.match(/WHERE\s+([\s\S]+?)(?:ORDER|LIMIT|GROUP|$)/i);
       if (whereMatch && whereMatch[1]) {
@@ -670,6 +674,7 @@ export function initDb() {
   try { db.execSync(`ALTER TABLE notes ADD COLUMN last_reviewed_at TEXT;`); } catch (e) {}
   try { db.execSync(`ALTER TABLE notes ADD COLUMN flashcards TEXT DEFAULT '[]';`); } catch (e) {}
   try { db.execSync(`ALTER TABLE notes ADD COLUMN formulas TEXT DEFAULT '[]';`); } catch (e) {}
+  try { db.execSync(`ALTER TABLE tasks ADD COLUMN due_time TEXT;`); } catch (e) {}
 
   db.execSync(`
     PRAGMA journal_mode = WAL;
@@ -1049,10 +1054,24 @@ export function initDb() {
 export function getTasks(userId: string = 'guest') {
   try {
     const tasks = db.getAllSync<any>('SELECT * FROM tasks WHERE user_id = ? AND deleted_at IS NULL ORDER BY order_index ASC', [userId]);
+    // High-performance bulk load of subtasks: 1 query instead of N individual queries
+    const allSubTasks = db.getAllSync<any>(
+      "SELECT * FROM sub_tasks WHERE (user_id = ? OR user_id = 'guest' OR ? = 'guest') AND deleted_at IS NULL ORDER BY order_index ASC",
+      [userId, userId]
+    );
+    const subTasksByTaskId = new Map<string, SubTask[]>();
+    for (const s of allSubTasks) {
+      const list = subTasksByTaskId.get(s.task_id) || [];
+      list.push({ ...s, completed: Boolean(s.completed) });
+      subTasksByTaskId.set(s.task_id, list);
+    }
+
     return tasks.map(t => ({
       ...t,
+      due_time: t.due_time || t.time_block || null,
+      time_block: t.time_block || t.due_time || null,
       completed: Boolean(t.completed),
-      sub_tasks: getSubTasksByTaskId(t.id, userId)
+      sub_tasks: subTasksByTaskId.get(t.id) || []
     })) as Task[];
   } catch (e) {
     return [];
@@ -1062,10 +1081,23 @@ export function getTasks(userId: string = 'guest') {
 export function getTasksByDate(date: string, userId: string = 'guest'): Task[] {
   try {
     const tasks = db.getAllSync<any>('SELECT * FROM tasks WHERE date = ? AND user_id = ? AND deleted_at IS NULL ORDER BY order_index ASC', [date, userId]);
+    const allSubTasks = db.getAllSync<any>(
+      "SELECT * FROM sub_tasks WHERE (user_id = ? OR user_id = 'guest' OR ? = 'guest') AND deleted_at IS NULL ORDER BY order_index ASC",
+      [userId, userId]
+    );
+    const subTasksByTaskId = new Map<string, SubTask[]>();
+    for (const s of allSubTasks) {
+      const list = subTasksByTaskId.get(s.task_id) || [];
+      list.push({ ...s, completed: Boolean(s.completed) });
+      subTasksByTaskId.set(s.task_id, list);
+    }
+
     return tasks.map(t => ({
       ...t,
+      due_time: t.due_time || t.time_block || null,
+      time_block: t.time_block || t.due_time || null,
       completed: Boolean(t.completed),
-      sub_tasks: getSubTasksByTaskId(t.id, userId)
+      sub_tasks: subTasksByTaskId.get(t.id) || []
     })) as Task[];
   } catch (e) {
     return [];
@@ -1078,10 +1110,23 @@ export function getTasksByDateRange(startDate: string, endDate: string, userId: 
       'SELECT * FROM tasks WHERE date >= ? AND date <= ? AND user_id = ? AND deleted_at IS NULL ORDER BY date ASC, order_index ASC',
       [startDate, endDate, userId]
     );
+    const allSubTasks = db.getAllSync<any>(
+      "SELECT * FROM sub_tasks WHERE (user_id = ? OR user_id = 'guest' OR ? = 'guest') AND deleted_at IS NULL ORDER BY order_index ASC",
+      [userId, userId]
+    );
+    const subTasksByTaskId = new Map<string, SubTask[]>();
+    for (const s of allSubTasks) {
+      const list = subTasksByTaskId.get(s.task_id) || [];
+      list.push({ ...s, completed: Boolean(s.completed) });
+      subTasksByTaskId.set(s.task_id, list);
+    }
+
     return tasks.map(t => ({
       ...t,
+      due_time: t.due_time || t.time_block || null,
+      time_block: t.time_block || t.due_time || null,
       completed: Boolean(t.completed),
-      sub_tasks: getSubTasksByTaskId(t.id, userId)
+      sub_tasks: subTasksByTaskId.get(t.id) || []
     })) as Task[];
   } catch (e) {
     return [];
@@ -1090,13 +1135,15 @@ export function getTasksByDateRange(startDate: string, endDate: string, userId: 
 
 export function getOverdueTasks(userId: string = 'guest'): Task[] {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const tasks = db.getAllSync<any>(
       'SELECT * FROM tasks WHERE date < ? AND completed = 0 AND user_id = ? AND deleted_at IS NULL ORDER BY date DESC, order_index ASC',
       [today, userId]
     );
     return tasks.map(t => ({
       ...t,
+      due_time: t.due_time || t.time_block || null,
+      time_block: t.time_block || t.due_time || null,
       completed: Boolean(t.completed),
       sub_tasks: getSubTasksByTaskId(t.id, userId)
     })) as Task[];
@@ -1119,7 +1166,7 @@ export function addTask(task: Partial<Task>) {
     const order_index = task.order_index ?? 0;
     const rawTitle = task.title ? String(task.title).trim() : '';
     const title = rawTitle.length > 0 ? rawTitle : 'Untitled task';
-    const date = task.date || getLocalDateString(new Date(created_at));
+    const date = task.date !== undefined ? task.date : getLocalDateString(new Date(created_at));
 
     db.runSync(
       `INSERT OR REPLACE INTO tasks (id, user_id, title, date, time_block, priority, note, reminder_time, order_index, completed, completed_at, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1140,6 +1187,18 @@ export function addTask(task: Partial<Task>) {
         task.deleted_at || null,
       ]
     );
+
+    const createdSubTasks: SubTask[] = [];
+    if (Array.isArray(task.sub_tasks) && task.sub_tasks.length > 0) {
+      for (const st of task.sub_tasks) {
+        const subTitle = typeof st === 'string' ? (st as any).trim() : (st && typeof st === 'object' ? ((st as any).title || '').trim() : '');
+        if (subTitle) {
+          const createdSub = createSubTask(id, subTitle, user_id);
+          if (createdSub) createdSubTasks.push(createdSub);
+        }
+      }
+    }
+
     return {
       id,
       user_id,
@@ -1157,7 +1216,7 @@ export function addTask(task: Partial<Task>) {
       created_at,
       updated_at,
       deleted_at: task.deleted_at || null,
-      sub_tasks: [],
+      sub_tasks: createdSubTasks,
     } as Task;
   } catch (e) {
     console.error("[DB] addTask error:", e);
@@ -1178,17 +1237,92 @@ export function updateTask(id: string, updates: Partial<Task>) {
         sanitizedUpdates.title = trimmed;
       }
     }
-    const keys = Object.keys(sanitizedUpdates).filter(k => k !== 'id' && k !== 'sub_tasks');
-    if (keys.length === 0) return;
-    
-    const setClause = [...keys.map(k => `${k} = ?`), 'updated_at = ?'].join(', ');
-    const values = keys.map(k => {
-      const val = (sanitizedUpdates as any)[k];
-      if (typeof val === 'boolean') return val ? 1 : 0;
-      return val;
-    });
-    db.runSync(`UPDATE tasks SET ${setClause} WHERE id = ?`, [...values, new Date().toISOString(), id]);
-  } catch (e) {}
+
+    // Sync due_time and time_block
+    if ((sanitizedUpdates as any).due_time !== undefined) {
+      const timeVal = (sanitizedUpdates as any).due_time ? String((sanitizedUpdates as any).due_time).trim() : null;
+      (sanitizedUpdates as any).due_time = timeVal;
+      sanitizedUpdates.time_block = timeVal;
+    } else if (sanitizedUpdates.time_block !== undefined) {
+      const timeVal = sanitizedUpdates.time_block ? String(sanitizedUpdates.time_block).trim() : null;
+      sanitizedUpdates.time_block = timeVal;
+      (sanitizedUpdates as any).due_time = timeVal;
+    }
+
+    const VALID_TASK_COLUMNS = new Set([
+      'user_id',
+      'title',
+      'time_block',
+      'due_time',
+      'date',
+      'completed',
+      'completed_at',
+      'priority',
+      'note',
+      'reminder_time',
+      'order_index',
+      'created_at',
+      'updated_at',
+      'deleted_at'
+    ]);
+
+    const now = new Date().toISOString();
+    const keys = Object.keys(sanitizedUpdates).filter(k => k !== 'id' && VALID_TASK_COLUMNS.has(k));
+    if (keys.length > 0) {
+      const setClause = [...keys.map(k => `${k} = ?`), 'updated_at = ?'].join(', ');
+      const values = keys.map(k => {
+        const val = (sanitizedUpdates as any)[k];
+        if (typeof val === 'boolean') return val ? 1 : 0;
+        if (val === undefined) return null;
+        return val;
+      });
+      db.runSync(`UPDATE tasks SET ${setClause} WHERE id = ?`, [...values, now, id]);
+    } else if (updates.sub_tasks !== undefined) {
+      // Even if only sub_tasks changed, update task's updated_at
+      db.runSync('UPDATE tasks SET updated_at = ? WHERE id = ?', [now, id]);
+    }
+
+    // Persist and sync sub_tasks if provided
+    if (Array.isArray(updates.sub_tasks)) {
+      const taskRow = db.getFirstSync<any>('SELECT user_id FROM tasks WHERE id = ?', [id]);
+      const userId = taskRow?.user_id || 'guest';
+      const currentSubs = db.getAllSync<any>('SELECT id FROM sub_tasks WHERE task_id = ? AND deleted_at IS NULL', [id]);
+      const currentIds = new Set(currentSubs.map((s: any) => s.id));
+      const incomingIds = new Set<string>();
+
+      for (let i = 0; i < updates.sub_tasks.length; i++) {
+        const st = updates.sub_tasks[i];
+        const stTitle = typeof st === 'string' ? st : (st?.title || '');
+        if (!stTitle.trim()) continue;
+        const subId = (typeof st === 'object' && st.id) ? st.id : Math.random().toString(36).substring(7);
+        const completed = (typeof st === 'object' && st.completed) ? 1 : 0;
+        const orderIndex = (typeof st === 'object' && typeof st.order_index === 'number') ? st.order_index : i;
+        incomingIds.add(subId);
+
+        const existing = db.getFirstSync<any>('SELECT id FROM sub_tasks WHERE id = ?', [subId]);
+        if (existing) {
+          db.runSync(
+            'UPDATE sub_tasks SET title = ?, completed = ?, order_index = ?, updated_at = ?, deleted_at = NULL WHERE id = ?',
+            [stTitle.trim(), completed, orderIndex, now, subId]
+          );
+        } else {
+          db.runSync(
+            'INSERT INTO sub_tasks (id, task_id, user_id, title, completed, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [subId, id, userId, stTitle.trim(), completed, orderIndex, now, now]
+          );
+        }
+      }
+
+      // Any subtask that was in currentIds but not in incomingIds should be soft-deleted
+      for (const curId of currentIds) {
+        if (!incomingIds.has(curId)) {
+          db.runSync('UPDATE sub_tasks SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, curId]);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[DB] updateTask error:', e);
+  }
 }
 
 export function deleteTask(id: string) {
@@ -1209,7 +1343,10 @@ export function reorderTasks(taskIds: string[]) {
 // --- SUB-TASKS ---
 export function getSubTasksByTaskId(taskId: string, userId: string = 'guest'): SubTask[] {
   try {
-    const subs = db.getAllSync<any>('SELECT * FROM sub_tasks WHERE task_id = ? AND user_id = ? AND deleted_at IS NULL', [taskId, userId]);
+    const subs = db.getAllSync<any>(
+      'SELECT * FROM sub_tasks WHERE task_id = ? AND (user_id = ? OR user_id = \'guest\' OR ? = \'guest\') AND deleted_at IS NULL ORDER BY order_index ASC',
+      [taskId, userId, userId]
+    );
     return subs.map(s => ({ ...s, completed: Boolean(s.completed) }));
   } catch (e) {
     return [];
@@ -1267,6 +1404,7 @@ export function getHabits(userId: string = 'guest') {
 }
 
 export function addHabit(habit: Partial<Habit>) {
+  try {
   const userId = habit.user_id || 'guest';
   const id = habit.id || Math.random().toString(36).substring(7);
   const created_at = habit.created_at || new Date().toISOString();
@@ -1311,6 +1449,10 @@ export function addHabit(habit: Partial<Habit>) {
     updated_at,
     deleted_at: habit.deleted_at || null,
   } as Habit;
+  } catch (e) {
+    console.error("[DB] addHabit error:", e);
+    return null;
+  }
 }
 
 
@@ -1326,6 +1468,15 @@ export function updateHabit(id: string, updates: Partial<Habit>) {
     `UPDATE habits SET ${setClause}, updated_at = ? WHERE id = ?`,
     [...values, updated_at, id]
   );
+}
+
+export function deleteHabit(id: string) {
+  try {
+    const now = new Date().toISOString();
+    db.runSync('UPDATE habits SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+  } catch (e) {
+    console.error('[DB] deleteHabit error:', e);
+  }
 }
 
 function safeParseArray<T>(val: any): T[] {
@@ -1513,7 +1664,12 @@ export function migrateGuestData(guestUserId: string, newUserId: string) {
     db.runSync('UPDATE notes SET user_id = ? WHERE user_id = ?', [newUserId, guestUserId]);
     db.runSync('UPDATE note_tags SET user_id = ? WHERE user_id = ?', [newUserId, guestUserId]);
     db.runSync('UPDATE day_notes SET user_id = ? WHERE user_id = ?', [newUserId, guestUserId]);
-    db.runSync('UPDATE user_settings SET user_id = ? WHERE user_id = ?', [newUserId, guestUserId]);
+    const existingSettings = db.getFirstSync<any>('SELECT user_id FROM user_settings WHERE user_id = ?', [newUserId]);
+    if (existingSettings) {
+      db.runSync('DELETE FROM user_settings WHERE user_id = ?', [guestUserId]);
+    } else {
+      db.runSync('UPDATE user_settings SET user_id = ? WHERE user_id = ?', [newUserId, guestUserId]);
+    }
     console.log(`[DB] Migrated guest data from ${guestUserId} to ${newUserId}`);
   } catch (e) {
     console.error('[DB] Error migrating guest data:', e);
@@ -1525,13 +1681,12 @@ export function getUserSettings(userId: string) {
     const result = db.getFirstSync<any>('SELECT * FROM user_settings WHERE user_id = ?', [userId]);
     if (result) {
       return {
-        theme: result.theme || 'system',
+        theme: result.theme || 'light',
         accentColor: result.accent_color || '#007AFF',
         premiumThemeId: result.premium_theme_id || 'default',
         notificationsEnabled: !!result.notifications_enabled,
         tasksLayout: result.tasks_layout || 'list',
         habitsLayout: result.habits_layout || 'grid',
-        notesLayout: result.notes_layout || 'grid',
         isUpdateBannerDismissed: !!result.is_update_banner_dismissed,
         defaultFocusDuration: result.default_focus_duration || 25,
         dailyGoal: result.daily_goal || 5,
@@ -1585,7 +1740,7 @@ export function saveUserSettings(userId: string, settings: any) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
-        settings.theme || 'system',
+        settings.theme || 'light',
         settings.accentColor || '#007AFF',
         settings.premiumThemeId || 'default',
         settings.notificationsEnabled ? 1 : 0,

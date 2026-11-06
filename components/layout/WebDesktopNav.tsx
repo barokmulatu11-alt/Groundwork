@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Pressable, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Pressable, Platform, Image } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import {
   Home,
@@ -25,6 +25,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useStore } from '@/store/useStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { hapticSelection } from '@/lib/haptics';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
 
 interface NavItem {
   id: string;
@@ -76,6 +77,11 @@ export function WebDesktopNav() {
 
   const username = profile?.username || session?.user?.email?.split('@')[0] || (isGuest ? 'Guest' : 'User');
   const avatarInitial = username.charAt(0).toUpperCase();
+  const rawAvatarUrl =
+    profile?.avatar_url ||
+    (session?.user?.user_metadata as any)?.avatar_url ||
+    (session?.user?.user_metadata as any)?.picture;
+  const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
 
   return (
     <View
@@ -218,8 +224,12 @@ export function WebDesktopNav() {
           accessibilityRole="button"
           accessibilityLabel="User settings and account"
         >
-          <View style={[styles.avatarCircle, { backgroundColor: theme.accent }]}>
-            <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
+          <View style={[styles.avatarCircle, { backgroundColor: theme.accent, overflow: 'hidden' }]}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+            ) : (
+              <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
+            )}
           </View>
           {!isCollapsed && (
             <View style={styles.userInfoTextCol}>
@@ -316,6 +326,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     position: 'relative',
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer', userSelect: 'none' } as any) : {}),
   },
   navItemRowCollapsed: {
     paddingHorizontal: 0,
@@ -335,6 +346,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    flexShrink: 0,
   },
   navItemLabel: {
     fontSize: 14,
@@ -398,6 +410,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer', userSelect: 'none' } as any) : {}),
   },
   userProfileChipCollapsed: {
     paddingHorizontal: 0,
@@ -410,6 +423,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   avatarInitialText: {
     color: '#FFFFFF',
@@ -418,6 +432,7 @@ const styles = StyleSheet.create({
   },
   userInfoTextCol: {
     flex: 1,
+    minWidth: 0,
   },
   usernameText: {
     fontSize: 13,

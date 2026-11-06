@@ -22,29 +22,51 @@ export function HabitItem({ habit, onToggle }: HabitItemProps) {
 
   return (
     <AnimatedCard style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <View style={{ flex: 1 }}>
-        <Text style={{
-          fontSize: 14, fontFamily: 'Inter_600SemiBold',
-          color: textColor,
-          marginBottom: 8 }}>
+      <View style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
+        <Text
+          numberOfLines={2}
+          ellipsizeMode="tail"
+          style={{
+            fontSize: 14,
+            fontFamily: 'Inter_600SemiBold',
+            color: textColor,
+            marginBottom: 8,
+          }}
+        >
           {habit.title}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={{
-            fontSize: 26, fontFamily: 'Inter_700Bold',
-            color: textColor,
-            marginRight: 8 }}>
+          <Text
+            style={{
+              fontSize: 26,
+              fontFamily: 'Inter_700Bold',
+              color: textColor,
+              marginRight: 8,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
             {habit.streak}
           </Text>
-          <Text style={{ fontSize: 24, fontFamily: 'System' }}>
-            {habit.streak > 0 ? '' : ''}
-          </Text>
+          {habit.streak > 0 ? (
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: secondaryColor }}>days</Text>
+          ) : null}
         </View>
       </View>
       <Pressable 
-        style={{ marginLeft: 16, padding: 8 }}
+        style={({ pressed }) => [
+          {
+            marginLeft: 16,
+            padding: 8,
+            flexShrink: 0,
+            transform: [{ scale: pressed ? 0.92 : 1 }],
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
         onPress={() => onToggle(habit.id, today)}
-        hitSlop={10}
+        hitSlop={12}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isCompletedToday }}
+        accessibilityLabel={`Mark ${habit.title} complete`}
       >
         {isCompletedToday ? (
           <CheckCircle2 size={32} color={theme.accent} strokeWidth={1.5} />
@@ -55,6 +77,3 @@ export function HabitItem({ habit, onToggle }: HabitItemProps) {
     </AnimatedCard>
   );
 }
-
-
-

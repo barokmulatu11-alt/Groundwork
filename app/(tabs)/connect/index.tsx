@@ -6,6 +6,7 @@ import {
   ScrollView,
   useWindowDimensions,
   Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useResponsive } from '@/hooks/useResponsive';
 import { hapticLight, hapticSelection } from '@/lib/haptics';
 import { Users, Trophy, Award, User, ChevronRight, Sparkles } from 'lucide-react-native';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
 
 // Subscreen imports
 import LeaderboardScreen from '@/components/connect/screens/LeaderboardScreen';
@@ -58,6 +60,11 @@ export default function ConnectRootScreen() {
     session?.user?.email?.charAt(0) ||
     'G'
   ).toUpperCase();
+  const rawAvatarUrl =
+    profile?.avatar_url ||
+    (session?.user?.user_metadata as any)?.avatar_url ||
+    (session?.user?.user_metadata as any)?.picture;
+  const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
   const displayName = profile?.full_name || profile?.username || (isGuest ? 'Guest User' : 'Groundwork User');
   const displayHandle = profile?.username ? `@${profile.username}` : (isGuest ? 'Local device' : 'Active user');
 
@@ -81,114 +88,59 @@ export default function ConnectRootScreen() {
     }
   };
 
-  const renderNavGrid = () => (
-    <View style={styles.navGrid}>
-      {/* Row 1: Friends | Leaderboard */}
-      <View style={styles.navRow}>
-        <TouchableOpacity
-          testID="connect-tab-friends"
-          onPress={() => handleTabPress('Friends')}
-          style={styles.navCell}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'Friends' }}
-        >
-          <Text
-            style={[
-              styles.navText,
-              activeTab === 'Friends' ? styles.navTextActive : styles.navTextInactive,
-            ]}
-          >
-            Friends
-          </Text>
-          <View
-            style={[
-              styles.navUnderline,
-              activeTab === 'Friends' ? styles.navUnderlineActive : styles.navUnderlineInactive,
-            ]}
-          />
-        </TouchableOpacity>
+  const CONNECT_TABS = [
+    { id: 'Friends' as const, label: 'Friends', icon: Users },
+    { id: 'Leaderboard' as const, label: 'Leaderboard', icon: Trophy },
+    { id: 'Achievements' as const, label: 'Achievements', icon: Award },
+    { id: 'Profile' as const, label: 'Profile', icon: User },
+  ];
 
-        <TouchableOpacity
-          testID="connect-tab-leaderboard"
-          onPress={() => handleTabPress('Leaderboard')}
-          style={styles.navCell}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'Leaderboard' }}
-        >
-          <Text
-            style={[
-              styles.navText,
-              activeTab === 'Leaderboard' ? styles.navTextActive : styles.navTextInactive,
-            ]}
-          >
-            Leaderboard
-          </Text>
-          <View
-            style={[
-              styles.navUnderline,
-              activeTab === 'Leaderboard' ? styles.navUnderlineActive : styles.navUnderlineInactive,
-            ]}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Row 2: Achievements | Profile */}
-      <View style={styles.navRow}>
-        <TouchableOpacity
-          testID="connect-tab-achievements"
-          onPress={() => handleTabPress('Achievements')}
-          style={styles.navCell}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'Achievements' }}
-        >
-          <Text
-            style={[
-              styles.navText,
-              activeTab === 'Achievements' ? styles.navTextActive : styles.navTextInactive,
-            ]}
-          >
-            Achievements
-          </Text>
-          <View
-            style={[
-              styles.navUnderline,
-              activeTab === 'Achievements' ? styles.navUnderlineActive : styles.navUnderlineInactive,
-            ]}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          testID="connect-tab-profile"
-          onPress={() => handleTabPress('Profile')}
-          style={styles.navCell}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'Profile' }}
-        >
-          <Text
-            style={[
-              styles.navText,
-              activeTab === 'Profile' ? styles.navTextActive : styles.navTextInactive,
-            ]}
-          >
-            Profile
-          </Text>
-          <View
-            style={[
-              styles.navUnderline,
-              activeTab === 'Profile' ? styles.navUnderlineActive : styles.navUnderlineInactive,
-            ]}
-          />
-        </TouchableOpacity>
-      </View>
+  const renderNavTabs = () => (
+    <View style={styles.navTabsWrapper}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.navTabsContainer}
+      >
+        {CONNECT_TABS.map((tabItem) => {
+          const isSelected = activeTab === tabItem.id;
+          const Icon = tabItem.icon;
+          return (
+            <TouchableOpacity
+              key={tabItem.id}
+              testID={`connect-tab-${tabItem.id.toLowerCase()}`}
+              onPress={() => handleTabPress(tabItem.id)}
+              style={[
+                styles.navTabChip,
+                isSelected ? styles.navTabChipActive : styles.navTabChipInactive,
+              ]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isSelected }}
+            >
+              <Icon
+                size={17}
+                color={isSelected ? theme.accent : theme.secondaryText}
+                strokeWidth={isSelected ? 2.4 : 1.8}
+              />
+              <Text
+                style={[
+                  styles.navTabText,
+                  isSelected ? styles.navTabTextActive : styles.navTabTextInactive,
+                ]}
+              >
+                {tabItem.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 
   return (
     <View style={styles.root}>
       {/* Brand Header with wordmark and blue accent line */}
-      <View style={{ paddingTop: insets.top }}>
-        <BrandHeader showBack={false} showMoreMenu={false} showAvatar={false} />
-      </View>
+      <BrandHeader showBack={false} showMoreMenu={false} showAvatar={false} />
 
       <View
         style={[
@@ -209,7 +161,7 @@ export default function ConnectRootScreen() {
               <View style={styles.headingBlock}>
                 <Text style={styles.pageHeading}>Connect.</Text>
                 <Text style={styles.pageSubline}>Progress feels better together.</Text>
-                {renderNavGrid()}
+                {renderNavTabs()}
               </View>
 
               <View style={styles.contentWrap}>
@@ -222,8 +174,12 @@ export default function ConnectRootScreen() {
               {/* User Identity Card */}
               <View style={styles.desktopSideCard}>
                 <View style={styles.userCardHeader}>
-                  <View style={[styles.avatarCircle, { backgroundColor: theme.accent }]}>
-                    <Text style={styles.avatarInitial}>{avatarInitial}</Text>
+                  <View style={[styles.avatarCircle, { backgroundColor: theme.accent, overflow: 'hidden' }]}>
+                    {avatarUrl ? (
+                      <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 22 }} />
+                    ) : (
+                      <Text style={styles.avatarInitial}>{avatarInitial}</Text>
+                    )}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.userNameText} numberOfLines={1}>{displayName}</Text>
@@ -300,7 +256,7 @@ export default function ConnectRootScreen() {
             <View style={styles.headingBlock}>
               <Text style={styles.pageHeading}>Connect.</Text>
               <Text style={styles.pageSubline}>Progress feels better together.</Text>
-              {renderNavGrid()}
+              {renderNavTabs()}
             </View>
 
             <View style={styles.contentWrap}>
@@ -328,56 +284,59 @@ function createStyles(theme: any, isDark: boolean) {
       paddingBottom: 4,
     },
     pageHeading: {
-      fontSize: 42,
+      fontSize: 28,
       fontFamily: 'Inter_800ExtraBold',
-      letterSpacing: -1.2,
+      letterSpacing: -0.6,
       color: theme.primaryText,
       marginBottom: 4,
     },
     pageSubline: {
-      fontSize: 15,
+      fontSize: 14,
       fontFamily: 'Inter_400Regular',
       color: theme.secondaryText,
-      marginBottom: 20,
-    },
-
-    // Two-row Navigation
-    navGrid: {
-      gap: 16,
       marginBottom: 16,
     },
-    navRow: {
+
+    // Horizontal scrollable tabs navigation
+    navTabsWrapper: {
+      marginBottom: 16,
+      marginHorizontal: -20,
+    },
+    navTabsContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 24,
+      gap: 10,
+      paddingHorizontal: 20,
+      paddingVertical: 4,
     },
-    navCell: {
-      flex: 1,
+    navTabChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 14,
+      borderWidth: 1,
     },
-    navText: {
-      fontSize: 16,
+    navTabChipActive: {
+      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.16)' : 'rgba(0, 122, 255, 0.08)',
+      borderColor: theme.accent,
+    },
+    navTabChipInactive: {
+      backgroundColor: isDark ? '#1C1C1E' : '#F4F4F6',
+      borderColor: isDark ? '#2C2C2E' : '#E8E8ED',
+    },
+    navTabText: {
+      fontSize: 14,
       letterSpacing: -0.2,
-      paddingBottom: 8,
     },
-    navTextActive: {
+    navTabTextActive: {
       color: theme.accent,
       fontFamily: 'Inter_700Bold',
     },
-    navTextInactive: {
-      color: theme.primaryText,
+    navTabTextInactive: {
+      color: theme.secondaryText,
       fontFamily: 'Inter_500Medium',
-    },
-    navUnderline: {
-      width: '100%',
-    },
-    navUnderlineActive: {
-      height: 2.5,
-      backgroundColor: theme.accent,
-      borderRadius: 1,
-    },
-    navUnderlineInactive: {
-      height: 1,
-      backgroundColor: theme.separator,
     },
 
     contentWrap: {
@@ -427,6 +386,7 @@ function createStyles(theme: any, isDark: boolean) {
       borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     avatarInitial: {
       color: '#FFFFFF',

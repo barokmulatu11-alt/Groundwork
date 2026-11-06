@@ -2,6 +2,7 @@ import { AppText as Text } from '@/components/ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { XP_VALUES } from '@/lib/connect/xpSystem';
 import { useStore } from '@/store/useStore';
+import { getLocalDateString } from '@/lib/dateUtils';
 import { Target } from 'lucide-react-native';
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -14,7 +15,7 @@ export function DailyQuestCard() {
   const { tasks } = useStore();
 
   const { completedToday, totalToday, done, progress } = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const todayTasks = (tasks || []).filter((t) => t.date === today && !t.deleted_at);
     const completed = todayTasks.filter((t) => t.completed).length;
     const target = Math.min(QUEST_TASKS, Math.max(todayTasks.length, QUEST_TASKS));

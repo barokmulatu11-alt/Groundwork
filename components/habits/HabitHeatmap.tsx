@@ -227,6 +227,7 @@ const styles = StyleSheet.create({
   summaryNum: {
     fontSize: 20,
     fontFamily: 'Inter_800ExtraBold',
+    fontVariant: ['tabular-nums'],
   },
   summaryLabel: {
     fontSize: 12,
@@ -268,3 +269,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
   },
 });
+
+

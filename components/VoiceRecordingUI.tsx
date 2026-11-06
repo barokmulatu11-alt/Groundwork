@@ -181,5 +181,5 @@ const styles = StyleSheet.create({
   stopText: {
     color: '#FFF',
     fontSize: 14,
-    fontFamily: 'System' }
+    fontFamily: 'Inter_600SemiBold' }
 });

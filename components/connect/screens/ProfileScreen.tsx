@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -55,15 +55,24 @@ export default function ProfileScreen({
 
   const [refreshing, setRefreshing] = useState(false);
 
+  const refreshProfileRef = useRef(refreshProfile);
+  refreshProfileRef.current = refreshProfile;
+  const refreshXPRef = useRef(refreshXP);
+  refreshXPRef.current = refreshXP;
+  const refreshFriendsRef = useRef(refreshFriends);
+  refreshFriendsRef.current = refreshFriends;
+  const refreshStatsRef = useRef(refreshStats);
+  refreshStatsRef.current = refreshStats;
+
   useFocusEffect(
     useCallback(() => {
       if (isAuthenticated) {
-        refreshProfile();
-        refreshXP();
-        refreshFriends();
-        refreshStats();
+        refreshProfileRef.current?.();
+        refreshXPRef.current?.();
+        refreshFriendsRef.current?.();
+        refreshStatsRef.current?.();
       }
-    }, [isAuthenticated, refreshProfile, refreshXP, refreshFriends, refreshStats])
+    }, [isAuthenticated])
   );
 
   const handleRefresh = async () => {
@@ -79,6 +88,23 @@ export default function ProfileScreen({
   };
 
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
+
+  const filteredAchievements = React.useMemo(() => {
+    return unlockedAchievements.filter((ach) => {
+      const cat = (ach.category || '').toLowerCase();
+      if (cat === 'notes' || cat === 'study' || cat === 'pro') return false;
+      if (
+        ach.key.includes('note') ||
+        ach.key.includes('revision') ||
+        ach.key.includes('formula') ||
+        ach.key.includes('folder') ||
+        ach.key.includes('tag')
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [unlockedAchievements]);
 
   // ─── Signed-Out Honest Invitation ──────────────────────────────────────────
   if (!isAuthenticated) {
@@ -163,23 +189,6 @@ export default function ProfileScreen({
       })
     : null;
 
-  const filteredAchievements = React.useMemo(() => {
-    return unlockedAchievements.filter((ach) => {
-      const cat = (ach.category || '').toLowerCase();
-      if (cat === 'notes' || cat === 'study' || cat === 'pro') return false;
-      if (
-        ach.key.includes('note') ||
-        ach.key.includes('revision') ||
-        ach.key.includes('formula') ||
-        ach.key.includes('folder') ||
-        ach.key.includes('tag')
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [unlockedAchievements]);
-
   return (
     <ScrollView
       style={styles.container}
@@ -240,7 +249,9 @@ export default function ProfileScreen({
         <View style={styles.statCell}>
           <Text style={styles.statValue}>{(xp || 0).toLocaleString()}</Text>
           <Text style={styles.statLabel}>TOTAL XP</Text>
-          <Text style={styles.statSub}>Level progress {progress}%</Text>
+          <Text style={styles.statSub}>
+            Level progress {Math.max(0, Math.min(100, Math.round(progress > 1 ? progress : (progress || 0) * 100)))}%
+          </Text>
         </View>
 
         <View style={styles.statCell}>
@@ -359,11 +370,11 @@ function createStyles(theme: any, isDark: boolean) {
       paddingBottom: 150,
     },
     signedOutTitle: {
-      fontSize: 38,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 36,
+      fontFamily: 'Inter_800ExtraBold',
       color: theme.primaryText,
       letterSpacing: -0.8,
-      lineHeight: 44,
+      lineHeight: 42,
       marginBottom: 10,
     },
     signedOutSub: {
@@ -459,8 +470,8 @@ function createStyles(theme: any, isDark: boolean) {
       height: '100%',
     },
     profileAvatarInitial: {
-      fontSize: 28,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 26,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
     },
     editProfileBtn: {
@@ -480,10 +491,11 @@ function createStyles(theme: any, isDark: boolean) {
       color: theme.primaryText,
     },
     profileFullName: {
-      fontSize: 28,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 26,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       letterSpacing: -0.5,
+      lineHeight: 32,
       marginBottom: 3,
     },
     profileHandle: {
@@ -522,7 +534,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     statValue: {
       fontSize: 20,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       marginBottom: 2,
     },
@@ -553,13 +565,13 @@ function createStyles(theme: any, isDark: boolean) {
       gap: 8,
     },
     sectionIndex: {
-      fontSize: 18,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
       color: theme.accent,
     },
     sectionTitle: {
-      fontSize: 12,
-      fontFamily: 'PlayfairDisplay_600SemiBold',
+      fontSize: 11,
+      fontFamily: 'Inter_700Bold',
       letterSpacing: 1.5,
       color: theme.secondaryText,
     },
@@ -580,7 +592,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     emptySectionTitle: {
       fontSize: 18,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       marginBottom: 6,
     },
@@ -618,7 +630,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     achName: {
       fontSize: 15,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontFamily: 'Inter_600SemiBold',
       color: theme.primaryText,
       marginBottom: 2,
     },
@@ -659,7 +671,7 @@ function createStyles(theme: any, isDark: boolean) {
     },
     networkStatNum: {
       fontSize: 22,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       marginBottom: 2,
     },

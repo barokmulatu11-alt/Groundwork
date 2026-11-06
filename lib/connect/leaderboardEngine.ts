@@ -411,13 +411,24 @@ export const fetchCloudLeaderboard = async (
   currentUserId?: string
 ): Promise<LeaderboardScore[] | null> => {
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('connect_profiles')
       .select('user_id, username, avatar_url, xp, level, institution, privacy_level, longest_streak')
       .neq('privacy_level', 'private')
       .neq('user_id', 'guest')
       .order('xp', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    if (error) {
+      const fallback = await supabase
+        .from('connect_profiles')
+        .select('user_id, username, avatar_url, xp, level')
+        .neq('user_id', 'guest')
+        .order('xp', { ascending: false })
+        .range(offset, offset + limit - 1);
+      data = fallback.data as any;
+      error = fallback.error;
+    }
 
     if (error || !data) {
       console.warn('[leaderboardEngine] cloud global fetch failed:', error?.message);
@@ -460,10 +471,19 @@ export const fetchFriendsLeaderboardCloud = async (
     });
 
     const ids = Array.from(friendIds);
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('connect_profiles')
       .select('user_id, username, avatar_url, xp, level, institution, privacy_level, longest_streak')
       .in('user_id', ids);
+
+    if (error) {
+      const fallback = await supabase
+        .from('connect_profiles')
+        .select('user_id, username, avatar_url, xp, level')
+        .in('user_id', ids);
+      data = fallback.data as any;
+      error = fallback.error;
+    }
 
     if (error || !data) return null;
 

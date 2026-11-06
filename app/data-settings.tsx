@@ -103,7 +103,7 @@ export default function DataSyncSettingsScreen() {
   const router = useRouter();
   const accentColor = theme.accent;
 
-  const { syncStatus: storeSyncStatus, lastSyncedAt, syncPartialFailures, syncFromCloud, tasks, habits, notes, focusSessions } = useStore();
+  const { syncStatus: storeSyncStatus, lastSyncedAt, syncPartialFailures, syncFromCloud, tasks, habits, focusSessions } = useStore();
   const { offlineMode, setOfflineMode } = useSettingsStore();
   const { session, isGuest } = useAuthStore();
 
@@ -239,7 +239,6 @@ export default function DataSyncSettingsScreen() {
       const data = {
         tasks,
         habits,
-        notes,
         focusSessions,
         settings: useSettingsStore.getState(),
         exportedAt: new Date().toISOString(),
@@ -257,12 +256,6 @@ export default function DataSyncSettingsScreen() {
       contentToShare += 'ID,Title,Streak,Frequency\n';
       habits.forEach(h => {
         contentToShare += `${h.id},"${h.title.replace(/"/g, '""')}",${h.streak},${h.frequency}\n`;
-      });
-      
-      contentToShare += '\n--- NOTES ---\n';
-      contentToShare += 'ID,Title\n';
-      notes.forEach(n => {
-        contentToShare += `${n.id},"${n.title.replace(/"/g, '""')}"\n`;
       });
       
       contentToShare += '\n--- PRODUCTIVITY (FOCUS SESSIONS) ---\n';
@@ -426,11 +419,11 @@ export default function DataSyncSettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+        <View style={{ marginBottom: 24, marginTop: 4 }}>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
             Data & sync.
           </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
             Backups, import and cloud sync.
           </Text>
         </View>

@@ -231,7 +231,7 @@ export const getTaskStats = (date: string) => {
 };
 
 export const getOverdueTasks = (): Task[] => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const tasks = db.getAllSync('SELECT * FROM tasks WHERE date < ? AND completed = 0 ORDER BY date DESC, order_index ASC', [today]) as any[];
   return tasks.map(parseTask);
 };

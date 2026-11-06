@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Opening Groundwork...</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 28px;
+      padding: 44px 28px;
+      max-width: 440px;
+      width: 90%;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+    }
+    .logo {
+      font-size: 32px;
+      font-weight: 900;
+      margin-bottom: 20px;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: #007AFF; }
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      margin: 0 0 10px;
+      color: #ffffff;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #93c5fd;
+      background: rgba(0, 122, 255, 0.12);
+      border: 1px solid rgba(0, 122, 255, 0.25);
+      border-radius: 9999px;
+      padding: 6px 16px;
+      margin-bottom: 20px;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: #3b82f6;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+    p {
+      font-size: 14px;
+      color: #9ca3af;
+      line-height: 1.6;
+      margin: 0 0 26px;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      background: #007AFF;
+      color: #ffffff !important;
+      font-size: 16px;
+      font-weight: 800;
+      text-decoration: none;
+      padding: 16px 24px;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(0, 122, 255, 0.4);
+      margin-bottom: 12px;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.1s ease, background-color 0.2s;
+    }
+    .btn:active {
+      transform: scale(0.98);
+      background: #0062cc;
+    }
+    .btn-secondary {
+      display: block;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #e5e7eb !important;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 13px 20px;
+      border-radius: 14px;
+      margin-bottom: 12px;
+      transition: background 0.15s ease;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .download-link {
+      display: inline-block;
+      margin-top: 14px;
+      font-size: 13px;
+      color: #60a5fa;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .download-link:hover {
+      text-decoration: underline;
+    }
+    .hint {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 20px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><span>g</span>roundwork.</div>
+    <div class="status-badge">
+      <div class="pulse-dot"></div>
+      <span id="status-text">Detecting Groundwork app...</span>
+    </div>
+
+    <h1 id="headline">Opening Groundwork</h1>
+    <p id="subtext">
+      Attempting to launch Groundwork on your device. If you don't have it installed, you will be redirected to Google Play.
+    </p>
+
+    <!-- Primary Launch Button (Custom Scheme & Intent) -->
+    <a id="btn-open-app" href="groundwork://" class="btn">
+      🚀 Open Groundwork App
+    </a>
+
+    <!-- Direct Play Store Button -->
+    <a id="btn-play-store" href="https://play.google.com/store/apps/details?id=com.baroklabs.groundwork" class="btn-secondary">
+      🛒 View on Google Play Store
+    </a>
+
+    <!-- Download Direct APK Fallback -->
+    <div>
+      <a href="https://github.com/barokmulatu11-alt/Groundwork/releases/download/v1.2.1/groundwork-1.2.1.apk" class="download-link">
+        📥 Need the direct APK? Download here
+      </a>
+    </div>
+
+    <div class="hint">
+      App identifier: <code>com.baroklabs.groundwork</code>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var screen = params.get('screen');
+
+      // Target path inside the app
+      var appPath = '';
+      if (token) {
+        appPath = 'reset-password?token=' + encodeURIComponent(token);
+      } else if (screen) {
+        appPath = screen;
+      }
+
+      var customSchemeUrl = appPath ? ('groundwork://' + appPath) : 'groundwork://';
+      var playStoreUrl = 'https://play.google.com/store/apps/details?id=com.baroklabs.groundwork';
+      var androidIntentUrl = 'intent://' + appPath + '#Intent;scheme=groundwork;package=com.baroklabs.groundwork;S.browser_fallback_url=' + encodeURIComponent(playStoreUrl) + ';end;';
+
+      var btnOpenApp = document.getElementById('btn-open-app');
+      var btnPlayStore = document.getElementById('btn-play-store');
+      var statusText = document.getElementById('status-text');
+      var subtext = document.getElementById('subtext');
+
+      if (btnPlayStore) {
+        btnPlayStore.href = playStoreUrl;
+      }
+
+      var isAndroid = /Android/i.test(navigator.userAgent);
+      var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      // Primary click handler
+      function launchApp() {
+        var targetUrl = isAndroid ? androidIntentUrl : customSchemeUrl;
+        try {
+          window.location.replace(targetUrl);
+        } catch (e) {
+          try { window.location.href = targetUrl; } catch (_) {}
+        }
+      }
+
+      if (btnOpenApp) {
+        btnOpenApp.href = isAndroid ? androidIntentUrl : customSchemeUrl;
+        btnOpenApp.addEventListener('click', function(e) {
+          e.preventDefault();
+          launchApp();
+        });
+      }
+
+      // If returning from OAuth callback, attempt to attach session parameters first
+      if (screen === 'auth/callback') {
+        fetch('/api/auth/mobile-session')
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (data && data.success && data.session) {
+              var s = data.session;
+              var q = '?token=' + encodeURIComponent(s.token) +
+                      '&userId=' + encodeURIComponent(s.userId) +
+                      '&email=' + encodeURIComponent(s.email || '') +
+                      '&name=' + encodeURIComponent(s.name || '');
+              customSchemeUrl = 'groundwork://auth/callback' + q;
+              androidIntentUrl = 'intent://auth/callback' + q + '#Intent;scheme=groundwork;package=com.baroklabs.groundwork;S.browser_fallback_url=' + encodeURIComponent(playStoreUrl) + ';end;';
+              if (btnOpenApp) btnOpenApp.href = isAndroid ? androidIntentUrl : customSchemeUrl;
+              if (statusText) statusText.innerText = 'Authenticated as ' + (s.name || s.email || 'User') + '!';
+              launchApp();
+            } else {
+              launchApp();
+            }
+          })
+          .catch(function() {
+            launchApp();
+          });
+      } else if (isMobile) {
+        // Normal deep link (e.g. reset-password) - launch immediately
+        launchApp();
+      } else {
+        // Desktop browser
+        if (statusText) statusText.innerText = 'Mobile App Link';
+        if (subtext) subtext.innerText = 'Scan or open this link on your Android phone to launch Groundwork or install from Google Play.';
+      }
+    })();
+  </script>
+</body>
+</html>

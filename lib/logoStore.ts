@@ -1,11 +1,13 @@
 /**
- * logoStore.ts — Groundwork Pro Logo Center
+ * logoStore.ts — Groundwork Launcher Icon Center
  *
- * ISOLATED MODULE — local persistence only, no cloud sync, no backend.
- * Safe to remove without affecting any other system.
+ * Manages the Android launcher icon variant selection.
+ * In-app headers and branding remain completely consistent and decoupled
+ * from the Android device launcher icon.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeModules, Platform } from 'react-native';
 import { create } from 'zustand';
 
 // ─── Logo variant definitions ─────────────────────────────────────────────────
@@ -22,14 +24,14 @@ export interface LogoVariant {
   id: LogoVariantId;
   name: string;
   tagline: string;
-  // Visual identity tokens — used to render the logo in-app
-  letterColor: string;        // Primary color of the "g"
-  letterColorSecondary: string; // Gradient end / secondary
-  dotColor: string;           // The dot after "g."
-  background: string;         // Card/icon background
-  isGradient: boolean;        // Whether the letter uses a gradient
-  glowColor: string | null;   // Neon glow color (null = no glow)
-  isPro: boolean;             // Requires Pro
+  // Visual identity tokens used for preview cards
+  letterColor: string;
+  letterColorSecondary: string;
+  dotColor: string;
+  background: string;
+  isGradient: boolean;
+  glowColor: string | null;
+  isPro: boolean; // Milestone reward unlocked
 }
 
 export const LOGO_VARIANTS: LogoVariant[] = [
@@ -47,12 +49,12 @@ export const LOGO_VARIANTS: LogoVariant[] = [
   },
   {
     id: 'pro_blue',
-    name: 'Pro Blue',
+    name: 'Groundwork Blue',
     tagline: 'Deep blue gradient with premium depth.',
     letterColor: '#1A56FF',
     letterColorSecondary: '#0A2AFF',
     dotColor: '#4A90FF',
-    background: '#0A0F1E',
+    background: '#0B1528',
     isGradient: true,
     glowColor: null,
     isPro: true,
@@ -64,7 +66,7 @@ export const LOGO_VARIANTS: LogoVariant[] = [
     letterColor: '#8E8E93',
     letterColorSecondary: '#636366',
     dotColor: '#AEAEB2',
-    background: '#1C1C1E',
+    background: '#1C1E24',
     isGradient: true,
     glowColor: null,
     isPro: true,
@@ -72,11 +74,11 @@ export const LOGO_VARIANTS: LogoVariant[] = [
   {
     id: 'gold_elite',
     name: 'Gold Elite',
-    tagline: 'Luxurious gold on obsidian black.',
+    tagline: 'Warm gold on obsidian black.',
     letterColor: '#D4AF37',
     letterColorSecondary: '#F5C842',
     dotColor: '#F5C842',
-    background: '#0A0800',
+    background: '#0E0D0B',
     isGradient: true,
     glowColor: null,
     isPro: true,
@@ -84,11 +86,11 @@ export const LOGO_VARIANTS: LogoVariant[] = [
   {
     id: 'neon_future',
     name: 'Neon Future',
-    tagline: 'Electric cyan glow on midnight dark.',
+    tagline: 'Electric cyan on midnight dark.',
     letterColor: '#00F5FF',
     letterColorSecondary: '#00CFDD',
     dotColor: '#00F5FF',
-    background: '#040D14',
+    background: '#060B14',
     isGradient: false,
     glowColor: '#00F5FF',
     isPro: true,
@@ -96,11 +98,11 @@ export const LOGO_VARIANTS: LogoVariant[] = [
   {
     id: 'executive',
     name: 'Executive Minimal',
-    tagline: 'Understated slate for the focused mind.',
+    tagline: 'Understated slate on soft gray.',
     letterColor: '#3A3A4A',
     letterColorSecondary: '#52525B',
     dotColor: '#52525B',
-    background: '#F0F0F5',
+    background: '#EDEFF2',
     isGradient: false,
     glowColor: null,
     isPro: true,
@@ -109,54 +111,115 @@ export const LOGO_VARIANTS: LogoVariant[] = [
 
 export const DEFAULT_LOGO_ID: LogoVariantId = 'classic';
 
-const STORAGE_KEY = '@groundwork_selected_logo_v1';
+export const STORAGE_KEY = '@groundwork_selected_logo_v1';
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-interface LogoStoreState {
+export interface LogoStoreState {
   selectedLogoId: LogoVariantId;
   isLoaded: boolean;
-  setSelectedLogo: (id: LogoVariantId) => Promise<void>;
+  isApplying: boolean;
+  error: string | null;
+  setSelectedLogo: (id: LogoVariantId) => Promise<boolean>;
   loadSavedLogo: () => Promise<void>;
   getActiveVariant: () => LogoVariant;
+  clearError: () => void;
 }
 
-// Zustand store for logo selection — persists to AsyncStorage, no cloud sync
 export const useLogoStore = create<LogoStoreState>((set, get) => ({
   selectedLogoId: DEFAULT_LOGO_ID,
   isLoaded: false,
+  isApplying: false,
+  error: null,
 
-  // Saves the chosen logo ID to AsyncStorage so it persists between sessions
+  clearError: () => set({ error: null }),
+
+  // Applies the launcher icon natively on Android and persists only on success
   setSelectedLogo: async (id: LogoVariantId) => {
+    const isValid = LOGO_VARIANTS.some((v) => v.id === id);
+    if (!isValid) {
+      const err = `Invalid launcher icon variant: ${id}`;
+      set({ error: err });
+      throw new Error(err);
+    }
+
+    if (get().selectedLogoId === id) {
+      return true;
+    }
+
+    if (Platform.OS === 'web') {
+      const msg = 'Changing home screen launcher icons is only supported on installed Android apps.';
+      set({ error: msg });
+      throw new Error(msg);
+    }
+
+    if (Platform.OS !== 'android') {
+      const msg = 'Changing launcher icons is currently supported only on Android.';
+      set({ error: msg });
+      throw new Error(msg);
+    }
+
+    const { AppIconModule } = NativeModules;
+    if (!AppIconModule || typeof AppIconModule.setAppIcon !== 'function') {
+      const msg = 'AppIconModule is not available on this Android build.';
+      set({ error: msg });
+      throw new Error(msg);
+    }
+
+    const prevId = get().selectedLogoId;
+    set({ isApplying: true, error: null });
+
     try {
+      const confirmedVariant = await AppIconModule.setAppIcon(id);
+      if (confirmedVariant !== id) {
+        throw new Error(`Android returned unexpected active variant '${confirmedVariant}'.`);
+      }
+      // Persist only after native success
       await AsyncStorage.setItem(STORAGE_KEY, id);
-      set({ selectedLogoId: id });
-    } catch (e) {
-      console.warn('[LogoStore] Failed to persist logo selection:', e);
-      // Keep in-session selection even if storage fails
-      set({ selectedLogoId: id });
+      set({ selectedLogoId: id, isApplying: false, error: null });
+      return true;
+    } catch (err: any) {
+      const message = err?.message || 'Failed to update launcher icon on Android.';
+      // Restore previous applied selection
+      set({ selectedLogoId: prevId, isApplying: false, error: message });
+      throw err;
     }
   },
 
-  // Loads the saved logo on app boot; falls back to default if none found or invalid
+  // Authoritatively reads the enabled Android alias on startup and reconciles AsyncStorage
   loadSavedLogo: async () => {
     try {
-      const saved = await AsyncStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        // Validate that saved id is still a valid variant
-        const isValid = LOGO_VARIANTS.some((v) => v.id === saved);
-        if (isValid) {
-          set({ selectedLogoId: saved as LogoVariantId, isLoaded: true });
+      if (Platform.OS === 'android' && NativeModules.AppIconModule?.getCurrentIcon) {
+        try {
+          const activeNative = await NativeModules.AppIconModule.getCurrentIcon();
+          const isValid = LOGO_VARIANTS.some((v) => v.id === activeNative);
+          const authoritativeId = (isValid ? activeNative : DEFAULT_LOGO_ID) as LogoVariantId;
+
+          const saved = await AsyncStorage.getItem(STORAGE_KEY);
+          if (saved !== authoritativeId) {
+            await AsyncStorage.setItem(STORAGE_KEY, authoritativeId);
+          }
+
+          set({ selectedLogoId: authoritativeId, isLoaded: true, error: null });
           return;
+        } catch (nativeErr) {
+          console.warn('[LogoStore] Failed to read native launcher icon state:', nativeErr);
         }
+      }
+
+      // Fallback for non-Android or if native query was unavailable
+      const saved = await AsyncStorage.getItem(STORAGE_KEY);
+      if (saved && LOGO_VARIANTS.some((v) => v.id === saved)) {
+        set({ selectedLogoId: saved as LogoVariantId, isLoaded: true, error: null });
+        return;
       }
     } catch (e) {
       console.warn('[LogoStore] Failed to load saved logo, using default:', e);
     }
-    set({ selectedLogoId: DEFAULT_LOGO_ID, isLoaded: true });
+    set({ selectedLogoId: DEFAULT_LOGO_ID, isLoaded: true, error: null });
   },
 
-  // Returns the currently active LogoVariant object (or the first/default one)
+  // Returns the currently active LogoVariant object for previews
   getActiveVariant: () => {
     const { selectedLogoId } = get();
     return (

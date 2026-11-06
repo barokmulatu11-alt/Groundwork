@@ -1,15 +1,10 @@
 {
+  "buildCommand": "npm run export:web:pwa",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
   ],
   "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
-        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
-      ]
-    },
     {
       "source": "/sw.js",
       "headers": [

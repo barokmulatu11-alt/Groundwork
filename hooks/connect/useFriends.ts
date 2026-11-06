@@ -20,6 +20,25 @@ export interface FriendUser {
   streak?: number;
 }
 
+function areFriendListsEqual(a: FriendUser[], b: FriendUser[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].user_id !== b[i].user_id ||
+      a[i].connectionState !== b[i].connectionState ||
+      a[i].xp !== b[i].xp ||
+      a[i].level !== b[i].level ||
+      a[i].requestId !== b[i].requestId ||
+      a[i].username !== b[i].username ||
+      a[i].avatar_url !== b[i].avatar_url
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export const useFriends = () => {
   const { session, isGuest } = useAuthStore();
   const currentUserId = session?.user?.id || (isGuest ? 'guest' : 'guest');
@@ -35,6 +54,7 @@ export const useFriends = () => {
 
   // Anti-spam request timestamp tracking
   const lastRequestTime = useRef<number>(0);
+  const isFetchingRef = useRef<boolean>(false);
 
   const enrichUsers = useCallback((profiles: any[], stateMap: Map<string, { state: 'none' | 'sent' | 'received' | 'friends' | 'blocked'; reqId?: string }>): FriendUser[] => {
     return profiles.map(p => {
@@ -57,13 +77,19 @@ export const useFriends = () => {
       setLoading(false);
       return;
     }
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setLoading(true);
 
     try {
       // 1. Fetch Blocks
       const blockRows = db.getAllSync<{ blocked_id: string }>('SELECT blocked_id FROM connect_blocks WHERE blocker_id = ?', [currentUserId]);
       const blockedSet = new Set(blockRows.map(r => r.blocked_id));
-      setBlockedUsers(Array.from(blockedSet));
+      setBlockedUsers(prev => {
+        const next = Array.from(blockedSet);
+        if (prev.length === next.length && prev.every((id, idx) => id === next[idx])) return prev;
+        return next;
+      });
 
       const blockedByRows = db.getAllSync<{ blocker_id: string }>('SELECT blocker_id FROM connect_blocks WHERE blocked_id = ?', [currentUserId]);
       const blockedBySet = new Set(blockedByRows.map(r => r.blocker_id));
@@ -71,7 +97,7 @@ export const useFriends = () => {
       // 2. Fetch Friend Requests
       const reqRows = db.getAllSync<any>('SELECT * FROM connect_friend_requests WHERE sender_id = ? OR receiver_id = ?', [currentUserId, currentUserId]);
       
-      // 3. Fetch Friendhips
+      // 3. Fetch Friendships
       const friendshipRows = db.getAllSync<any>('SELECT * FROM connect_friendships WHERE user_id1 = ? OR user_id2 = ?', [currentUserId, currentUserId]);
 
       // Auto-resolve mutual pending friend requests
@@ -112,11 +138,13 @@ export const useFriends = () => {
         }
       }
 
-      if (hasMutual) {
-        // Re-fetch clean states
-        setTimeout(() => fetchFriendsData(), 200);
-        return;
-      }
+      // Re-query local tables directly if mutual requests were resolved — avoiding async recursion
+      const activeReqRows = hasMutual
+        ? db.getAllSync<any>('SELECT * FROM connect_friend_requests WHERE sender_id = ? OR receiver_id = ?', [currentUserId, currentUserId])
+        : reqRows;
+      const activeFriendshipRows = hasMutual
+        ? db.getAllSync<any>('SELECT * FROM connect_friendships WHERE user_id1 = ? OR user_id2 = ?', [currentUserId, currentUserId])
+        : friendshipRows;
 
       // Map out all relationship states
       const stateMap = new Map<string, { state: 'none' | 'sent' | 'received' | 'friends' | 'blocked'; reqId?: string }>();
@@ -126,7 +154,7 @@ export const useFriends = () => {
 
       // Friendships
       const friendIdsSet = new Set<string>();
-      friendshipRows.forEach(f => {
+      activeFriendshipRows.forEach(f => {
         const friendId = f.user_id1.trim().toLowerCase() === currentUserId.trim().toLowerCase() ? f.user_id2 : f.user_id1;
         if (!blockedSet.has(friendId) && !blockedBySet.has(friendId)) {
           stateMap.set(friendId, { state: 'friends' });
@@ -137,7 +165,7 @@ export const useFriends = () => {
       // Requests
       const incomingIdsSet = new Set<string>();
       const sentIdsSet = new Set<string>();
-      reqRows.forEach(r => {
+      activeReqRows.forEach(r => {
         if (r.status === 'pending') {
           if (r.sender_id.trim().toLowerCase() === currentUserId.trim().toLowerCase()) {
             const receiverId = r.receiver_id;
@@ -179,7 +207,7 @@ export const useFriends = () => {
                   profiles.push(p);
                 }
                 db.runSync(
-                  'INSERT OR REPLACE INTO connect_profiles (id, user_id, username, bio, avatar_url, xp, level, productivity_category, joined_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                  'INSERT OR IGNORE INTO connect_profiles (id, user_id, username, bio, avatar_url, xp, level, productivity_category, joined_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                   [p.id, p.user_id, p.username, p.bio, p.avatar_url, p.xp, p.level, p.productivity_category, p.joined_at, p.updated_at]
                 );
               });
@@ -210,7 +238,7 @@ export const useFriends = () => {
                     profiles.push(p);
                   }
                   db.runSync(
-                    'INSERT OR REPLACE INTO connect_profiles (id, user_id, username, bio, avatar_url, xp, level, productivity_category, joined_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT OR IGNORE INTO connect_profiles (id, user_id, username, bio, avatar_url, xp, level, productivity_category, joined_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [p.id, p.user_id, p.username, p.bio, p.avatar_url, p.xp, p.level, p.productivity_category, p.joined_at, p.updated_at]
                   );
                 });
@@ -236,7 +264,7 @@ export const useFriends = () => {
             };
             profiles.push(p);
             db.runSync(
-              'INSERT OR REPLACE INTO connect_profiles (id, user_id, username, bio, avatar_url, xp, level, productivity_category, joined_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              'INSERT OR IGNORE INTO connect_profiles (id, user_id, username, bio, avatar_url, xp, level, productivity_category, joined_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
               [p.id, p.user_id, p.username, p.bio, p.avatar_url, p.xp, p.level, p.productivity_category, p.joined_at, p.updated_at]
             );
           }
@@ -245,20 +273,28 @@ export const useFriends = () => {
 
       const enriched = enrichUsers(profiles, stateMap);
 
-      setFriends(enriched.filter(u => u.connectionState === 'friends'));
-      setIncomingRequests(enriched.filter(u => u.connectionState === 'received'));
-      setSentRequests(enriched.filter(u => u.connectionState === 'sent'));
+      const nextFriends = enriched.filter(u => u.connectionState === 'friends');
+      const nextIncoming = enriched.filter(u => u.connectionState === 'received');
+      const nextSent = enriched.filter(u => u.connectionState === 'sent');
+
+      setFriends(prev => areFriendListsEqual(prev, nextFriends) ? prev : nextFriends);
+      setIncomingRequests(prev => areFriendListsEqual(prev, nextIncoming) ? prev : nextIncoming);
+      setSentRequests(prev => areFriendListsEqual(prev, nextSent) ? prev : nextSent);
 
     } catch (e) {
       console.error('[useFriends] fetch error:', e);
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
   }, [currentUserId, enrichUsers]);
 
+  const fetchFriendsDataRef = useRef(fetchFriendsData);
+  fetchFriendsDataRef.current = fetchFriendsData;
+
   // Sync with cloud on load or focus
   useEffect(() => {
-    fetchFriendsData();
+    fetchFriendsDataRef.current();
 
     if (!currentUserId || currentUserId === 'guest') return;
 
@@ -340,7 +376,7 @@ export const useFriends = () => {
           });
         }
 
-        fetchFriendsData();
+        fetchFriendsDataRef.current();
       } catch (err) {
         console.warn('[useFriends] Cloud sync background warning:', err);
       }
@@ -423,7 +459,7 @@ export const useFriends = () => {
       supabase.removeChannel(friendshipChannel1);
       supabase.removeChannel(friendshipChannel2);
     };
-  }, [currentUserId, fetchFriendsData]);
+  }, [currentUserId]);
 
   // Search logic
   useEffect(() => {

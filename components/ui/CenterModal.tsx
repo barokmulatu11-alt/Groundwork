@@ -33,7 +33,7 @@ export function CenterModal({
         />
         
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}
           pointerEvents="box-none"
         >

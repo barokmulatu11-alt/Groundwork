@@ -19,21 +19,21 @@ interface Stats {
 function StatCard({ icon: Icon, label, value, sub, color = 'blue' }: any) {
   const { isDark } = useTheme();
   const colors: Record<string, string> = {
-    blue:   'text-[#007AFF] bg-[#007AFF]/10 border-[#007AFF]/20',
+    blue:   'text-[#0066FF] bg-[#0066FF]/10 border-[#0066FF]/25',
     green:  'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
     purple: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
     orange: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
   };
   return (
-    <div className="glass rounded-2xl p-6 flex flex-col gap-4 transition-all hover:scale-[1.01]">
+    <div className={clsx("rounded-2xl p-6 flex flex-col gap-4 transition-all hover:scale-[1.01] border backdrop-blur-xl", isDark ? "bg-[#0A0A0C]/80 border-white/10" : "bg-white border-black/8 shadow-sm")}>
       <div className="flex items-start justify-between">
         <div className={clsx('p-2.5 rounded-xl border', colors[color])}>
           <Icon size={18} />
         </div>
-        <TrendingUp size={14} className={clsx('transition-colors', isDark ? 'text-gray-600' : 'text-slate-300')} />
+        <TrendingUp size={14} className={clsx('transition-colors', isDark ? 'text-[#787571]' : 'text-[#8E8C87]')} />
       </div>
       <div>
-        <p className={clsx('text-3xl font-black transition-colors', isDark ? 'text-white' : 'text-slate-900')}>
+        <p className={clsx('text-3xl font-black transition-colors', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>
           {value != null ? value : (
             <span className={clsx('animate-pulse', isDark ? 'text-gray-800' : 'text-slate-200')}>---</span>
           )}
@@ -130,12 +130,12 @@ export default function DashboardPage() {
 
   const roleBadge = (role: string) => {
     const map: Record<string, string> = {
-      owner:     'bg-yellow-400/15 text-yellow-500 border-yellow-400/30',
-      admin:     'bg-[#007AFF]/15 text-[#007AFF] border-[#007AFF]/30',
+      owner:     'bg-amber-400/15 text-amber-500 border-amber-400/30',
+      admin:     'bg-[#0066FF]/15 text-[#0066FF] border-[#0066FF]/30',
       moderator: 'bg-purple-400/15 text-purple-400 border-purple-400/30',
       user:       isDark
-        ? 'bg-gray-700/40 text-gray-400 border-gray-700'
-        : 'bg-slate-100 text-slate-500 border-slate-200',
+        ? 'bg-white/5 text-[#A3A099] border-white/10'
+        : 'bg-black/5 text-[#686662] border-black/10',
     };
     return map[role] || map.user;
   };
@@ -145,19 +145,19 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className={clsx('text-2xl font-black transition-colors', isDark ? 'text-white' : 'text-slate-900')}>
+          <h1 className={clsx('text-2xl font-black tracking-tight transition-colors', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>
             Overview
           </h1>
-          <p className="text-[var(--text-secondary)] text-sm mt-1 font-medium">
-            Live data from Supabase • groundwork. v1.2.1
+          <p className={clsx('text-sm mt-1 font-medium transition-colors', isDark ? 'text-[#A3A099]' : 'text-[#686662]')}>
+            Live data from Supabase • Groundwork Ecosystem
             {lastRefreshed && (
-              <span className="ml-2 opacity-50">
+              <span className="ml-2 opacity-60">
                 • Refreshed {lastRefreshed.toLocaleTimeString()}
               </span>
             )}
           </p>
           {loadError && (
-            <p className="text-red-400 text-xs mt-1">⚠ Failed to load stats: {loadError}</p>
+            <p className="text-rose-400 text-xs mt-1 font-medium">⚠ Failed to load stats: {loadError}</p>
           )}
         </div>
         <button
@@ -166,8 +166,8 @@ export default function DashboardPage() {
           className={clsx(
             'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border',
             isDark
-              ? 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
-              : 'bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-200',
+              ? 'bg-[#0A0A0C] border-white/10 text-[#A3A099] hover:text-[#F5F2EB] hover:border-white/20 hover:bg-white/5'
+              : 'bg-white border-black/8 text-[#686662] hover:text-[#141312] hover:border-black/20 hover:bg-black/5 shadow-sm',
             loading && 'opacity-50 cursor-not-allowed'
           )}
         >
@@ -209,28 +209,34 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards — Row 2: Productivity */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <div className="glass rounded-2xl p-6 flex flex-col gap-2 border border-[var(--border-color)]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className={clsx(
+          "rounded-2xl p-6 flex flex-col gap-2 border backdrop-blur-xl transition-all",
+          isDark ? "bg-[#0A0A0C]/80 border-white/10" : "bg-white border-black/8 shadow-sm"
+        )}>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl border text-emerald-400 bg-emerald-400/10 border-emerald-400/20">
               <Clock size={18} />
             </div>
             <div>
-              <p className={clsx('text-3xl font-black', isDark ? 'text-white' : 'text-slate-900')}>
+              <p className={clsx('text-3xl font-black transition-colors', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>
                 {stats.totalFocusHours != null ? `${stats.totalFocusHours}h` : (
-                  <span className="animate-pulse text-gray-600">---</span>
+                  <span className={clsx('animate-pulse', isDark ? 'text-gray-800' : 'text-slate-200')}>---</span>
                 )}
               </p>
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">Total Focus Time</p>
+              <p className={clsx("text-sm font-semibold transition-colors", isDark ? "text-[#A3A099]" : "text-[#686662]")}>Total Focus Time</p>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--text-secondary)] opacity-60 uppercase tracking-widest font-bold mt-1">
+          <p className={clsx("text-[10px] opacity-60 uppercase tracking-widest font-bold mt-1", isDark ? "text-[#787571]" : "text-[#8E8C87]")}>
             Over {stats.totalFocusSessions ?? '—'} recorded sessions
           </p>
         </div>
 
-        <div className={clsx('glass rounded-2xl p-6 flex flex-col justify-between border border-[var(--border-color)]')}>
-          <p className={clsx('text-xs font-black uppercase tracking-wider mb-3', isDark ? 'text-gray-400' : 'text-slate-500')}>
+        <div className={clsx(
+          "rounded-2xl p-6 flex flex-col justify-between border backdrop-blur-xl transition-all",
+          isDark ? "bg-[#0A0A0C]/80 border-white/10" : "bg-white border-black/8 shadow-sm"
+        )}>
+          <p className={clsx('text-xs font-black uppercase tracking-wider mb-3 transition-colors', isDark ? 'text-[#A3A099]' : 'text-[#686662]')}>
             Platform Snapshot
           </p>
           <div className="space-y-2 text-sm font-semibold">
@@ -240,8 +246,8 @@ export default function DashboardPage() {
               { label: 'Tasks completed', value: stats.completedTasks != null ? stats.completedTasks.toLocaleString() : '—' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between">
-                <span className="text-[var(--text-secondary)] text-xs">{label}</span>
-                <span className={clsx('text-xs font-black', isDark ? 'text-white' : 'text-slate-900')}>{value}</span>
+                <span className={clsx("text-xs font-medium transition-colors", isDark ? "text-[#A3A099]" : "text-[#686662]")}>{label}</span>
+                <span className={clsx('text-xs font-black transition-colors', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>{value}</span>
               </div>
             ))}
           </div>
@@ -249,41 +255,46 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Signups */}
-      <div className="glass rounded-2xl p-6 shadow-sm mb-4">
+      <div className={clsx(
+        "rounded-2xl p-6 shadow-sm mb-6 border backdrop-blur-xl transition-all",
+        isDark ? "bg-[#0A0A0C]/80 border-white/10" : "bg-white border-black/8"
+      )}>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className={clsx('text-base font-bold transition-colors', isDark ? 'text-white' : 'text-slate-900')}>
+            <h2 className={clsx('text-base font-bold transition-colors', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>
               Recent Signups
             </h2>
-            <p className="text-[var(--text-secondary)] text-xs mt-0.5 font-medium">Latest 5 user registrations</p>
+            <p className={clsx('text-xs mt-0.5 font-medium transition-colors', isDark ? 'text-[#A3A099]' : 'text-[#686662]')}>
+              Latest 5 user registrations
+            </p>
           </div>
-          <Clock size={16} className={clsx('transition-colors', isDark ? 'text-gray-600' : 'text-slate-300')} />
+          <Clock size={16} className={clsx('transition-colors', isDark ? 'text-[#787571]' : 'text-[#8E8C87]')} />
         </div>
 
         {loading ? (
           <div className="space-y-3">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className={clsx('h-14 rounded-xl animate-pulse', isDark ? 'bg-gray-800/50' : 'bg-slate-100')} />
+              <div key={i} className={clsx('h-14 rounded-xl animate-pulse', isDark ? 'bg-white/5' : 'bg-black/5')} />
             ))}
           </div>
         ) : (stats.recentSignups?.length ?? 0) === 0 ? (
-          <p className="text-[var(--text-secondary)] text-sm text-center py-8">No users yet.</p>
+          <p className={clsx('text-sm text-center py-8 font-medium', isDark ? 'text-[#787571]' : 'text-[#8E8C87]')}>No users yet.</p>
         ) : (
           <div className="space-y-2">
             {stats.recentSignups?.map((u) => (
               <Link
                 key={u.id}
                 href={`/dashboard/users/${u.id}`}
-                className={clsx('flex items-center gap-4 px-4 py-3 rounded-xl transition-colors', isDark ? 'hover:bg-white/5' : 'hover:bg-slate-50')}
+                className={clsx('flex items-center gap-4 px-4 py-3 rounded-xl transition-colors border border-transparent', isDark ? 'hover:bg-white/5 hover:border-white/5' : 'hover:bg-black/5 hover:border-black/5')}
               >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#007AFF] to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-lg">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#0066FF] to-indigo-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-md">
                   {(u.full_name || u.username || 'U')[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={clsx('text-sm font-semibold truncate transition-colors', isDark ? 'text-white' : 'text-slate-900')}>
+                  <p className={clsx('text-sm font-semibold truncate transition-colors', isDark ? 'text-[#F5F2EB]' : 'text-[#141312]')}>
                     {u.full_name || u.username || 'Anonymous'}
                   </p>
-                  <p className="text-xs text-[var(--text-secondary)] font-medium">
+                  <p className={clsx("text-xs font-medium transition-colors", isDark ? "text-[#A3A099]" : "text-[#686662]")}>
                     {new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </p>
                 </div>
@@ -306,25 +317,29 @@ export default function DashboardPage() {
       {/* Quick Links */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: 'Manage Users',   href: '/dashboard/users',         icon: Users,    color: 'from-[#007AFF]/10' },
-          { label: 'Feature Flags',  href: '/dashboard/flags',         icon: Zap,      color: 'from-purple-500/10' },
-          { label: 'Announcements',  href: '/dashboard/announcements', icon: BarChart2, color: 'from-emerald-500/10' },
-        ].map(({ label, href, icon: Icon, color }) => (
-          <a
+          { label: 'Manage Users',   href: '/dashboard/users',         icon: Users,    glow: 'hover:border-[#0066FF]/30' },
+          { label: 'Feature Flags',  href: '/dashboard/flags',         icon: Zap,      glow: 'hover:border-purple-500/30' },
+          { label: 'Announcements',  href: '/dashboard/announcements', icon: BarChart2, glow: 'hover:border-emerald-500/30' },
+        ].map(({ label, href, icon: Icon, glow }) => (
+          <Link
             key={href}
             href={href}
-            className={clsx('glass rounded-2xl p-5 flex items-center gap-4 hover:scale-[1.02] transition-all group bg-gradient-to-br', color)}
+            className={clsx(
+              'rounded-2xl p-5 flex items-center gap-4 hover:scale-[1.01] transition-all group border backdrop-blur-xl',
+              isDark ? 'bg-[#0A0A0C]/80 border-white/10 hover:bg-[#0E0E10]' : 'bg-white border-black/8 hover:border-black/15 shadow-sm',
+              glow
+            )}
           >
-            <Icon
-              size={20}
-              className={clsx('transition-colors', isDark ? 'text-gray-500 group-hover:text-[#007AFF]' : 'text-slate-400 group-hover:text-[#007AFF]')}
-            />
-            <span className={clsx('text-sm font-bold transition-colors', isDark ? 'text-gray-300 group-hover:text-white' : 'text-slate-600 group-hover:text-slate-900')}>
+            <div className={clsx("p-2.5 rounded-xl border transition-colors", isDark ? "bg-white/5 border-white/10 group-hover:text-[#0066FF] group-hover:border-[#0066FF]/30 text-[#A3A099]" : "bg-black/5 border-black/10 group-hover:text-[#0066FF] group-hover:border-[#0066FF]/30 text-[#686662]")}>
+              <Icon size={18} />
+            </div>
+            <span className={clsx('text-sm font-bold transition-colors', isDark ? 'text-[#A3A099] group-hover:text-[#F5F2EB]' : 'text-[#686662] group-hover:text-[#141312]')}>
               {label}
             </span>
-          </a>
+          </Link>
         ))}
       </div>
     </div>
   );
 }
+

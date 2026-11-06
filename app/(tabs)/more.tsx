@@ -7,6 +7,7 @@ import {
   Platform,
   useWindowDimensions,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import { BrandHeader } from '@/components/ui/BrandHeader';
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { hapticLight } from '@/lib/haptics';
+import { resolveAvatarUrl } from '@/lib/avatarUtils';
 
 export default function MoreScreen() {
   const router = useRouter();
@@ -73,14 +75,18 @@ export default function MoreScreen() {
     'G'
   ).toUpperCase();
 
+  const rawAvatarUrl =
+    profile?.avatar_url ||
+    (session?.user?.user_metadata as any)?.avatar_url ||
+    (session?.user?.user_metadata as any)?.picture;
+  const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
+
   const isUserAuthenticated = !isGuest && !!session?.user?.id;
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
 
   return (
     <View style={styles.root}>
-      <View style={{ paddingTop: insets.top }}>
-        <BrandHeader showBack={false} showMoreMenu={false} />
-      </View>
+      <BrandHeader showBack={false} showMoreMenu={false} />
 
       <ScrollView
         style={{ flex: 1, width: '100%' }}
@@ -104,7 +110,11 @@ export default function MoreScreen() {
         {/* Account Area */}
         <View style={styles.accountCard}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
+            )}
           </View>
 
           <View style={styles.accountInfoCol}>
@@ -144,10 +154,10 @@ export default function MoreScreen() {
 
         <View style={styles.thinDivider} />
 
-        {/* ── 01 YOUR WORKSPACE ────────────────────────────────────────────── */}
+        {/* ── 01 Your workspace ────────────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionIndex}>01</Text>
-          <Text style={styles.sectionHeadingUpper}>YOUR WORKSPACE</Text>
+          <Text style={styles.sectionTitle}>Your workspace</Text>
         </View>
 
         {/* Appearance row with large serif Aa and swatches */}
@@ -173,7 +183,7 @@ export default function MoreScreen() {
               />
             </View>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         {/* Productivity */}
@@ -187,7 +197,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Productivity</Text>
             <Text style={styles.itemSubtitle}>Build your daily rhythm.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         {/* Notifications */}
@@ -201,7 +211,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Notifications</Text>
             <Text style={styles.itemSubtitle}>Choose when to be interrupted.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         <View style={styles.thinDivider} />
@@ -209,7 +219,7 @@ export default function MoreScreen() {
         {/* ── 02 Account & privacy ─────────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionIndex}>02</Text>
-          <Text style={styles.sectionHeadingSerif}>Account & privacy</Text>
+          <Text style={styles.sectionTitle}>Account & privacy</Text>
         </View>
 
         {/* Account */}
@@ -223,7 +233,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Account</Text>
             <Text style={styles.itemSubtitle}>Profile and sign-in.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         {/* Privacy & security */}
@@ -237,7 +247,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Privacy & security</Text>
             <Text style={styles.itemSubtitle}>App lock, sessions and permissions.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         <View style={styles.thinDivider} />
@@ -245,10 +255,24 @@ export default function MoreScreen() {
         {/* ── 03 Data & progress ───────────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionIndex}>03</Text>
-          <Text style={styles.sectionHeadingSerif}>Data & progress</Text>
+          <Text style={styles.sectionTitle}>Data & progress</Text>
         </View>
 
-        {/* Data & sync */}
+        {/* Productivity analytics */}
+        <TouchableOpacity
+          onPress={() => router.push('/analytics' as any)}
+          style={styles.navRow}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+        >
+          <View style={styles.navTextCol}>
+            <Text style={styles.itemTitle}>Productivity analytics</Text>
+            <Text style={styles.itemSubtitle}>Focus metrics, consistency and trends.</Text>
+          </View>
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
+        </TouchableOpacity>
+
+        {/* Milestone rewards */}
         <TouchableOpacity
           onPress={() => router.push('/data-settings' as any)}
           style={styles.navRow}
@@ -259,7 +283,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Data & sync</Text>
             <Text style={styles.itemSubtitle}>Backups, import and cloud sync.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         {/* Offline storage */}
@@ -273,7 +297,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Offline storage</Text>
             <Text style={styles.itemSubtitle}>Content saved on this device.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         {/* Milestone rewards */}
@@ -287,7 +311,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Milestone rewards</Text>
             <Text style={styles.itemSubtitle}>Features earned through consistency.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         <View style={styles.thinDivider} />
@@ -295,7 +319,7 @@ export default function MoreScreen() {
         {/* ── 04 Here to help ──────────────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionIndex}>04</Text>
-          <Text style={styles.sectionHeadingSerif}>Here to help</Text>
+          <Text style={styles.sectionTitle}>Here to help</Text>
         </View>
 
         {/* Support & contact */}
@@ -309,7 +333,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>Support & contact</Text>
             <Text style={styles.itemSubtitle}>Get help or report an issue.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         {/* About Groundwork */}
@@ -323,7 +347,7 @@ export default function MoreScreen() {
             <Text style={styles.itemTitle}>About Groundwork</Text>
             <Text style={styles.itemSubtitle}>Version, credits and legal.</Text>
           </View>
-          <ChevronRight size={18} color="#0066FF" strokeWidth={2.2} />
+          <ChevronRight size={18} color={theme.accent} strokeWidth={2.2} />
         </TouchableOpacity>
 
         <View style={styles.thinDivider} />
@@ -337,7 +361,7 @@ export default function MoreScreen() {
           accessibilityRole="button"
         >
           {signOutLoading || isSigningOut ? (
-            <ActivityIndicator size="small" color="#0066FF" />
+            <ActivityIndicator size="small" color={theme.accent} />
           ) : (
             <Text style={styles.exitActionText}>
               {isGuest ? 'Exit guest mode →' : 'Sign out →'}
@@ -363,17 +387,17 @@ const createStyles = (theme: any, isDark: boolean) =>
       marginBottom: 6,
     },
     pageHeading: {
-      fontSize: 44,
+      fontSize: 28,
       fontFamily: 'Inter_800ExtraBold',
-      letterSpacing: -1,
+      letterSpacing: -0.6,
       color: theme.primaryText,
       marginBottom: 4,
     },
     pageSubline: {
-      fontSize: 16,
-      fontFamily: 'Inter_400Regular',
+      fontSize: 14,
+      fontFamily: 'PlayfairDisplay_600SemiBold_Italic',
       color: theme.secondaryText,
-      marginBottom: 24,
+      marginBottom: 20,
     },
 
     // Account Card
@@ -392,6 +416,13 @@ const createStyles = (theme: any, isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.cardSolid,
+      overflow: 'hidden',
+      flexShrink: 0,
+    },
+    avatarImg: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 22,
     },
     avatarInitialText: {
       fontSize: 18,
@@ -400,6 +431,7 @@ const createStyles = (theme: any, isDark: boolean) =>
     },
     accountInfoCol: {
       flex: 1,
+      minWidth: 0,
     },
     accountPrimaryText: {
       fontSize: 16,
@@ -440,15 +472,10 @@ const createStyles = (theme: any, isDark: boolean) =>
       fontFamily: 'Inter_700Bold',
       color: theme.accent,
     },
-    sectionHeadingUpper: {
-      fontSize: 12,
+    sectionTitle: {
+      fontSize: 20,
       fontFamily: 'Inter_700Bold',
-      letterSpacing: 2,
-      color: theme.secondaryText,
-    },
-    sectionHeadingSerif: {
-      fontSize: 22,
-      fontFamily: 'PlayfairDisplay_600SemiBold',
+      letterSpacing: -0.4,
       color: theme.primaryText,
     },
 
@@ -460,10 +487,10 @@ const createStyles = (theme: any, isDark: boolean) =>
       gap: 18,
     },
     serifAa: {
-      fontSize: 40,
+      fontSize: 34,
       fontFamily: 'PlayfairDisplay_700Bold',
       color: theme.primaryText,
-      lineHeight: 46,
+      lineHeight: 40,
     },
     appearanceTextCol: {
       flex: 1,

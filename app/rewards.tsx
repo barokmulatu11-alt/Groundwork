@@ -22,7 +22,7 @@ import {
   UserProgress,
 } from '@/lib/rewardsService';
 import { useTheme } from '@/lib/ThemeContext';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import {
   Award,
   Check,
@@ -117,10 +117,14 @@ export default function RewardsScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      {/* Header */}
+      <BrandHeader title="groundwork." onBack={() => router.back()} />
+
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingTop: insets.top + 16,
+          paddingTop: 16,
           paddingBottom: insets.bottom + 32,
           paddingHorizontal: 20,
           maxWidth: isDesktop ? 700 : undefined,
@@ -136,9 +140,6 @@ export default function RewardsScreen() {
           />
         }
       >
-        {/* Header */}
-        <BrandHeader title="groundwork." onBack={() => router.back()} />
-
         <View style={{ marginBottom: 28, marginTop: 8 }}>
           <Text style={styles.mainTitle}>
             Milestones.

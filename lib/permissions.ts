@@ -53,6 +53,7 @@ export const checkPermissionStatus = async (type: PermissionType): Promise<Permi
       return 'undetermined';
     }
     if (type === 'media') {
+      if (Platform.OS === 'android' || Platform.OS === 'web') return 'granted';
       const ImagePicker = await import('expo-image-picker');
       const res = await ImagePicker.getMediaLibraryPermissionsAsync();
       if (res?.status === 'granted') return 'granted';
@@ -109,6 +110,9 @@ export const requestIntelligentPermission = async (type: PermissionType): Promis
       return { granted, status: granted ? 'granted' : 'denied' };
     }
     if (type === 'media') {
+      if (Platform.OS === 'android' || Platform.OS === 'web') {
+        return { granted: true, status: 'granted' };
+      }
       const ImagePicker = await import('expo-image-picker');
       const res = await ImagePicker.requestMediaLibraryPermissionsAsync();
       const granted = res.status === 'granted' || (res.status as any) === 'limited';

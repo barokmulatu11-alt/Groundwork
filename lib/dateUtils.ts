@@ -67,3 +67,47 @@ export function formatDateDisplay(dateStr?: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Returns true if the given date string is strictly after the reference date string (local calendar).
+ */
+export function isFutureLocalDate(dateStr: string, referenceDateStr: string = getLocalDateString()): boolean {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  return dateStr > referenceDateStr;
+}
+
+/**
+ * Returns true if the given date string is strictly before the reference date string (local calendar).
+ */
+export function isPastLocalDate(dateStr: string, referenceDateStr: string = getLocalDateString()): boolean {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  return dateStr < referenceDateStr;
+}
+
+/**
+ * Returns true if the given date string matches the reference date string.
+ */
+export function isTodayLocalDate(dateStr: string, referenceDateStr: string = getLocalDateString()): boolean {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  return dateStr === referenceDateStr;
+}
+
+/**
+ * Validates whether string is in valid YYYY-MM-DD format.
+ */
+export function isValidDateString(dateStr: string): boolean {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  const match = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const testDate = new Date(year, month - 1, day, 12, 0, 0, 0);
+  return (
+    testDate.getFullYear() === year &&
+    testDate.getMonth() === month - 1 &&
+    testDate.getDate() === day
+  );
+}
+
+

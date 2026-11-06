@@ -69,14 +69,14 @@ export const PermissionPromptModal = forwardRef<BottomSheet, PermissionPromptMod
 const styles = StyleSheet.create({
   content: { flex: 1, alignItems: 'center', padding: 24 },
   emojiCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  emojiText: { fontSize: 32, fontFamily: 'System', },
-  title: { fontSize: 20, fontFamily: 'System', fontWeight: '800', marginBottom: 8, textAlign: 'center' },
-  reason: { fontSize: 14, fontFamily: 'System', fontWeight: '600', textAlign: 'center', marginBottom: 24, paddingHorizontal: 20 },
+  emojiText: { fontSize: 32 },
+  title: { fontSize: 20, fontFamily: 'Inter_800ExtraBold', marginBottom: 8, textAlign: 'center' },
+  reason: { fontSize: 14, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginBottom: 24, paddingHorizontal: 20 },
   actions: { width: '100%', gap: 12 },
   primaryButton: { height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  primaryButtonText: { color: 'white', fontSize: 16, fontFamily: 'System', fontWeight: '800' },
+  primaryButtonText: { color: 'white', fontSize: 16, fontFamily: 'Inter_800ExtraBold' },
   secondaryButton: { height: 40, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { fontSize: 14, fontFamily: 'System', fontWeight: '700' }
+  secondaryButtonText: { fontSize: 14, fontFamily: 'Inter_700Bold' }
 });
 
 

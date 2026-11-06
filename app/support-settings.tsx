@@ -25,6 +25,7 @@ import React, { useState } from 'react';
 import { Dimensions, Linking, ScrollView, Share, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ReportSheet } from '@/components/ReportSheet';
 
 const { width } = Dimensions.get('window');
 
@@ -80,6 +81,7 @@ export default function SupportAboutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
 
   const version = Constants.expoConfig?.version || '1.1.0';
 
@@ -92,7 +94,7 @@ export default function SupportAboutScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out groundwork. - The ultimate daily focus companion! Download it now at https://groundwork.app`,
+        message: `Check out groundwork. - The ultimate daily focus companion! Download it now at https://barok-labs.pro.et/open.html`,
       });
     } catch (error) {
       console.log(error);
@@ -103,7 +105,12 @@ export default function SupportAboutScreen() {
     showAlert({
       title: 'Rate App',
       message: 'Redirecting to Play Store... Thank you for your support!',
-      primaryButton: { text: 'OK', onPress: () => { } }
+      primaryButton: { 
+        text: 'OK', 
+        onPress: () => {
+          openLink('https://play.google.com/store/apps/details?id=com.baroklabs.groundwork');
+        } 
+      }
     });
   };
 
@@ -136,11 +143,11 @@ export default function SupportAboutScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+        <View style={{ marginBottom: 24, marginTop: 4 }}>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
             Support.
           </Text>
-          <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
             Get help or report an issue.
           </Text>
         </View>
@@ -160,7 +167,7 @@ export default function SupportAboutScreen() {
             <View style={{ height: 16 }} />
             <View style={styles.attributionRow}>
               <Text style={[styles.builtBy, { color: theme.tertiaryText }]}>Developed by</Text>
-              <TouchableOpacity onPress={() => openLink('https://v0-barok-labs.vercel.app/')}>
+              <TouchableOpacity onPress={() => openLink('https://barok-labs.pro.et/')}>
                 <Text style={[styles.companyName, { color: theme.accent }]}>Barok Labs</Text>
               </TouchableOpacity>
             </View>
@@ -176,7 +183,7 @@ export default function SupportAboutScreen() {
               title="Help Center"
               subtitle="Browse tutorials and FAQs"
               theme={theme}
-              onPress={() => openLink('https://v0-barok-labs.vercel.app/help')}
+              onPress={() => openLink('https://barok-labs.pro.et/help')}
             />
             <View style={[styles.separator, { backgroundColor: theme.separator }]} />
             <SupportRow
@@ -200,7 +207,7 @@ export default function SupportAboutScreen() {
               title="Report a Bug"
               subtitle="Help us fix issues"
               theme={theme}
-              onPress={() => openLink('mailto:barok.m.lakew@gmail.com?subject=groundwork. Bug Report')}
+              onPress={() => setReportSheetVisible(true)}
             />
           </Card>
         </Animated.View>
@@ -235,7 +242,7 @@ export default function SupportAboutScreen() {
               icon={Globe}
               title="Visit Website"
               theme={theme}
-              onPress={() => openLink('https://v0-barok-labs.vercel.app/')}
+              onPress={() => openLink('https://barok-labs.pro.et/')}
             />
             <View style={[styles.separator, { backgroundColor: theme.separator }]} />
             <SupportRow
@@ -256,6 +263,11 @@ export default function SupportAboutScreen() {
         </View>
 
       </ScrollView>
+
+      <ReportSheet
+        visible={reportSheetVisible}
+        onClose={() => setReportSheetVisible(false)}
+      />
     </View>
   );
 }

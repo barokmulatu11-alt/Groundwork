@@ -20,7 +20,7 @@ export function AppLockScreen() {
 
   const appState = useRef(AppState.currentState);
   const lastActive = useRef(Date.now());
-  const hasSecurityEnabled = faceIdEnabled || !!appPin;
+  const hasSecurityEnabled = faceIdEnabled;
 
   const triggerAuth = async () => {
     if (Platform.OS === 'web') {

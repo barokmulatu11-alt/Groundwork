@@ -1,7 +1,6 @@
 'use client';
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { supabase, Profile, AdminRole } from '@/lib/supabase';
-import { User, Session } from '@supabase/supabase-js';
+import { supabase, Profile, AdminRole, User, Session } from '@/lib/supabase';
 import { isAdminRole, normalizeRole } from '@/lib/admin-actions';
 
 interface AuthContextType {
@@ -54,8 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchProfile(s.user.id);
-      else {
+      if (s?.profile) {
+        setProfile({ ...s.profile, role: normalizeRole(s.profile.role) as AdminRole });
+        setProfileReady(true);
+      } else if (s?.user) {
+        fetchProfile(s.user.id);
+      } else {
         setProfile(null);
         setProfileReady(true);
       }
@@ -65,8 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchProfile(s.user.id);
-      else {
+      if (s?.profile) {
+        setProfile({ ...s.profile, role: normalizeRole(s.profile.role) as AdminRole });
+        setProfileReady(true);
+      } else if (s?.user) {
+        fetchProfile(s.user.id);
+      } else {
         setProfile(null);
         setProfileReady(true);
         setProfileError(null);
@@ -78,10 +85,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
-    const { data: { session: s } } = await supabase.auth.getSession();
-    if (s?.user) await fetchProfile(s.user.id);
+    if (data?.session) {
+      setSession(data.session);
+      setUser(data.user);
+      if (data.session.profile) {
+        setProfile({ ...data.session.profile, role: normalizeRole(data.session.profile.role) as AdminRole });
+        setProfileReady(true);
+      }
+    }
     return { error: null };
   };
 

@@ -454,11 +454,11 @@ function createStyles(theme: any, isDark: boolean) {
 
     // Heading matching mockup
     editorialTitle: {
-      fontSize: 38,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 34,
+      fontFamily: 'Inter_800ExtraBold',
       color: theme.primaryText,
       letterSpacing: -0.8,
-      lineHeight: 44,
+      lineHeight: 40,
       marginBottom: 6,
     },
     editorialSubtitle: {
@@ -478,8 +478,8 @@ function createStyles(theme: any, isDark: boolean) {
       paddingVertical: 22,
     },
     categoryIndexNumeral: {
-      fontSize: 22,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 18,
+      fontFamily: 'Inter_700Bold',
       color: theme.accent,
       width: 44,
       paddingTop: 2,
@@ -489,8 +489,8 @@ function createStyles(theme: any, isDark: boolean) {
       paddingRight: 16,
     },
     categoryTitle: {
-      fontSize: 24,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 20,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       letterSpacing: -0.4,
       marginBottom: 6,
@@ -532,8 +532,8 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 6,
     },
     catHeaderIndex: {
-      fontSize: 20,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
       color: theme.accent,
     },
     catHeaderIndexLabel: {
@@ -543,8 +543,8 @@ function createStyles(theme: any, isDark: boolean) {
       color: theme.secondaryText,
     },
     catHeaderTitle: {
-      fontSize: 34,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 30,
+      fontFamily: 'Inter_800ExtraBold',
       color: theme.primaryText,
       letterSpacing: -0.6,
       marginBottom: 6,
@@ -605,8 +605,8 @@ function createStyles(theme: any, isDark: boolean) {
       marginBottom: 4,
     },
     achName: {
-      fontSize: 17,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 16,
+      fontFamily: 'Inter_700Bold',
       color: theme.primaryText,
       letterSpacing: -0.2,
     },
@@ -720,8 +720,8 @@ function createStyles(theme: any, isDark: boolean) {
       letterSpacing: 0.5,
     },
     modalTitle: {
-      fontSize: 24,
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontSize: 22,
+      fontFamily: 'Inter_700Bold',
       textAlign: 'center',
       letterSpacing: -0.4,
       marginBottom: 8,

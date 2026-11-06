@@ -21,11 +21,15 @@ import {
     Sparkles,
     Sun,
     Award,
+    AlertCircle,
+    RotateCw,
 } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Animated,
     Easing,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -388,30 +392,52 @@ function LogoMark({ variant, size = "md" }: { variant: LogoVariant; size?: "sm" 
 
 // ─── Logo Center Inline Component ────────────────────────────────────────────
 
-// Embedded logo picker — lets users browse, preview, and apply logo variants
+// Embedded launcher icon picker — lets users browse, preview, and apply launcher icon variants
 function LogoCenterInline({ theme, isDark, accentColor, isPro, router }: {
   theme: any; isDark: boolean; accentColor: string; isPro: boolean; router: any;
 }) {
-  const { selectedLogoId, setSelectedLogo, loadSavedLogo, isLoaded } = useLogoStore();
+  const { selectedLogoId, setSelectedLogo, loadSavedLogo, isLoaded, isApplying, error, clearError } = useLogoStore();
   const [previewId, setPreviewId] = useState<LogoVariantId>(selectedLogoId);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  useEffect(() => { if (!isLoaded) loadSavedLogo(); }, []);
-  useEffect(() => { setPreviewId(selectedLogoId); }, [selectedLogoId]);
+  useEffect(() => {
+    if (!isLoaded) {
+      loadSavedLogo();
+    }
+  }, [isLoaded, loadSavedLogo]);
+
+  useEffect(() => {
+    setPreviewId(selectedLogoId);
+  }, [selectedLogoId]);
 
   const previewVariant = LOGO_VARIANTS.find((v) => v.id === previewId) ?? LOGO_VARIANTS[0];
-  const selectedVariant = LOGO_VARIANTS.find((v) => v.id === selectedLogoId) ?? LOGO_VARIANTS[0];
-  const isApplyDisabled = previewId === selectedLogoId;
+  const isApplied = previewId === selectedLogoId;
+  const isWeb = Platform.OS === 'web';
 
   const handleApply = async () => {
+    if (isApplying) return;
+    clearError();
+    setSuccessMessage(null);
+
     if (previewVariant.isPro && !isPro) {
       router.push("/rewards" as any);
       return;
     }
-    await setSelectedLogo(previewId);
-    hapticSuccess();
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2500);
+
+    if (isWeb) {
+      return;
+    }
+
+    try {
+      await setSelectedLogo(previewId);
+      hapticSuccess();
+      setSuccessMessage("Launcher icon changed. Your home screen may take a moment to refresh.");
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 5000);
+    } catch (err: any) {
+      hapticLight();
+    }
   };
 
   return (
@@ -419,9 +445,9 @@ function LogoCenterInline({ theme, isDark, accentColor, isPro, router }: {
       {/* Milestone hint for locked variants */}
       {!isPro && (
         <View style={[lcStyles.proHint, { backgroundColor: accentColor + "14", borderColor: accentColor + "33" }]}>
-          <Award size={12} color={accentColor} />
+          <Award size={13} color={accentColor} />
           <Text style={[lcStyles.proHintText, { color: accentColor }]}>
-            Exclusive logo variants unlock through Milestone Rewards. Tap any to preview.
+            Exclusive launcher icons unlock through Milestone Rewards. Tap any card to preview.
           </Text>
         </View>
       )}
@@ -432,12 +458,16 @@ function LogoCenterInline({ theme, isDark, accentColor, isPro, router }: {
           <LogoVariantCard
             key={variant.id}
             variant={variant}
-            isSelected={variant.id === previewId}
+            isPreviewed={variant.id === previewId}
             isApplied={variant.id === selectedLogoId}
-            isPro={isPro}
+            isLocked={variant.isPro && !isPro}
+            isApplying={isApplying}
             accentColor={accentColor}
             theme={theme}
             onPress={() => {
+              if (isApplying) return;
+              clearError();
+              setSuccessMessage(null);
               hapticSelection();
               setPreviewId(variant.id);
             }}
@@ -452,49 +482,103 @@ function LogoCenterInline({ theme, isDark, accentColor, isPro, router }: {
           <Text style={[lcStyles.previewName, { color: theme.primaryText }]}>{previewVariant.name}</Text>
           <Text style={[lcStyles.previewTagline, { color: theme.secondaryText }]}>{previewVariant.tagline}</Text>
         </View>
-        {previewVariant.isPro && !isPro && (
+        {previewVariant.isPro && !isPro ? (
           <View style={[lcStyles.lockedBadge, { backgroundColor: accentColor + "14", borderColor: accentColor + "33" }]}>
-            <Lock size={11} color={accentColor} />
-            <Text style={[lcStyles.lockedBadgeText, { color: accentColor }]}>PRO</Text>
+            <Award size={11} color={accentColor} />
+            <Text style={[lcStyles.lockedBadgeText, { color: accentColor }]}>Reward</Text>
           </View>
-        )}
-        {previewVariant.id === selectedLogoId && (
-          <View style={[lcStyles.activeBadge, { backgroundColor: accentColor + "18", borderColor: accentColor + "40" }]}>
-            <Text style={[lcStyles.activeBadgeText, { color: accentColor }]}>Active</Text>
+        ) : previewVariant.id === selectedLogoId ? (
+          <View style={[lcStyles.activeBadge, { backgroundColor: "#34C75918", borderColor: "#34C75940" }]}>
+            <Check size={11} color="#34C759" />
+            <Text style={[lcStyles.activeBadgeText, { color: "#34C759" }]}>Applied</Text>
+          </View>
+        ) : (
+          <View style={[lcStyles.previewBadge, { backgroundColor: accentColor + "14", borderColor: accentColor + "33" }]}>
+            <Text style={[lcStyles.previewBadgeText, { color: accentColor }]}>Previewing</Text>
           </View>
         )}
       </View>
 
-      {/* Apply button */}
-      {saveSuccess ? (
-        <View style={[lcStyles.successRow, { backgroundColor: "#34C75918", borderColor: "#34C75940" }]}>
-          <Check size={15} color="#34C759" />
-          <Text style={[lcStyles.successText, { color: "#34C759" }]}>Logo applied!</Text>
+      {/* Feedback & Error States */}
+      {successMessage && (
+        <View style={[lcStyles.feedbackRow, { backgroundColor: "#34C75918", borderColor: "#34C75940" }]}>
+          <Check size={16} color="#34C759" />
+          <Text style={[lcStyles.feedbackText, { color: "#34C759" }]}>{successMessage}</Text>
         </View>
+      )}
+
+      {error && !successMessage && (
+        <View style={[lcStyles.feedbackRow, { backgroundColor: "#FF3B3018", borderColor: "#FF3B3040" }]}>
+          <AlertCircle size={16} color="#FF3B30" />
+          <View style={{ flex: 1 }}>
+            <Text style={[lcStyles.feedbackText, { color: "#FF3B30" }]}>{error}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleApply}
+            disabled={isApplying}
+            style={[lcStyles.retryBtn, { borderColor: "#FF3B3060" }]}
+          >
+            <RotateCw size={12} color="#FF3B30" />
+            <Text style={[lcStyles.retryBtnText, { color: "#FF3B30" }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Action button */}
+      {isWeb ? (
+        <View style={[lcStyles.applyBtn, { backgroundColor: theme.cardBorder }]}>
+          <Text style={[lcStyles.applyBtnText, { color: theme.secondaryText }]}>
+            Android App Only
+          </Text>
+        </View>
+      ) : previewVariant.isPro && !isPro ? (
+        <TouchableOpacity
+          testID="unlock-milestone-btn"
+          accessibilityRole="button"
+          accessibilityLabel="View Milestones to Unlock"
+          onPress={() => router.push("/rewards" as any)}
+          activeOpacity={0.85}
+          style={[lcStyles.applyBtn, { backgroundColor: accentColor }]}
+        >
+          <Award size={16} color="#fff" />
+          <Text style={lcStyles.applyBtnText}>View Milestone to Unlock</Text>
+        </TouchableOpacity>
       ) : (
         <TouchableOpacity
           testID="apply-logo-btn"
           accessibilityRole="button"
-          accessibilityLabel="Apply Logo Variant"
+          accessibilityLabel="Apply Launcher Icon"
           onPress={handleApply}
+          disabled={isApplied || isApplying}
           activeOpacity={0.85}
-          style={[lcStyles.applyBtn, {
-            backgroundColor: (isApplyDisabled && !(previewVariant.isPro && !isPro))
-              ? accentColor + "55" : accentColor,
-          }]}
+          style={[
+            lcStyles.applyBtn,
+            {
+              backgroundColor: isApplied ? theme.cardBorder : accentColor,
+              opacity: isApplying ? 0.7 : 1,
+            },
+          ]}
         >
-          {previewVariant.isPro && !isPro ? (
-            <><Award size={15} color="#fff" /><Text style={lcStyles.applyBtnText}>View Milestone to Unlock</Text></>
+          {isApplying ? (
+            <>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={lcStyles.applyBtnText}>Updating launcher icon...</Text>
+            </>
+          ) : isApplied ? (
+            <>
+              <Check size={16} color={theme.secondaryText} />
+              <Text style={[lcStyles.applyBtnText, { color: theme.secondaryText }]}>Already Applied</Text>
+            </>
           ) : (
-            <Text style={lcStyles.applyBtnText}>
-              {isApplyDisabled ? "Already Applied" : `Apply ${previewVariant.name}`}
-            </Text>
+            <Text style={lcStyles.applyBtnText}>Apply to Android Home Screen</Text>
           )}
         </TouchableOpacity>
       )}
 
       <Text style={[lcStyles.hint, { color: theme.tertiaryText }]}>
-        Saved locally on this device only.
+        {isWeb
+          ? "Home screen launcher icons require the installed Android app."
+          : "Changes the Groundwork icon on this Android device. Some launchers may take a few seconds to refresh."}
       </Text>
     </View>
   );
@@ -502,15 +586,30 @@ function LogoCenterInline({ theme, isDark, accentColor, isPro, router }: {
 
 // ─── Logo Variant Card ────────────────────────────────────────────────────────
 
-// A single logo option in the gallery grid — shows the logo preview, name, PRO tag, and selection state
-function LogoVariantCard({ variant, isSelected, isApplied, isPro, accentColor, theme, onPress }: {
-  variant: LogoVariant; isSelected: boolean; isApplied: boolean;
-  isPro: boolean; accentColor: string; theme: any; onPress: () => void;
+// A single logo option in the gallery grid — distinguishes previewed, applied, and locked states
+function LogoVariantCard({
+  variant,
+  isPreviewed,
+  isApplied,
+  isLocked,
+  isApplying,
+  accentColor,
+  theme,
+  onPress,
+}: {
+  variant: LogoVariant;
+  isPreviewed: boolean;
+  isApplied: boolean;
+  isLocked: boolean;
+  isApplying: boolean;
+  accentColor: string;
+  theme: any;
+  onPress: () => void;
 }) {
-  const isLocked = variant.isPro && !isPro;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
+    if (isApplying) return;
     Animated.sequence([
       Animated.timing(scaleAnim, { toValue: 0.93, duration: 70, easing: Easing.out(Easing.quad), useNativeDriver: true }),
       Animated.timing(scaleAnim, { toValue: 1, duration: 180, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
@@ -529,8 +628,9 @@ function LogoVariantCard({ variant, isSelected, isApplied, isPro, accentColor, t
           lcStyles.variantCard,
           {
             backgroundColor: theme.card,
-            borderColor: isSelected ? accentColor : theme.cardBorder,
-            borderWidth: isSelected ? 2 : 1,
+            borderColor: isPreviewed ? accentColor : isApplied ? "#34C75980" : theme.cardBorder,
+            borderWidth: isPreviewed ? 2 : isApplied ? 1.5 : 1,
+            opacity: isLocked ? 0.75 : 1,
           },
         ]}
       >
@@ -545,21 +645,27 @@ function LogoVariantCard({ variant, isSelected, isApplied, isPro, accentColor, t
             {variant.name.replace("Groundwork ", "")}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
-            {isLocked && <Crown size={9} color={accentColor} />}
-            {isLocked && <Text style={[lcStyles.variantTag, { color: accentColor }]}>PRO</Text>}
+            {isLocked ? (
+              <>
+                <Award size={10} color={accentColor} />
+                <Text style={[lcStyles.variantTag, { color: accentColor }]}>Reward</Text>
+              </>
+            ) : isApplied ? (
+              <Text style={[lcStyles.variantTag, { color: "#34C759" }]}>Applied</Text>
+            ) : null}
           </View>
         </View>
 
         {/* Selection check */}
-        {isSelected && (
+        {isPreviewed && (
           <View style={[lcStyles.checkBadge, { backgroundColor: accentColor }]}>
             <Check size={10} color="#fff" strokeWidth={3} />
           </View>
         )}
 
         {/* Applied dot */}
-        {isApplied && !isSelected && (
-          <View style={[lcStyles.appliedDot, { backgroundColor: accentColor }]} />
+        {isApplied && !isPreviewed && (
+          <View style={[lcStyles.appliedDot, { backgroundColor: "#34C759" }]} />
         )}
       </Pressable>
     </Animated.View>
@@ -613,21 +719,31 @@ const lcStyles = StyleSheet.create({
   },
   lockedBadgeText: { fontSize: 10, fontFamily: "Inter_800ExtraBold", letterSpacing: 0.5 },
   activeBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1,
   },
   activeBadgeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  previewBadge: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1,
+  },
+  previewBadgeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
 
   applyBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 8, paddingVertical: 14, borderRadius: 16, marginBottom: 10,
   },
   applyBtnText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff" },
-  successRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, paddingVertical: 14, borderRadius: 16, borderWidth: 1, marginBottom: 10,
+  feedbackRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1, marginBottom: 10,
   },
-  successText: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  hint: { fontSize: 11, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 4 },
+  feedbackText: { fontSize: 13, fontFamily: "Inter_600SemiBold", flex: 1, lineHeight: 18 },
+  retryBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1,
+  },
+  retryBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  hint: { fontSize: 11, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 4, lineHeight: 16 },
 });
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
@@ -637,6 +753,7 @@ export default function AppearanceSettingsScreen() {
   const { theme, isDark, showAlert, previewTheme, clearPreview } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { isDesktop, contentMaxWidth, horizontalPadding } = useResponsive();
 
   const {
     theme: themeMode,
@@ -710,11 +827,11 @@ export default function AppearanceSettingsScreen() {
         <View style={isDesktop ? styles.desktopTwoColLayout : undefined}>
           {/* Main Column */}
           <View style={isDesktop ? styles.desktopMainCol : undefined}>
-            <View style={{ marginBottom: 28, marginTop: 8 }}>
-              <Text style={{ fontSize: 36, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -1 }}>
+            <View style={{ marginBottom: 24, marginTop: 4 }}>
+              <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: theme.text, letterSpacing: -0.5 }}>
                 Appearance.
               </Text>
-              <Text style={{ fontSize: 16, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'PlayfairDisplay_600SemiBold_Italic', color: theme.textSecondary, marginTop: 4 }}>
                 Type, colour, atmosphere.
               </Text>
             </View>

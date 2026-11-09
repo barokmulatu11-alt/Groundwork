@@ -350,16 +350,17 @@ function RootLayoutNav() {
         let effectiveEmail = email;
         let effectiveName = name;
 
-        // If parameters missing in deep link, fetch from mobile-session bridge
-        if (!effectiveToken || !effectiveUserId) {
+        // If token missing but userId is present in deep link, fetch from mobile-session bridge
+        if (!effectiveToken && effectiveUserId) {
           try {
-            const bridgeRes = await fetch('https://barok-labs.pro.et/api/auth/mobile-session');
+            const bridgeRes = await fetch(
+              `https://barok-labs.pro.et/api/auth/mobile-session?userId=${encodeURIComponent(effectiveUserId)}`
+            );
             const bridgeData = await bridgeRes.json();
             if (bridgeData.success && bridgeData.session?.token) {
               effectiveToken = bridgeData.session.token;
-              effectiveUserId = bridgeData.session.userId;
-              effectiveEmail = bridgeData.session.email;
-              effectiveName = bridgeData.session.name;
+              effectiveEmail = effectiveEmail || bridgeData.session.email;
+              effectiveName = effectiveName || bridgeData.session.name;
             }
           } catch (_) {}
         }

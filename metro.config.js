@@ -1,4 +1,41 @@
+const fs = require("fs");
 const path = require("path");
+
+// Gracefully handle Windows EMFILE / EBUSY errors with automatic retry and backoff
+try {
+  const gracefulFs = require("graceful-fs");
+  gracefulFs.gracefulify(fs);
+} catch (_) {}
+
+if (fs.promises) {
+  const patchPromiseFn = (fnName) => {
+    const orig = fs.promises[fnName];
+    if (typeof orig === "function") {
+      fs.promises[fnName] = async function (...args) {
+        let retries = 8;
+        let delay = 25;
+        while (true) {
+          try {
+            return await orig.apply(this, args);
+          } catch (err) {
+            if ((err.code === "EMFILE" || err.code === "EBUSY") && retries > 0) {
+              retries--;
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              delay = Math.min(delay * 2, 250);
+              continue;
+            }
+            throw err;
+          }
+        }
+      };
+    }
+  };
+
+  patchPromiseFn("readFile");
+  patchPromiseFn("open");
+  patchPromiseFn("writeFile");
+}
+
 const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 

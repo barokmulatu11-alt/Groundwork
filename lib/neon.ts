@@ -312,12 +312,10 @@ export const getNeonJWTToken = async (forceRefresh = false): Promise<string | nu
     }
   } catch (_) {}
 
-  // 4. If user is logged in, attempt mobile-session bridge (which mints authentic EdDSA JWTs)
-  if (isUserLoggedIn) {
+  // 4. If user is logged in, attempt mobile-session bridge for their specific userId
+  if (isUserLoggedIn && loggedInUserId && loggedInUserId !== 'guest') {
     try {
-      const bridgeUrl = loggedInUserId
-        ? `https://barok-labs.pro.et/api/auth/mobile-session?userId=${encodeURIComponent(loggedInUserId)}`
-        : 'https://barok-labs.pro.et/api/auth/mobile-session';
+      const bridgeUrl = `https://barok-labs.pro.et/api/auth/mobile-session?userId=${encodeURIComponent(loggedInUserId)}`;
       const bridgeRes = await fetch(bridgeUrl);
       if (bridgeRes.ok) {
         const bridgeData = await bridgeRes.json().catch(() => null);

@@ -196,77 +196,80 @@ export default function SignUpScreen() {
         "groundwork://"
       );
 
-      if (res.type === 'success' || res.type === 'dismiss') {
-        let token: string | null = null;
-        let userId: string | null = null;
-        let email: string | null = null;
-        let name: string | null = null;
+      if (res.type !== 'success') {
+        return;
+      }
 
-        if (res.type === "success" && (res as any).url) {
-          const params = extractParamsFromUrl((res as any).url);
-          token = params.token || null;
-          userId = params.userId || null;
-          email = params.email || null;
-          name = params.name || null;
-        }
+      let token: string | null = null;
+      let userId: string | null = null;
+      let email: string | null = null;
+      let name: string | null = null;
 
-        // Fallback: Query mobile-session bridge from Neon
-        if (!token || !userId) {
-          try {
-            const bridgeRes = await fetch("https://barok-labs.pro.et/api/auth/mobile-session");
-            const bridgeData = await bridgeRes.json();
-            if (bridgeData.success && bridgeData.session?.token) {
-              token = bridgeData.session.token;
-              userId = bridgeData.session.userId;
-              email = bridgeData.session.email || null;
-              name = bridgeData.session.name || null;
-            }
-          } catch (bridgeErr) {
-            console.warn("[Auth] Bridge session fetch error:", bridgeErr);
+      if ((res as any).url) {
+        const params = extractParamsFromUrl((res as any).url);
+        token = params.token || null;
+        userId = params.userId || null;
+        email = params.email || null;
+        name = params.name || null;
+      }
+
+      // If token is missing but userId is present, try mobile-session bridge strictly for that userId
+      if (!token && userId) {
+        try {
+          const bridgeRes = await fetch(
+            `https://barok-labs.pro.et/api/auth/mobile-session?userId=${encodeURIComponent(userId)}`
+          );
+          const bridgeData = await bridgeRes.json();
+          if (bridgeData.success && bridgeData.session?.token) {
+            token = bridgeData.session.token;
+            email = email || bridgeData.session.email || null;
+            name = name || bridgeData.session.name || null;
           }
+        } catch (bridgeErr) {
+          console.warn("[Auth] Bridge session fetch error:", bridgeErr);
         }
+      }
 
-        if (token && userId) {
-          await persistSessionToken(token);
-          useAuthStore.getState().setIsGuest(false);
-          await migrateGuestData("guest", userId);
-          await useAuthStore.getState().handleAuthEvent("SIGNED_IN", {
-            user: {
-              id: userId,
-              email: email || "",
-              user_metadata: { full_name: name || "" },
-            },
-            session: {
-              access_token: token,
-              token: token,
-              userId: userId,
-              user: { id: userId, email: email || "", user_metadata: { full_name: name || "" } },
-            },
-          });
+      if (token && userId) {
+        await persistSessionToken(token);
+        useAuthStore.getState().setIsGuest(false);
+        await migrateGuestData("guest", userId);
+        await useAuthStore.getState().handleAuthEvent("SIGNED_IN", {
+          user: {
+            id: userId,
+            email: email || "",
+            user_metadata: { full_name: name || "" },
+          },
+          session: {
+            access_token: token,
+            token: token,
+            userId: userId,
+            user: { id: userId, email: email || "", user_metadata: { full_name: name || "" } },
+          },
+        });
 
-          const { useStore } = await import("@/store/useStore");
-          await useStore.getState().syncFromCloud();
-          console.log("[Auth] Google signup sync complete");
-          router.replace('/');
-          return;
-        }
+        const { useStore } = await import("@/store/useStore");
+        await useStore.getState().syncFromCloud();
+        console.log("[Auth] Google signup sync complete");
+        router.replace('/');
+        return;
+      }
 
-        // Second fallback: neonAuth.getSession()
-        const { data: authData } = await neonAuth.getSession().catch(() => ({ data: null }));
-        const authUser = authData?.user;
-        const authSession = authData?.session;
+      // Fallback: neonAuth.getSession()
+      const { data: authData } = await neonAuth.getSession().catch(() => ({ data: null }));
+      const authUser = authData?.user;
+      const authSession = authData?.session;
 
-        const fallbackUserId = authUser?.id || null;
-        if (fallbackUserId && authUser && authSession) {
-          await migrateGuestData("guest", fallbackUserId);
-          useAuthStore.getState().setIsGuest(false);
-          await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: authUser, session: authSession });
-          
-          const { useStore } = await import("@/store/useStore");
-          await useStore.getState().syncFromCloud();
-          console.log("[Auth] Google signup sync complete");
-          router.replace('/');
-        }
+      const fallbackUserId = authUser?.id || null;
+      if (fallbackUserId && authUser && authSession) {
+        await migrateGuestData("guest", fallbackUserId);
+        useAuthStore.getState().setIsGuest(false);
+        await useAuthStore.getState().handleAuthEvent("SIGNED_IN", { user: authUser, session: authSession });
+        
+        const { useStore } = await import("@/store/useStore");
+        await useStore.getState().syncFromCloud();
+        console.log("[Auth] Google signup sync complete");
+        router.replace('/');
       }
     } catch (e: any) {
       console.error('[Auth] Google sign in error:', e);

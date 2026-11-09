@@ -394,8 +394,8 @@ const pushBatchToCloud = async (table: string, items: any[]): Promise<boolean> =
 
 const getUserId = () => {
   const { session, isGuest } = useAuthStore.getState();
-  if (session?.user?.id) return session.user.id;
   if (isGuest) return "guest";
+  if (session?.user?.id) return session.user.id;
   return "guest";
 };
 
@@ -935,8 +935,17 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   syncFromCloud: async (explicitSession?: any) => {
+    const authState = useAuthStore.getState();
+    if (authState.isGuest) {
+      return {
+        success: false,
+        skipped: true,
+        reason: "You are currently in guest mode. Sign in to synchronize your data with the cloud.",
+      };
+    }
+
     // Use the cached local session first to avoid a blocking network call
-    let user = explicitSession?.user || useAuthStore.getState().session?.user;
+    let user = explicitSession?.user || authState.session?.user;
 
     if (!user) {
       // Last-resort: fetch from Supabase (slower, may fail offline)

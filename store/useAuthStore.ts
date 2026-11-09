@@ -101,11 +101,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setProfile: (profile) => set({ profile }),
 
   setIsGuest: (isGuest) => {
-    set({ isGuest });
     if (isGuest) {
-      set({ welcomeShown: true });
+      set({
+        isGuest: true,
+        session: null,
+        welcomeShown: true,
+      });
       AsyncStorage.setItem("groundwork_welcome_shown", "true");
       AsyncStorage.setItem(IS_GUEST_KEY, "true");
+      AsyncStorage.multiRemove([
+        "groundwork_offline_session",
+        "neon_auth_jwt",
+        "neon_auth_jwt_exp",
+        "neon_auth_cookie",
+      ]).catch(() => {});
+
+      try {
+        supabase.auth.signOut().catch(() => {});
+      } catch (_) {}
+
       AsyncStorage.getItem("profile_guest").then((cached) => {
         if (cached) {
           set({ profile: JSON.parse(cached) });
@@ -126,7 +140,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           );
         }
       });
+      try {
+        const { initializeAccountRewards } = require('@/lib/rewardsService');
+        initializeAccountRewards('guest').catch(() => {});
+      } catch (_) {}
     } else {
+      set({ isGuest: false });
       AsyncStorage.removeItem(IS_GUEST_KEY);
     }
   },
@@ -144,8 +163,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   getUserId: () => {
     const { session, isGuest } = get();
-    if (session?.user?.id) return session.user.id;
     if (isGuest) return "guest";
+    if (session?.user?.id) return session.user.id;
     return "guest";
   },
 
@@ -196,13 +215,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     try {
       console.log("[AuthStore] Initializing...");
-      // 1. Check for existing session
+      // 1. Check for guest status first
+      const guestValue = await AsyncStorage.getItem(IS_GUEST_KEY);
+      const isGuestSaved = guestValue === "true";
+
       const isManualSignout = await AsyncStorage.getItem(
         "groundwork_manual_signout",
       );
 
       let session: any = null;
-      if (isManualSignout !== "true") {
+      if (!isGuestSaved && isManualSignout !== "true") {
         const { data } = await supabase.auth.getSession();
         session = data?.session || null;
 
@@ -237,15 +259,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             } catch (_) {}
           }
         }
+      } else if (isGuestSaved) {
+        console.log("[AuthStore] Guest mode active, skipping session restoration");
       } else {
         console.log("[AuthStore] Manual signout flag active, skipping session restoration");
       }
 
-      // 2. Check for guest status if no session
-      let isGuest = false;
-      if (!session) {
-        const guestValue = await AsyncStorage.getItem(IS_GUEST_KEY);
-        isGuest = guestValue === "true";
+      // 2. Determine final guest status and ensure session/profile isolation
+      let isGuest = isGuestSaved;
+      if (session) {
+        isGuest = false;
+      } else if (isGuest) {
+        session = null;
       }
 
       // Check onboarding status
@@ -334,8 +359,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
-      // 3. If session exists, trigger immediate data hydration
-      if (session) {
+      // 3. If session exists and user is not a guest, trigger immediate data hydration
+      if (session && !isGuest) {
         console.log("[AuthStore] Existing session found, hydrating data...");
         const { useSessionStore } = require("./useSessionStore");
         useSessionStore.getState().initializeDevice();
@@ -537,11 +562,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn("[AuthStore] Failed to remove guest key:", e);
     }
 
-    // 6. Clear sensitive session-specific keys
+    // 6. Clear sensitive session-specific keys and tokens
     try {
       await AsyncStorage.multiRemove([
         "last_ambient_sound",
         "notification_preferences",
+        "groundwork_offline_session",
+        "neon_auth_jwt",
+        "neon_auth_jwt_exp",
+        "neon_auth_cookie",
       ]);
     } catch (e) {
       console.warn("[AuthStore] Failed to clear AsyncStorage keys:", e);

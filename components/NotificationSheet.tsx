@@ -3,7 +3,7 @@ import { View, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } fro
 import { AppText as Text } from './ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
 import { neonData as supabase } from '@/lib/neon';
-import { X, BellRing as Bell, CheckCircle2, Info, AlertTriangle, Inbox } from 'lucide-react-native';
+import { X, BellRing as Bell, CheckCircle2, Info, AlertTriangle, Inbox, Megaphone } from 'lucide-react-native';
 import { useAuthStore } from '@/store/useAuthStore';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 
@@ -11,9 +11,10 @@ interface Notification {
   id: string;
   title: string;
   message: string;
-  type: 'info' | 'success' | 'warning';
+  type: 'info' | 'success' | 'warning' | 'announcement';
   is_read: boolean;
   created_at: string;
+  isAnnouncement?: boolean;
 }
 
 interface NotificationSheetProps {
@@ -28,25 +29,56 @@ export function NotificationSheet({ visible, onClose }: NotificationSheetProps) 
   const [loading, setLoading] = useState(true);
 
   const fetchNotifications = async () => {
-    if (!session?.user?.id) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('user_notifications')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
-    
-    if (data) setNotifications(data);
+    let allItems: Notification[] = [];
+
+    // 1. Fetch system announcements
+    try {
+      const res = await fetch('https://barok-labs.pro.et/api/announcements');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.announcements)) {
+          const annItems: Notification[] = json.announcements.map((a: any) => ({
+            id: `ann_${a.id}`,
+            title: a.title,
+            message: a.message || '',
+            type: 'announcement',
+            is_read: false,
+            created_at: a.created_at,
+            isAnnouncement: true,
+          }));
+          allItems = allItems.concat(annItems);
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fetch personal user notifications if logged in
+    if (session?.user?.id) {
+      try {
+        const { data } = await supabase
+          .from('user_notifications')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false });
+        if (data) {
+          allItems = allItems.concat(data);
+        }
+      } catch (_) {}
+    }
+
+    setNotifications(allItems);
     setLoading(false);
   };
 
   const markAllRead = async () => {
-    if (!session?.user?.id || notifications.length === 0) return;
-    await supabase
-      .from('user_notifications')
-      .update({ is_read: true })
-      .eq('user_id', session.user.id);
-    
+    if (session?.user?.id) {
+      try {
+        await supabase
+          .from('user_notifications')
+          .update({ is_read: true })
+          .eq('user_id', session.user.id);
+      } catch (_) {}
+    }
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 
@@ -56,6 +88,7 @@ export function NotificationSheet({ visible, onClose }: NotificationSheetProps) 
 
   const getIcon = (type: string) => {
     switch (type) {
+      case 'announcement': return <Megaphone size={18} color={theme.accent} />;
       case 'success': return <CheckCircle2 size={18} color="#34C759" />;
       case 'warning': return <AlertTriangle size={18} color="#FF9500" />;
       default: return <Info size={18} color={theme.accent} />;

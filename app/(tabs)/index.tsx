@@ -38,6 +38,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { useResponsive } from '@/hooks/useResponsive';
 import { TaskComposerModal } from '@/components/tasks/TaskComposer';
 import { HabitComposerModal } from '@/components/habits/HabitComposer';
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -495,6 +496,8 @@ export default function DashboardScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        <AnnouncementBanner />
+
         {isDesktop ? (
           /* ── Desktop 2-Column Workspace Composition ─────────────── */
           <View style={styles.desktopColumnsRow}>

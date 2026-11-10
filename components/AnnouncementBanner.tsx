@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppText as Text } from './ui/AppText';
 import { useTheme } from '@/lib/ThemeContext';
@@ -80,6 +81,12 @@ export function AnnouncementBanner() {
   useEffect(() => {
     fetchAnnouncements();
   }, [fetchAnnouncements]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchAnnouncements();
+    }, [fetchAnnouncements])
+  );
 
   // Filter out any dismissed announcements
   const activeAnnouncements = announcements.filter(
